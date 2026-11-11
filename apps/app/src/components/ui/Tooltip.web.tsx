@@ -23,7 +23,11 @@ export function Tooltip({ children, label }: TooltipProps) {
   return (
     <span
       onBlurCapture={() => setFocused(false)}
-      onClick={() => setDismissed(true)}
+      onClickCapture={(event) => {
+        if (event.currentTarget.contains(event.target as Node)) {
+          setDismissed(true);
+        }
+      }}
       onFocusCapture={() => {
         setDismissed(false);
         setFocused(true);

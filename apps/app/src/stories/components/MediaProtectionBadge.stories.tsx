@@ -33,6 +33,7 @@ export const OpensFilteredImage: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
+    const user = userEvent.setup();
     const badge = canvas.getByTestId('media-protection-badge');
 
     const bounds = badge.getBoundingClientRect();
@@ -42,17 +43,17 @@ export const OpensFilteredImage: Story = {
     );
     expect(pointerTarget).toBe(badge);
 
-    await userEvent.hover(badge);
+    await user.hover(badge);
     const tooltip = await page.findByRole('tooltip');
     expect(tooltip).toHaveTextContent('AI 학습방지 필터가 적용되었어요.');
 
-    await userEvent.hover(tooltip);
+    await user.hover(tooltip);
     expect(tooltip).toBeVisible();
-    await userEvent.click(tooltip);
+    await user.click(tooltip);
     expect(imageOpen).not.toHaveBeenCalled();
 
-    await userEvent.hover(badge);
-    await userEvent.click(badge);
+    await user.hover(badge);
+    await user.click(badge);
     expect(imageOpen).toHaveBeenCalledOnce();
     expect(imageOpen).toHaveBeenCalledWith(2, expect.any(Object));
     expect(page.queryByRole('tooltip')).not.toBeInTheDocument();

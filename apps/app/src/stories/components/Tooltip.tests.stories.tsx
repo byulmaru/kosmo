@@ -17,10 +17,11 @@ export const HoverDescriptionAndDismiss: Story = {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
     const trigger = canvas.getByRole('button', { name: '미디어 미리보기 열기' });
+    const user = userEvent.setup();
 
     expect(page.queryByRole('tooltip')).not.toBeInTheDocument();
     expect(trigger.getAttribute('aria-describedby')).toBe('tooltip-story-description');
-    await userEvent.hover(trigger);
+    await user.hover(trigger);
 
     const tooltip = await page.findByRole('tooltip');
     expect(
@@ -29,14 +30,12 @@ export const HoverDescriptionAndDismiss: Story = {
     expect(trigger.getAttribute('aria-describedby')).toContain(tooltip.id);
     expect(trigger.getAttribute('aria-describedby')).toContain('tooltip-story-description');
 
-    await userEvent.hover(tooltip);
+    await user.hover(tooltip);
     expect(page.getByRole('tooltip')).toBeVisible();
-    await userEvent.click(
-      within(tooltip).getByText('이 게시글에는 민감한 콘텐츠가 포함되어 있습니다.'),
-    );
+    await user.click(within(tooltip).getByText('이 게시글에는 민감한 콘텐츠가 포함되어 있습니다.'));
     expect(page.getByRole('tooltip')).toBeVisible();
     expect(canvas.queryByText('미디어 미리보기가 열렸습니다.')).not.toBeInTheDocument();
-    await userEvent.hover(canvasElement.ownerDocument.body);
+    await user.hover(canvasElement.ownerDocument.body);
     await waitFor(() => expect(page.queryByRole('tooltip')).not.toBeInTheDocument());
     expect(trigger.getAttribute('aria-describedby')).toBe('tooltip-story-description');
   },
@@ -47,14 +46,15 @@ export const FocusAndEscape: Story = {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
     const trigger = canvas.getByRole('button', { name: '미디어 미리보기 열기' });
+    const user = userEvent.setup();
 
     expect(page.queryByRole('tooltip')).not.toBeInTheDocument();
-    await userEvent.tab();
+    await user.tab();
     expect(trigger).toHaveFocus();
     const tooltip = await page.findByRole('tooltip');
     expect(trigger.getAttribute('aria-describedby')).toContain(tooltip.id);
 
-    await userEvent.keyboard('{Escape}');
+    await user.keyboard('{Escape}');
     await waitFor(() => expect(page.queryByRole('tooltip')).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();
     expect(trigger.getAttribute('aria-describedby')).toBe('tooltip-story-description');
@@ -66,10 +66,11 @@ export const TriggerActivationDismisses: Story = {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
     const trigger = canvas.getByRole('button', { name: '미디어 미리보기 열기' });
+    const user = userEvent.setup();
 
-    await userEvent.hover(trigger);
+    await user.hover(trigger);
     await page.findByRole('tooltip');
-    await userEvent.click(trigger);
+    await user.click(trigger);
     await waitFor(() => expect(page.queryByRole('tooltip')).not.toBeInTheDocument());
     expect(canvas.getByText('미디어 미리보기가 열렸습니다.')).toBeVisible();
   },
@@ -81,8 +82,9 @@ export const NearBottomPlacement: Story = {
     const page = within(canvasElement.ownerDocument.body);
     const trigger = canvas.getByRole('button', { name: '미디어 미리보기 열기' });
     const window = canvasElement.ownerDocument.defaultView!;
+    const user = userEvent.setup();
 
-    await userEvent.hover(trigger);
+    await user.hover(trigger);
     const tooltip = await page.findByRole('tooltip');
     await waitFor(() => {
       const triggerRect = trigger.getBoundingClientRect();
