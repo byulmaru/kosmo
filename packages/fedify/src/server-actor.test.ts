@@ -25,6 +25,7 @@ const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhos
 const localProfileId = '019f6f67-1111-7777-8888-123456789abc';
 const remoteProfileId = '019f6f67-2222-7777-8888-123456789abc';
 const serverActorUri = new URL('/ap/actor/~instance', publicOrigin);
+const diagnosticServerActorUri = new URL('/ap/actor/instance', publicOrigin);
 const localInstanceActorHandle = 'kosmo.instance';
 const remoteActorUri = new URL(`https://example.com/users/${crypto.randomUUID()}`);
 
@@ -162,6 +163,90 @@ describe('local Instance ActivityPub actor', () => {
       .from(ActivityPubActors)
       .where(eq(ActivityPubActors.uri, actorUri));
     assert.deepEqual(actorRow, []);
+  });
+
+  test('serves the diagnostic Application with alias-owned instance signing keys', async () => {
+    const requestActor = async (uri: URL) => {
+      const response = await federation.fetch(
+        new Request(uri, { headers: { accept: 'application/activity+json' } }),
+        { contextData: undefined },
+      );
+      assert.equal(response.status, 200);
+      assert.match(response.headers.get('content-type') ?? '', /application\/activity\+json/);
+      return (await response.json()) as Record<string, unknown> & {
+        assertionMethod?: Array<{
+          controller?: string;
+          id?: string;
+          publicKeyMultibase?: string;
+          type?: string;
+        }>;
+        endpoints?: { sharedInbox?: string };
+        id?: string;
+        inbox?: string;
+        outbox?: string;
+        preferredUsername?: string;
+        publicKey?: { id?: string; owner?: string; publicKeyPem?: string };
+        type?: string;
+      };
+    };
+    const diagnosticActor = await requestActor(diagnosticServerActorUri);
+    const diagnosticActorUri = diagnosticServerActorUri.href;
+
+    assert.equal(diagnosticActor.id, diagnosticActorUri);
+    assert.equal(diagnosticActor.publicKey?.id, `${diagnosticActorUri}#main-key`);
+    assert.equal(diagnosticActor.publicKey?.owner, diagnosticActorUri);
+    assert.equal(diagnosticActor.assertionMethod?.length, 1);
+    assert.equal(diagnosticActor.assertionMethod?.[0]?.id, `${diagnosticActorUri}#multikey-2`);
+    assert.equal(diagnosticActor.assertionMethod?.[0]?.controller, diagnosticActorUri);
+
+    assert.deepEqual(await db.select().from(Profiles), []);
+    assert.deepEqual(await db.select().from(ActivityPubActors), []);
+
+    const canonicalActor = await requestActor(serverActorUri);
+    assert.equal(diagnosticActor.type, canonicalActor.type);
+    assert.equal(diagnosticActor.inbox, canonicalActor.inbox);
+    assert.equal(diagnosticActor.outbox, canonicalActor.outbox);
+    assert.deepEqual(diagnosticActor.endpoints, canonicalActor.endpoints);
+    assert.equal(diagnosticActor.preferredUsername, canonicalActor.preferredUsername);
+    assert.equal(diagnosticActor.publicKey?.publicKeyPem, canonicalActor.publicKey?.publicKeyPem);
+    assert.equal(
+      diagnosticActor.assertionMethod?.[0]?.publicKeyMultibase,
+      canonicalActor.assertionMethod?.[0]?.publicKeyMultibase,
+    );
+
+    const repeatedActor = await requestActor(diagnosticServerActorUri);
+    assert.deepEqual(repeatedActor, diagnosticActor);
+
+    const { ensureDrizzleLocalInstanceActorKeyPairs } =
+      await import('./local-instance-actor-store');
+    const keyPairs = await ensureDrizzleLocalInstanceActorKeyPairs(localInstanceId);
+    const rsaKeyPair = keyPairs.find(
+      (keyPair) => keyPair.publicKey.algorithm.name === 'RSASSA-PKCS1-v1_5',
+    );
+    assert.ok(rsaKeyPair);
+    const diagnosticKeyId = new URL('#main-key', diagnosticServerActorUri);
+    const signedRequest = await signRequest(
+      new Request(new URL('/diagnostic', remoteActorUri.origin)),
+      rsaKeyPair.privateKey,
+      diagnosticKeyId,
+    );
+    const verifiedKey = await verifyRequest(signedRequest, {
+      contextLoader: getDocumentLoader(),
+      documentLoader: async (url) => ({
+        contextUrl: null,
+        document: diagnosticActor,
+        documentUrl: url,
+      }),
+    });
+    assert.equal(verifiedKey?.id?.href, diagnosticKeyId.href);
+
+    const foreignHostResponse = await federation.fetch(
+      new Request(new URL(diagnosticServerActorUri.pathname, 'https://alternate.example'), {
+        headers: { accept: 'application/activity+json' },
+      }),
+      { contextData: undefined },
+    );
+    assert.equal(foreignHostResponse.status, 404);
   });
 
   test('preserves local Profile actors while rejecting requests on a foreign host', async () => {
