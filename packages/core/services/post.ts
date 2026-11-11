@@ -41,6 +41,7 @@ import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { normalizeHashtag } from '../validation/hashtag';
 import { postVisibilityCondition } from '../visibility/post';
 import { revokePostQuoteConsentsForSource } from './post-quote-consent';
+import { withPostSlugRetry } from './post-slug';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { Transaction } from '../db';
@@ -396,18 +397,23 @@ const createOrFindRepost = async (
   }
 
   const visibility = resolveRepostVisibility(source, actorProfileId);
-  const inserted = await tx
-    .insert(Posts)
-    .values({
-      actorAccountId,
-      profileId: actorProfileId,
-      repostSourceId: source.id,
-      state: PostState.ACTIVE,
-      visibility,
-    })
-    .onConflictDoNothing()
-    .returning()
-    .then(first);
+  const inserted = await withPostSlugRetry(tx, async (insertTx) =>
+    insertTx
+      .insert(Posts)
+      .values({
+        actorAccountId,
+        profileId: actorProfileId,
+        repostSourceId: source.id,
+        state: PostState.ACTIVE,
+        visibility,
+      })
+      .onConflictDoNothing({
+        target: [Posts.profileId, Posts.repostSourceId],
+        where: sql`${Posts.state} = 'ACTIVE' AND ${Posts.currentContentId} IS NULL AND ${Posts.repostSourceId} IS NOT NULL`,
+      })
+      .returning()
+      .then(first),
+  );
   if (inserted) {
     return { created: true as const, repost: inserted };
   }
@@ -850,23 +856,25 @@ export const createPostInTransaction = async (
 
   const post =
     postId === undefined
-      ? await tx
-          .insert(Posts)
-          .values({
-            actorAccountId: input.origin === 'LOCAL' ? (input.accountId ?? null) : null,
-            createdAt,
-            currentContentId: content.id,
-            profileId: input.profileId,
-            repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
-            quoteConsentStatus:
-              input.origin === 'LOCAL' && input.repostSourceId !== undefined
-                ? PostQuoteConsentStatus.APPROVED
-                : undefined,
-            state: PostState.ACTIVE,
-            visibility: input.visibility,
-          })
-          .returning()
-          .then(firstOrThrow)
+      ? await withPostSlugRetry(tx, async (insertTx) =>
+          insertTx
+            .insert(Posts)
+            .values({
+              actorAccountId: input.origin === 'LOCAL' ? (input.accountId ?? null) : null,
+              createdAt,
+              currentContentId: content.id,
+              profileId: input.profileId,
+              repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
+              quoteConsentStatus:
+                input.origin === 'LOCAL' && input.repostSourceId !== undefined
+                  ? PostQuoteConsentStatus.APPROVED
+                  : undefined,
+              state: PostState.ACTIVE,
+              visibility: input.visibility,
+            })
+            .returning()
+            .then(firstOrThrow),
+        )
       : await tx
           .update(Posts)
           .set({

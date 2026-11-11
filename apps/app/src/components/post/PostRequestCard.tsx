@@ -59,6 +59,7 @@ const PostRequestCardFragment = graphql`
     id
     post {
       id
+      slug
       profile {
         relativeHandle
       }
@@ -232,7 +233,7 @@ export function PostRequestCard({
     }
   }
   const publishedHref = request.post?.profile.relativeHandle
-    ? `/${request.post.profile.relativeHandle}/${request.post.id}`
+    ? `/${request.post.profile.relativeHandle}/${request.post.slug}`
     : undefined;
 
   return (

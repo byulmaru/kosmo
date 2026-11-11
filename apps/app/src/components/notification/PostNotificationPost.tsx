@@ -23,6 +23,7 @@ import type { PostNotificationPost_post$key } from './__generated__/PostNotifica
 const PostNotificationPostFragment = graphql`
   fragment PostNotificationPost_post on Post {
     id
+    slug
     createdAt
     content {
       id
@@ -62,7 +63,7 @@ export function PostNotificationPost({
   const openViewer = usePostMediaViewerHost();
   const { reply, replySurface } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
-  const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
+  const detailHref = `/${post.profile.relativeHandle}/${post.slug}` as const;
   const openDetail = useCallback(() => {
     onActivate?.();
     router.push(detailHref);

@@ -41,6 +41,7 @@ import {
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
 import { createPost } from './post';
+import { withPostSlugRetry } from './post-slug';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import { updateProfile } from './profile-update';
 
@@ -148,6 +149,65 @@ test('createPost는 local Post와 최초 content 연결을 하나의 transaction
       .then((rows) => rows.length),
     0,
   );
+});
+
+test('Post slug 기본값은 12자 base62이고 이름 충돌만 savepoint 재시도한다', async () => {
+  const profile = await createProfile();
+  const posts = await db
+    .insert(Posts)
+    .values(
+      Array.from({ length: 32 }, () => ({
+        profileId: profile.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })),
+    )
+    .returning();
+  const slugs = posts.map(({ slug }) => slug);
+
+  assert.ok(slugs.every((slug) => /^[A-Za-z0-9]{12}$/.test(slug)));
+  assert.equal(new Set(slugs).size, slugs.length);
+
+  const occupiedSlug = posts[0]!.slug;
+  let slugAttempts = 0;
+  const retriedPost = await db.transaction((tx) =>
+    withPostSlugRetry(tx, async (insertTx) => {
+      slugAttempts += 1;
+      return insertTx
+        .insert(Posts)
+        .values({
+          profileId: profile.id,
+          slug: slugAttempts === 1 ? occupiedSlug : undefined,
+          state: PostState.ACTIVE,
+          visibility: PostVisibility.PUBLIC,
+        })
+        .returning()
+        .then(firstOrThrow);
+    }),
+  );
+  assert.equal(slugAttempts, 2);
+  assert.match(retriedPost.slug, /^[A-Za-z0-9]{12}$/);
+  assert.notEqual(retriedPost.slug, occupiedSlug);
+
+  let unrelatedAttempts = 0;
+  await assert.rejects(
+    db.transaction((tx) =>
+      withPostSlugRetry(tx, async (insertTx) => {
+        unrelatedAttempts += 1;
+        return insertTx
+          .insert(Posts)
+          .values({
+            id: posts[0]!.id,
+            profileId: profile.id,
+            state: PostState.ACTIVE,
+            visibility: PostVisibility.PUBLIC,
+          })
+          .returning()
+          .then(firstOrThrow);
+      }),
+    ),
+  );
+  assert.equal(unrelatedAttempts, 1);
 });
 
 test('createPost stores the original Account on its local Post source', async () => {

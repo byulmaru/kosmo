@@ -14,8 +14,10 @@ import { expect, test } from './fixtures';
 import type { Page } from '@playwright/test';
 
 const origin = process.env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:4173';
-const sharePath = (handle: string, postId: string) =>
-  `/${encodeURIComponent(`@${handle}`).replace(/%40/gi, '@')}/${encodeGlobalId('Post', postId)}`;
+const sharePath = (handle: string, slug: string) =>
+  `/${encodeURIComponent(`@${handle}`).replace(/%40/gi, '@')}/${slug}`;
+const legacySharePath = (handle: string, postId: string) =>
+  sharePath(handle, encodeGlobalId('Post', postId));
 
 async function readMetadata(page: Page, html: string) {
   return page.evaluate((source) => {
@@ -93,13 +95,13 @@ test('공개 Quote의 현재 작성자·본문·Mention·이미지 순서로 초
     repostSourceId: source.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const path = `${sharePath('old-route-handle', quote.id)}?campaign=share`;
+  const path = `${legacySharePath('old-route-handle', quote.id)}?campaign=share`;
   const response = await request.get(path, {
     headers: { accept: 'text/html', 'user-agent': 'Slackbot 1.0' },
   });
   const html = await response.text();
   const metadata = await readMetadata(page, html);
-  const canonicalUrl = `${origin}${sharePath(author.profile!.handle, quote.id)}`;
+  const canonicalUrl = `${origin}${sharePath(author.profile!.handle, quote.slug)}`;
 
   expect(response.status()).toBe(200);
   expect(response.headers()['cache-control']).toBe('no-store');
@@ -130,6 +132,11 @@ test('공개 Quote의 현재 작성자·본문·Mention·이미지 순서로 초
   expect(html).not.toContain('source-only preview secret');
   expect(html).toContain('&lt;script&gt;alert(&quot;preview&quot;)&lt;/script&gt;');
   expect(html.match(/property="og:title"/g)).toHaveLength(1);
+
+  const legacyNavigation = await page.goto(`${origin}${path}`);
+  expect(legacyNavigation?.status()).toBe(200);
+  await expect(page.getByText(body, { exact: true })).toBeVisible();
+  await expect.poll(() => page.url()).toBe(canonicalUrl);
 
   const navigation = await page.goto(canonicalUrl);
   expect(navigation?.status()).toBe(200);
@@ -164,9 +171,9 @@ test('Content Warning과 Sensitive Media 원문·이미지 정보는 응답 어�
     visibility: PostVisibility.PUBLIC,
   });
 
-  const warningResponse = await request.get(sharePath(author.profile!.handle, warning.id));
+  const warningResponse = await request.get(sharePath(author.profile!.handle, warning.slug));
   const warningHtml = await warningResponse.text();
-  const sensitiveResponse = await request.get(sharePath(author.profile!.handle, sensitive.id));
+  const sensitiveResponse = await request.get(sharePath(author.profile!.handle, sensitive.slug));
   const sensitiveHtml = await sensitiveResponse.text();
 
   expect(warningHtml).toContain('열람 주의 문구: 민감한 경고 &amp; 확인');
@@ -208,10 +215,10 @@ test('순수 Repost는 guest가 볼 수 있는 직접 Source를 canonicalize하�
     profileId: sourceAuthor.profile!.id,
     visibility: PostVisibility.FOLLOWERS,
   });
-  const repostResponse = await request.get(sharePath(repostAuthor.profile!.handle, repost.id));
+  const repostResponse = await request.get(sharePath(repostAuthor.profile!.handle, repost.slug));
   const repostHtml = await repostResponse.text();
   const privateResponse = await request.get(
-    sharePath(sourceAuthor.profile!.handle, privatePost.id),
+    legacySharePath(sourceAuthor.profile!.handle, privatePost.id),
     {
       headers: {
         cookie: `kosmo_session=${sourceAuthor.token}`,
@@ -226,7 +233,7 @@ test('순수 Repost는 guest가 볼 수 있는 직접 Source를 canonicalize하�
   expect(repostHtml).toContain('E2E Direct Source Author(@e2e-direct-source-author) on KOSMO');
   expect(repostHtml).not.toContain('E2E Repost Author');
   expect(repostHtml).toContain(
-    `${origin}${sharePath(sourceAuthor.profile!.handle, quoteSource.id)}`,
+    `${origin}${sharePath(sourceAuthor.profile!.handle, quoteSource.slug)}`,
   );
   expect((await readMetadata(page, repostHtml)).activityPubUris).toEqual([
     new URL(`/ap/note/${quoteSource.id}`, origin).toString(),
@@ -243,7 +250,7 @@ test('순수 Repost는 guest가 볼 수 있는 직접 Source를 canonicalize하�
     visibility: PostVisibility.UNLISTED,
   });
   const unlistedResponse = await request.get(
-    sharePath(sourceAuthor.profile!.handle, unlistedPost.id),
+    sharePath(sourceAuthor.profile!.handle, unlistedPost.slug),
   );
   expect(await unlistedResponse.text()).toContain('unlisted direct share body');
 
@@ -259,7 +266,7 @@ test('순수 Repost는 guest가 볼 수 있는 직접 Source를 canonicalize하�
     visibility: PostVisibility.PUBLIC,
   });
   const suspendedResponse = await request.get(
-    sharePath(`${suspendedRemote.handle}@suspended-preview.remote.example`, suspendedPost.id),
+    sharePath(`${suspendedRemote.handle}@suspended-preview.remote.example`, suspendedPost.slug),
   );
   const suspendedHtml = await suspendedResponse.text();
   expect(suspendedHtml).not.toContain('suspended instance secret');
@@ -297,7 +304,9 @@ test('Reply는 Parent 대신 자체 Content를 표시하고 Remote 작성자의 
     receivedAt: Temporal.Instant.from('2026-11-05T00:00:00Z'),
     uri: replyUri,
   });
-  const response = await request.get(sharePath(`${remoteAuthor.handle}@${remoteDomain}`, reply.id));
+  const response = await request.get(
+    sharePath(`${remoteAuthor.handle}@${remoteDomain}`, reply.slug),
+  );
   const html = await response.text();
   const metadata = await readMetadata(page, html);
 
@@ -331,7 +340,7 @@ test('실제 ActivityPub 경로는 HTML 미리보기와 분리해 공개·비공
     headers: { accept: 'application/activity+json' },
   });
   const htmlWithRejectedActivityPub = await request.get(
-    sharePath(author.profile!.handle, publicPost.id),
+    sharePath(author.profile!.handle, publicPost.slug),
     { headers: { accept: 'text/html, application/activity+json;q=0' } },
   );
   const activityBody = await activityResponse.text();
@@ -351,7 +360,7 @@ test('실제 ActivityPub 경로는 HTML 미리보기와 분리해 공개·비공
     'text/html;q=0.8, application/activity+json;q=0.5',
     'text/html, application/activity+json',
   ]) {
-    const response = await request.get(sharePath(author.profile!.handle, publicPost.id), {
+    const response = await request.get(sharePath(author.profile!.handle, publicPost.slug), {
       headers: { accept },
     });
     expect(response.status()).toBe(200);
@@ -379,7 +388,7 @@ test('HEAD는 메타데이터 응답 헤더와 빈 본문을 반환하고 변경
     profileId: author.profile!.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const path = sharePath(author.profile!.handle, post.id);
+  const path = sharePath(author.profile!.handle, post.slug);
   const initial = await request.get(path);
   const initialHtml = await initial.text();
   const etag = initial.headers()['etag'] ?? '"old-preview-validator"';

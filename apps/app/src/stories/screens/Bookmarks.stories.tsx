@@ -433,7 +433,9 @@ export const StatesAndCanonicalLinks: Story = {
     );
     expect(canvasElement.querySelector('a[href="/@space-writer"]')).toBeInTheDocument();
     expect(
-      canvasElement.querySelector('a[href="/@space-writer/bookmark-target-1"]'),
+      canvasElement.querySelector(
+        `a[href="/${targetPosts[0]!.profile.relativeHandle}/${targetPosts[0]!.slug}"]`,
+      ),
     ).toBeInTheDocument();
     expect(canvas.queryByRole('tab')).not.toBeInTheDocument();
     expect(canvas.queryByRole('tablist')).not.toBeInTheDocument();
@@ -558,7 +560,7 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
     const quoteCanvas = within(quoteArticle!);
     expect(quoteCanvas.getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
       'href',
-      '/@bookmark-source/bookmark-source-quote',
+      `/${bookmarkDirectQuote.profile.relativeHandle}/${bookmarkDirectQuote.slug}`,
     );
     const sourceBody = quoteCanvas.getByTestId('source-post-body');
     expect(sourceBody.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
@@ -574,7 +576,7 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
 
     await userEvent.click(quoteCanvas.getByRole('link', { name: '원문 게시글 보기' }));
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
-      '/@bookmark-source/bookmark-source-quote',
+      `/${bookmarkDirectQuote.profile.relativeHandle}/${bookmarkDirectQuote.slug}`,
     );
 
     await userEvent.click(
@@ -584,7 +586,7 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
 
     await userEvent.click(sourceBody);
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
-      '/@bookmark-source/bookmark-source-quote',
+      `/${bookmarkDirectQuote.profile.relativeHandle}/${bookmarkDirectQuote.slug}`,
     );
 
     await userEvent.click(
@@ -617,7 +619,7 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
     previewTimestampLink.focus();
     await userEvent.keyboard('{Enter}');
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
-      '/@deep-bookmark-source/bookmark-source-depth-2',
+      `/${bookmarkDeepSource.profile.relativeHandle}/${bookmarkDeepSource.slug}`,
     );
 
     await userEvent.click(repostQuoteAuthorLink);
@@ -626,12 +628,12 @@ export const RepostQuoteUsesOneSourceDepth: Story = {
     );
     await userEvent.click(within(repostQuotePreview).getByTestId('source-post-body'));
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
-      '/@deep-bookmark-source/bookmark-source-depth-2',
+      `/${bookmarkDeepSource.profile.relativeHandle}/${bookmarkDeepSource.slug}`,
     );
 
     await userEvent.click(within(pureRepostRow).getByTestId('post-list-row-body'));
     expect(canvas.getByTestId('bookmark-story-pathname')).toHaveTextContent(
-      '/@bookmark-pure-source/bookmark-pure-repost-source',
+      `/${bookmarkPureRepostSource.profile.relativeHandle}/${bookmarkPureRepostSource.slug}`,
     );
   },
 };
@@ -682,7 +684,9 @@ export const SelectedProfileRoute: Story = {
     expect(articles[0]).toHaveTextContent('두 번째로 저장한 게시글입니다.');
     expect(articles[1]).toHaveTextContent('첫 번째로 저장한 게시글입니다.');
     expect(
-      canvasElement.querySelector('a[href="/@space-writer/bookmark-target-1"]'),
+      canvasElement.querySelector(
+        `a[href="/${targetPosts[0]!.profile.relativeHandle}/${targetPosts[0]!.slug}"]`,
+      ),
     ).toBeInTheDocument();
   },
   render: () => <BookmarksRouteStory />,

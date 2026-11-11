@@ -149,6 +149,7 @@ export type StoryPost = {
   } | null;
   createdAt: string;
   id: string;
+  slug: string;
   isPinned: boolean;
   profile: StoryProfile;
   reactionCounts: Array<{ count: number; type: string }>;
@@ -168,6 +169,7 @@ export function post({
   createdAt = Temporal.Now.instant().subtract({ minutes: 5 }).toString(),
   contentWarning = null,
   id = 'post-1',
+  slug = storyPostSlug(id),
   isPinned = false,
   media = [],
   profile: author = profile(),
@@ -184,6 +186,7 @@ export function post({
   createdAt?: string;
   contentWarning?: string | null;
   id?: string;
+  slug?: string;
   isPinned?: boolean;
   media?: Array<
     Omit<StoryMedia, 'aiProhibitFilterApplied'> & {
@@ -224,6 +227,7 @@ export function post({
           },
     createdAt,
     id,
+    slug,
     isPinned,
     profile: author,
     reactionCounts,
@@ -236,6 +240,14 @@ export function post({
     viewerRepost,
     visibility,
   };
+}
+
+function storyPostSlug(id: string): string {
+  let hash = 0x811c9dc5;
+  for (const character of id) {
+    hash = Math.imul(hash ^ character.charCodeAt(0), 0x01000193);
+  }
+  return (hash >>> 0).toString(36).padStart(12, '0');
 }
 
 function storyDocumentFromText(bodyText: string): PostContentBodyDocumentV1 {

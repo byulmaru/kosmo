@@ -366,10 +366,10 @@ export const sendPushNotification = async (
     const targetPost = await db
       .select({
         currentContentId: Posts.currentContentId,
-        id: Posts.id,
         profileHandle: Profiles.handle,
         profileInstanceDomain: Instances.domain,
         profileInstanceKind: Instances.kind,
+        slug: Posts.slug,
       })
       .from(Posts)
       .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
@@ -384,7 +384,7 @@ export const sendPushNotification = async (
       targetPost.profileHandle,
       targetPost.profileInstanceKind,
       targetPost.profileInstanceDomain,
-    )}/${encodeGlobalId('Post', targetPost.id)}`;
+    )}/${targetPost.slug}`;
 
     if (targetPost.currentContentId) {
       const content = await db

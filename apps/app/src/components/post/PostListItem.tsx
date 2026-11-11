@@ -29,6 +29,7 @@ import type { PostMediaOpenHandler } from './PostMediaImage';
 const PostListRowFragment = graphql`
   fragment PostListRow_post on Post {
     id
+    slug
     createdAt
     visibility
     content {
@@ -55,6 +56,7 @@ const PostListRowFragment = graphql`
 const PostListItemFragment = graphql`
   fragment PostListItem_post on Post {
     id
+    slug
     createdAt
     content {
       id
@@ -80,6 +82,7 @@ const PostListItemFragment = graphql`
     ...PostSourcePresentationView_post
     repostSource {
       id
+      slug
       profile {
         relativeHandle
       }
@@ -110,7 +113,7 @@ export function PostListItem({
   const { reply, replySurface } = usePostReplySurface(post);
   const profileHref = `/${post.profile.relativeHandle}` as const;
   const detailPost = post.content ? post : (post.repostSource ?? post);
-  const detailHref = `/${detailPost.profile.relativeHandle}/${detailPost.id}` as const;
+  const detailHref = `/${detailPost.profile.relativeHandle}/${detailPost.slug}` as const;
   const openDetail = useCallback(() => router.push(detailHref), [detailHref, router]);
   const handleQuoteMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {
@@ -393,7 +396,7 @@ function PostListRow({
   const post = useFragment(PostListRowFragment, postKey);
   const openViewer = usePostMediaViewerHost();
   const profileHref = `/${post.profile.relativeHandle}` as const;
-  const detailHref = `/${post.profile.relativeHandle}/${post.id}` as const;
+  const detailHref = `/${post.profile.relativeHandle}/${post.slug}` as const;
   const openDetail = useCallback(() => router.push(detailHref), [detailHref, router]);
   const handleMediaOpen = useCallback<PostMediaOpenHandler>(
     (selectedIndex, originControl) => {

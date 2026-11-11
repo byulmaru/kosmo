@@ -21,8 +21,9 @@ Quote 동의와 federation 표현은 [ADR 0029](./0029-quote-consent-and-federat
 - Content가 있는 Local Post의 ActivityPub identity는 Author Profile이 연결된 Local Instance의 canonical
   origin과 `/ap/note/{postId}`를 결합한 URI다. `postId`는 immutable DB UUID다. Activity를 실행하는
   deployment의 configured Local Instance가 다르더라도 Author Instance identity를 대체하지 않는다.
-- Author handle이나 GraphQL global ID는 ActivityPub identity에 포함하지 않는다. Post의 canonical Web 공유
-  참조는 ActivityPub identity와 구분해 Note의 `url`로 제공한다.
+- Author handle이나 GraphQL global ID는 ActivityPub identity에 포함하지 않는다. Note의 `id`는 위 immutable
+  Post UUID 기반 identity를 유지하고, 사람이 공유하는 `url`에는 [Post Share Reference](./0015-post-share-reference.md)의
+  canonical `/{relativeHandle}/{slug}` 경로를 제공한다.
 - PROD-255와 archived 원격 Post 수신 계약에 따라 ActivityPub Post mapping은 remote object URI와
   materialized Post의 관계만 소유한다. Local Post identity는 이 기존 경계를 유지하며 DB row를 추가하지 않고
   Post ID에서 파생한다.
@@ -59,7 +60,7 @@ Quote 동의와 federation 표현은 [ADR 0029](./0029-quote-consent-and-federat
 
 Post UUID에 기반한 별도 ActivityPub URI는 mutable handle과 API 전용 global ID에서 federation identity를
 분리한다. Web 공유 URL은 사람이 탐색하는 canonical 참조이고 ActivityPub object URI는 protocol이 안정적으로
-역참조하는 identity이므로 역할을 하나의 URL에 합치지 않는다.
+역참조하는 identity이므로 역할을 하나의 URL에 합치지 않는다. 공유 경로의 slug는 Note identity를 바꾸지 않는다.
 
 Local Post의 federation identity를 Author Profile의 Local Instance에 결속하면 여러 Local Instance가 같은
 저장 모델에 존재하더라도 Activity를 실행한 deployment에 따라 Author Profile과 object origin이 바뀌지 않는다.

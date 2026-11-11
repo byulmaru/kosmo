@@ -19,7 +19,7 @@ export function PostReactionSummary({
     return null;
   }
 
-  const peopleHref = getReactionPeopleHref(controller.relativeHandle, controller.postId);
+  const peopleHref = getReactionPeopleHref(controller.relativeHandle, controller.postSlug);
   return (
     <View style={style}>
       <ReactionSummary

@@ -69,6 +69,7 @@ it('keeps Sensitive Media and preview fields when every V1 body node is unknown'
     },
     post: {
       id: 'post-1',
+      slug: 'PostNotif001',
       profile: { relativeHandle: '@author' },
       content: {
         bodyText: 'future body text',

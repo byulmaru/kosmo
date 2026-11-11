@@ -6,7 +6,6 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { toGlobalId } from './graphql';
 
 test.beforeEach(async () => {
   await resetE2EDatabase();
@@ -26,8 +25,7 @@ test('Web 링크 복사는 configured origin보다 현재 browser origin을 우�
     profileId: viewer.profile!.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const postId = toGlobalId('Post', post.id);
-  const expectedPath = `/@${viewer.profile!.handle}/${postId}`;
+  const expectedPath = `/@${viewer.profile!.handle}/${post.slug}`;
 
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await setE2ESessionCookie(context, viewer.token);

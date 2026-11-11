@@ -31,11 +31,12 @@ outbound Create와 Delete addressing은 아래 Local Note 표현 계약을 따�
 
 ## 속성
 
-| 속성           | 타입/nullability            | 검증 정책                                | 존재 조건                 | 조회 조건           | 조회 권한 |
-| -------------- | --------------------------- | ---------------------------------------- | ------------------------- | ------------------- | --------- |
-| 생성 시각      | 시각, 필수                  | 생성 결과로 기록하며 변경 불가           | 항상                      | Post 조회 정책 통과 | 없음      |
-| 삭제 시각      | 시각, nullable              | Tombstone 전이 결과로 기록하며 변경 불가 | Lifecycle이 Tombstone     | Tombstone 조회 정책 | 없음      |
-| 인용 허용 정책 | Quote Approval Policy, 필수 | 모두, 팔로워, 본인만 중 하나             | Content가 있는 Local Post | Post 조회 정책 통과 | 없음      |
+| 속성           | 타입/nullability            | 검증 정책                                                                  | 존재 조건                 | 조회 조건           | 조회 권한 |
+| -------------- | --------------------------- | -------------------------------------------------------------------------- | ------------------------- | ------------------- | --------- |
+| 공유 slug      | 문자열, 필수                | 무작위 12자리 ASCII 영숫자이며 모든 Post에서 전역적으로 유일하고 변경 불가 | 항상                      | Post 조회 정책 통과 | 없음      |
+| 생성 시각      | 시각, 필수                  | 생성 결과로 기록하며 변경 불가                                             | 항상                      | Post 조회 정책 통과 | 없음      |
+| 삭제 시각      | 시각, nullable              | Tombstone 전이 결과로 기록하며 변경 불가                                   | Lifecycle이 Tombstone     | Tombstone 조회 정책 | 없음      |
+| 인용 허용 정책 | Quote Approval Policy, 필수 | 모두, 팔로워, 본인만 중 하나                                               | Content가 있는 Local Post | Post 조회 정책 통과 | 없음      |
 
 인용 허용 정책은 Content가 있는 Local Post에 적용하며, `모두`, `팔로워`, `본인만` 중 하나다.
 새 Post와 정책 도입 전 작성한 Local Post의 초기값은 `모두`다. 이 값은 이후 인용 요청을 판단하는 기준이며
@@ -265,7 +266,10 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 ### Post 공유 참조
 
 - Content가 있는 Post의 공유 참조는 Web에서 현재 browser origin, Android와 iOS에서 configured Local
-  Instance의 canonical origin과 `/{relativeHandle}/{postId}` 경로를 결합한 절대 URL이다.
+  Instance의 canonical origin과 `/{relativeHandle}/{slug}` 경로를 결합한 절대 URL이다.
+- 모든 Post는 Post global ID와 별개인 무작위로 생성된 전역적으로 유일한 12자리 ASCII 영숫자 slug를 가진다.
+  새 공유 참조에는 이 immutable slug를 사용한다.
+- 이미 발행한 `/{relativeHandle}/{Post global ID}` 공유 URL도 같은 Post를 조회하는 호환 경로로 유지한다.
 - Content 없는 Repost의 공유 참조는 Repost 자신의 식별자가 아니라 조회 가능한 직접 Repost Source의 공유
   참조다. 클라이언트는 Repost 자신의 상세 참조를 노출하지 않고, 그 식별자로 직접 진입해도 Source 공유
   참조로 canonicalize한다.

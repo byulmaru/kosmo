@@ -112,6 +112,49 @@ const quoteNotificationPost = notificationPost({
     }),
   }),
 });
+const reactionNotificationPost = notificationPost({
+  id: 'notification-related-post',
+  profile: notificationRecipient,
+});
+const replyNotificationPost = notificationPost({
+  bodyText: '알림에서 바로 확인할 수 있는 답글 본문입니다.',
+  contentWarning: '답글 내용에 주의가 필요합니다.',
+  id: 'notification-reply-post',
+  reactionCounts: [
+    { count: 2, type: '❤️' },
+    { count: 1, type: '🎉' },
+  ],
+  media: [notificationReplyMedia],
+  profile: unreadFollower,
+});
+const repostRelatedNotificationPost = notificationPost({
+  id: 'notification-repost-related-post',
+  profile: notificationRecipient,
+});
+const mentionNotificationPost = notificationPost({
+  bodyText: '이 글에서 회원님을 멘션했습니다.',
+  id: 'notification-mention-post',
+  reactionCounts: [
+    { count: 2, type: '❤️' },
+    { count: 1, type: '🎉' },
+  ],
+  profile: unreadFollower,
+  replyParent: post({
+    bodyText: '답글 원문 미리보기는 표시하지 않습니다.',
+    id: 'notification-mention-parent',
+    profile: profile({
+      displayName: '답글 원글 작성자',
+      handle: 'reply-parent',
+      id: 'notification-mention-parent-author',
+      relativeHandle: '@reply-parent',
+    }),
+  }),
+});
+const reactionNotificationPostHref = `/${reactionNotificationPost.profile.relativeHandle}/${reactionNotificationPost.slug}`;
+const replyNotificationPostHref = `/${replyNotificationPost.profile.relativeHandle}/${replyNotificationPost.slug}`;
+const repostRelatedNotificationPostHref = `/${repostRelatedNotificationPost.profile.relativeHandle}/${repostRelatedNotificationPost.slug}`;
+const mentionNotificationPostHref = `/${mentionNotificationPost.profile.relativeHandle}/${mentionNotificationPost.slug}`;
+const quoteNotificationPostHref = `/${quoteNotificationPost.profile.relativeHandle}/${quoteNotificationPost.slug}`;
 
 const emptyProfile = notificationsProfile([], {}, { id: 'notification-profile-empty' });
 const contentProfile = notificationsProfile(
@@ -129,31 +172,18 @@ const contentProfile = notificationsProfile(
     followNotification({ id: 'notification-long', profile: longFollower }),
     reactionNotification({
       id: 'notification-reaction',
-      post: notificationPost({ id: 'notification-related-post', profile: notificationRecipient }),
+      post: reactionNotificationPost,
       profile: unreadFollower,
       type: '🎉',
     }),
     replyNotification({
       id: 'notification-reply',
-      post: notificationPost({
-        bodyText: '알림에서 바로 확인할 수 있는 답글 본문입니다.',
-        contentWarning: '답글 내용에 주의가 필요합니다.',
-        id: 'notification-reply-post',
-        reactionCounts: [
-          { count: 2, type: '❤️' },
-          { count: 1, type: '🎉' },
-        ],
-        media: [notificationReplyMedia],
-        profile: unreadFollower,
-      }),
+      post: replyNotificationPost,
       profile: unreadFollower,
     }),
     repostNotification({
       id: 'notification-repost',
-      post: notificationPost({
-        id: 'notification-repost-related-post',
-        profile: notificationRecipient,
-      }),
+      post: repostRelatedNotificationPost,
       profile: readFollower,
     }),
     operationalNotification,
@@ -170,25 +200,7 @@ const mentionProfile = notificationsProfile(
   [
     mentionNotification({
       id: 'notification-mention',
-      post: notificationPost({
-        bodyText: '이 글에서 회원님을 멘션했습니다.',
-        id: 'notification-mention-post',
-        reactionCounts: [
-          { count: 2, type: '❤️' },
-          { count: 1, type: '🎉' },
-        ],
-        profile: unreadFollower,
-        replyParent: post({
-          bodyText: '답글 원문 미리보기는 표시하지 않습니다.',
-          id: 'notification-mention-parent',
-          profile: profile({
-            displayName: '답글 원글 작성자',
-            handle: 'reply-parent',
-            id: 'notification-mention-parent-author',
-            relativeHandle: '@reply-parent',
-          }),
-        }),
-      }),
+      post: mentionNotificationPost,
     }),
     mentionNotification({
       id: 'notification-mention-unavailable',
@@ -709,15 +721,15 @@ export const StatesAndFollowItems: Story = {
     expect(canvasElement.querySelector('a[href="/@starlight"]')).toBeInTheDocument();
     expect(
       notificationPostSummary(canvasElement, /별빛 여행자님이 이 게시글에 반응했습니다/),
-    ).toHaveAttribute('href', '/@recipient/notification-related-post');
+    ).toHaveAttribute('href', reactionNotificationPostHref);
     expect(canvas.getByTestId('notification-post-author')).toHaveAttribute('href', '/@starlight');
     expect(canvas.getByRole('link', { name: '5분 전' })).toHaveAttribute(
       'href',
-      '/@starlight/notification-reply-post',
+      replyNotificationPostHref,
     );
     expect(
       notificationPostSummary(canvasElement, /은하 기록자님이 이 게시글을 재게시했습니다/),
-    ).toHaveAttribute('href', '/@recipient/notification-repost-related-post');
+    ).toHaveAttribute('href', repostRelatedNotificationPostHref);
   },
 };
 
@@ -995,9 +1007,7 @@ export const RepostReadNormalizesAndNavigates: Story = {
     await userEvent.click(
       notificationPostSummary(canvasElement, /은하 기록자님이 이 게시글을 재게시했습니다/),
     );
-    await expect(
-      canvas.findByText('/@recipient/notification-repost-related-post'),
-    ).resolves.toBeVisible();
+    await expect(canvas.findByText(repostRelatedNotificationPostHref)).resolves.toBeVisible();
     await waitFor(() => {
       const summary = notificationPostSummary(
         canvasElement,
@@ -1167,7 +1177,7 @@ export const ReplyAuthorActivationReadsOnce: Story = {
       expect.anything(),
     );
 
-    const detailPath = '/@starlight/notification-reply-post';
+    const detailPath = replyNotificationPostHref;
     const activations = [
       { target: canvas.getByTestId('notification-post-author'), path: '/@starlight' },
       { target: canvas.getByTestId('reply-notification-rail'), path: detailPath },
@@ -1401,7 +1411,7 @@ export const MentionSelectedProfileScreen: Story = {
     await expect(item).toHaveTextContent('읽지 않은 알림');
 
     await userEvent.click(within(mention).getByTestId('post-list-row-body'));
-    await expect(canvas.findByText('/@starlight/notification-mention-post')).resolves.toBeVisible();
+    await expect(canvas.findByText(mentionNotificationPostHref)).resolves.toBeVisible();
     await expect(notificationMutationRequest).toHaveBeenCalledTimes(1);
     await expect(notificationMutationRequest).toHaveBeenCalledWith(
       'NotificationListItemMarkReadMutation',
@@ -1445,9 +1455,7 @@ export const QuoteListActivationReadsNotification: Story = {
     await expect(item).toHaveTextContent('읽지 않은 알림');
 
     await userEvent.click(canvas.getByTestId('post-list-row-body'));
-    await expect(
-      canvas.findByText('/@quote-author/notification-quote-post'),
-    ).resolves.toBeVisible();
+    await expect(canvas.findByText(quoteNotificationPostHref)).resolves.toBeVisible();
     await expect(notificationMutationRequest).toHaveBeenCalledTimes(1);
     await expect(notificationMutationRequest).toHaveBeenCalledWith(
       'NotificationListItemMarkReadMutation',
@@ -1596,7 +1604,7 @@ export const ReplyReactionWhitespaceReadsOnce: Story = {
   ...reactionSummaryReadStory(
     ReplyAuthorActivationReadsOnce,
     'reply',
-    '/@starlight/notification-reply-post',
+    replyNotificationPostHref,
     'notification-reply',
   ),
 };
@@ -1604,7 +1612,7 @@ export const MentionReactionWhitespaceReadsOnce: Story = {
   ...reactionSummaryReadStory(
     MentionSelectedProfileScreen,
     'mention',
-    '/@starlight/notification-mention-post',
+    mentionNotificationPostHref,
     'notification-mention',
   ),
 };
@@ -1612,7 +1620,7 @@ export const QuoteReactionWhitespaceReadsOnce: Story = {
   ...reactionSummaryReadStory(
     QuoteListActivationReadsNotification,
     'quote',
-    '/@quote-author/notification-quote-post',
+    quoteNotificationPostHref,
     'notification-quote',
   ),
 };
@@ -1626,7 +1634,7 @@ export const ReplyReactionWhitespacePendingRead: Story = {
       },
     },
     'reply',
-    '/@starlight/notification-reply-post',
+    replyNotificationPostHref,
     'notification-reply',
   ),
 };
@@ -1640,7 +1648,7 @@ export const ReplyReactionWhitespaceFailedRead: Story = {
       },
     },
     'reply',
-    '/@starlight/notification-reply-post',
+    replyNotificationPostHref,
     'notification-reply',
   ),
 };

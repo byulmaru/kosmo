@@ -386,7 +386,9 @@ describe('PostComposerHost', () => {
     await act(async () => {
       renderer = create(createElement(PostComposerHost, props));
     });
-    await act(async () => composerProps?.onPostCreated?.({ id: 'post-published' }));
+    await act(async () =>
+      composerProps?.onPostCreated?.({ id: 'post-published', slug: 'AbCdEf123456' }),
+    );
 
     let modal = renderer?.root.findByType('ModalOverlay' as ElementType);
     assert.equal(modal?.props.visible, false);

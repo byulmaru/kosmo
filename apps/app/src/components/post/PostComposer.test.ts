@@ -27,7 +27,10 @@ import type {
   MobileFullscreenComposerShellCandidate as MobileFullscreenComposerShellCandidateComponent,
   MobileFullscreenComposerShellCandidateProps,
 } from './PostComposer';
-import type { PostComposerController as PostComposerComponent } from './PostComposerController';
+import type {
+  PostComposerController as PostComposerComponent,
+  PostComposerCreatedPost,
+} from './PostComposerController';
 import type { PostRequestMediaItem } from './PostComposerMediaControls';
 import type { PostComposerMentionInput as PostComposerMentionInputComponent } from './PostComposerMentionInput';
 import type { PostComposerProfileRef } from './PostComposerProfileSwitcher';
@@ -109,10 +112,10 @@ let mutationCalls: Array<{
   onCompleted: (
     response: {
       createPost: {
-        post?: { id: string } | null;
+        post?: { id: string; slug: string } | null;
         request: {
           id: string;
-          post?: { id: string } | null;
+          post?: { id: string; slug: string } | null;
           requestId: string;
           status?: string | null;
         } | null;
@@ -291,6 +294,10 @@ function makeCreatedPost({
     content,
     createdAt: '2026-11-03T00:00:00.000Z',
     id,
+    slug: `Slug${id
+      .slice(-8)
+      .replace(/[^A-Za-z0-9]/g, '')
+      .padStart(8, '0')}`,
     isPinned: false,
     profile,
     reactionCounts: [],
@@ -724,7 +731,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
     it(`projects a ${status} acknowledgement into Profile requests without changing Home`, async () => {
       const requestNodeId = 'post-request-node';
       const publishedPostId = 'post-published';
-      const createdPosts: Array<{ id: string }> = [];
+      const createdPosts: PostComposerCreatedPost[] = [];
       let acceptedCount = 0;
       const query = getRequest(PostRequestListQueryNode);
       const environment = relayEnvironment;
@@ -742,7 +749,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
       seedHomeTimeline(environment, ['post-home-existing']);
 
       const composerProps = (profile: typeof profileA) => ({
-        onPostCreated: (post: { id: string }) => createdPosts.push(post),
+        onPostCreated: (post: PostComposerCreatedPost) => createdPosts.push(post),
         onPostRequestAccepted: () => acceptedCount++,
         onRequestClose: () => undefined,
         presentation: 'overlay' as const,
@@ -799,10 +806,10 @@ describe('PostComposer request acknowledgement cache projection', () => {
       await act(async () =>
         call.onCompleted({
           createPost: {
-            post: publishedPost ? { id: publishedPostId } : null,
+            post: publishedPost ? { id: publishedPostId, slug: publishedPost.slug } : null,
             request: {
               id: requestNodeId,
-              post: publishedPost ? { id: publishedPostId } : null,
+              post: publishedPost ? { id: publishedPostId, slug: publishedPost.slug } : null,
               requestId,
               status,
             },
@@ -810,7 +817,10 @@ describe('PostComposer request acknowledgement cache projection', () => {
         }),
       );
       assert.equal(targetProps?.body, '');
-      assert.deepEqual(createdPosts, status === 'PUBLISHED' ? [{ id: publishedPostId }] : []);
+      assert.deepEqual(
+        createdPosts,
+        status === 'PUBLISHED' ? [{ id: publishedPostId, slug: publishedPost!.slug }] : [],
+      );
       assert.equal(acceptedCount, status === 'PUBLISHED' ? 0 : 1);
       assert.deepEqual(analyticsEvents, [
         {
@@ -892,10 +902,10 @@ describe('PostComposer request acknowledgement cache projection', () => {
         await act(async () =>
           authorBCall.onCompleted({
             createPost: {
-              post: { id: authorBPostId },
+              post: { id: authorBPostId, slug: authorBPost.slug },
               request: {
                 id: authorBRequestNodeId,
-                post: { id: authorBPostId },
+                post: { id: authorBPostId, slug: authorBPost.slug },
                 requestId: authorBRequestId,
                 status: 'PUBLISHED',
               },
@@ -904,8 +914,8 @@ describe('PostComposer request acknowledgement cache projection', () => {
         );
 
         assert.deepEqual(createdPosts, [
-          ...(status === 'PUBLISHED' ? [{ id: publishedPostId }] : []),
-          { id: authorBPostId },
+          ...(status === 'PUBLISHED' ? [{ id: publishedPostId, slug: publishedPost!.slug }] : []),
+          { id: authorBPostId, slug: authorBPost.slug },
         ]);
         assert.deepEqual(analyticsEvents[1], {
           event: 'post_created',
@@ -924,7 +934,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
 
   it('accepts a real Post response with no request without changing Home', async () => {
     const createdPostId = 'post-direct-created';
-    const createdPosts: Array<{ id: string }> = [];
+    const createdPosts: PostComposerCreatedPost[] = [];
     let acceptedCount = 0;
     const query = getRequest(PostRequestListQueryNode);
     const environment = relayEnvironment;
@@ -938,7 +948,7 @@ describe('PostComposer request acknowledgement cache projection', () => {
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {
-          onPostCreated: (post: { id: string }) => createdPosts.push(post),
+          onPostCreated: (post: PostComposerCreatedPost) => createdPosts.push(post),
           onPostRequestAccepted: () => acceptedCount++,
           onRequestClose: () => undefined,
           presentation: 'overlay',
@@ -967,11 +977,16 @@ describe('PostComposer request acknowledgement cache projection', () => {
       },
     });
     await act(async () =>
-      call.onCompleted({ createPost: { post: { id: createdPostId }, request: null } }),
+      call.onCompleted({
+        createPost: {
+          post: { id: createdPostId, slug: 'AbCdEf123456' },
+          request: null,
+        },
+      }),
     );
 
     assert.equal(targetProps?.body, '');
-    assert.deepEqual(createdPosts, [{ id: createdPostId }]);
+    assert.deepEqual(createdPosts, [{ id: createdPostId, slug: 'AbCdEf123456' }]);
     assert.equal(acceptedCount, 0);
     assert.deepEqual(analyticsEvents, [
       {
@@ -1052,7 +1067,12 @@ describe('PostComposer request acknowledgement cache projection', () => {
     const call = mutationCalls[0];
     assert.ok(call);
     await act(async () =>
-      call.onCompleted({ createPost: { post: { id: 'post-direct-created' }, request: null } }),
+      call.onCompleted({
+        createPost: {
+          post: { id: 'post-direct-created', slug: 'AbCdEf123456' },
+          request: null,
+        },
+      }),
     );
 
     assert.equal(targetProps?.body, '');
@@ -1062,10 +1082,10 @@ describe('PostComposer request acknowledgement cache projection', () => {
 });
 
 it('uses acknowledgement feedback without a published Post ID and published feedback with one', async () => {
-  const createdPosts: Array<{ id: string }> = [];
+  const createdPosts: PostComposerCreatedPost[] = [];
   let acceptedCount = 0;
   const props = {
-    onPostCreated: (post: { id: string }) => createdPosts.push(post),
+    onPostCreated: (post: PostComposerCreatedPost) => createdPosts.push(post),
     onPostRequestAccepted: () => acceptedCount++,
     onRequestClose: () => undefined,
     presentation: 'overlay' as const,
@@ -1113,7 +1133,7 @@ it('uses acknowledgement feedback without a published Post ID and published feed
       createPost: {
         request: {
           id: `request-${requestId}`,
-          post: { id: 'post-published-without-handler' },
+          post: { id: 'post-published-without-handler', slug: 'Published001' },
           requestId,
           status: 'PUBLISHED',
         },
@@ -1884,11 +1904,11 @@ describe('PostComposer local author', () => {
 
   it('keeps the draft after a request error and submits again without a client request ID', async () => {
     let acceptedCount = 0;
-    const createdPosts: Array<{ id: string }> = [];
+    const createdPosts: PostComposerCreatedPost[] = [];
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {
-          onPostCreated: (post: { id: string }) => createdPosts.push(post),
+          onPostCreated: (post: PostComposerCreatedPost) => createdPosts.push(post),
           onPostRequestAccepted: () => acceptedCount++,
           onRequestClose: () => undefined,
           presentation: 'overlay',
@@ -1987,11 +2007,11 @@ describe('PostComposer local author', () => {
 
   it('records an accepted request even when a partial GraphQL error is present', async () => {
     let acceptedCount = 0;
-    const createdPosts: Array<{ id: string }> = [];
+    const createdPosts: PostComposerCreatedPost[] = [];
     await act(async () => {
       renderer = create(
         createElement(PostComposer, {
-          onPostCreated: (post: { id: string }) => createdPosts.push(post),
+          onPostCreated: (post: PostComposerCreatedPost) => createdPosts.push(post),
           onPostRequestAccepted: () => acceptedCount++,
           onRequestClose: () => undefined,
           presentation: 'overlay',

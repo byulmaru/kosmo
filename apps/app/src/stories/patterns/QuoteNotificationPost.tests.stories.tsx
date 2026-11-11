@@ -16,21 +16,22 @@ const quoteAuthor = profile({
   id: 'notification-quote-author',
   relativeHandle: '@quote-author',
 });
+const quoteSourcePost = post({
+  bodyText: '인용된 원문 미리보기입니다.',
+  id: 'notification-quote-source',
+  profile: profile({
+    displayName: '원문 작성자',
+    handle: 'source-author',
+    id: 'notification-quote-source-author',
+    relativeHandle: '@source-author',
+  }),
+});
 const quotePost = {
   ...post({
     bodyText: '알림에서 확인할 인용글 본문입니다.',
     id: 'notification-quote-post',
     profile: quoteAuthor,
-    repostSource: post({
-      bodyText: '인용된 원문 미리보기입니다.',
-      id: 'notification-quote-source',
-      profile: profile({
-        displayName: '원문 작성자',
-        handle: 'source-author',
-        id: 'notification-quote-source-author',
-        relativeHandle: '@source-author',
-      }),
-    }),
+    repostSource: quoteSourcePost,
   }),
   viewerReactions: [],
 };
@@ -126,12 +127,12 @@ export const PresentationContract: Story = {
     const author = canvas.getByTestId('notification-post-author');
     await expect(author).toHaveAttribute('href', '/@quote-author');
     const timestampLink = author.parentElement?.querySelector(
-      'a[href="/@quote-author/notification-quote-post"]',
+      `a[href="/@quote-author/${quotePost.slug}"]`,
     );
     await expect(timestampLink).not.toBeNull();
     await expect(canvas.getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
       'href',
-      '/@source-author/notification-quote-source',
+      `/@source-author/${quoteSourcePost.slug}`,
     );
     await expect(canvas.getByText('회원님의 게시글을 인용했습니다').closest('a')).toBeNull();
 

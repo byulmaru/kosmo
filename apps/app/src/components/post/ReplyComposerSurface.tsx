@@ -290,7 +290,7 @@ function ReplyComposerSurfaceContents({
       showToast(`${composerName}을 게시했어요`, {
         action: {
           label: '보기',
-          onPress: () => router.push(`/${profile.relativeHandle}/${post.id}` as Href),
+          onPress: () => router.push(`/${profile.relativeHandle}/${post.slug}` as Href),
         },
         tone: 'success',
       });

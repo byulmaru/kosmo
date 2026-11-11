@@ -64,6 +64,7 @@ const actionBarProps = {
 const replyAccessibilityLabel = `답글, ${formatPostActionCount(actionBarProps.reply.count)}`;
 
 const sourcePostId = 'post-source';
+const sourcePostSlug = 'Action000001';
 const activeRepostId = 'post-repost-active';
 type RepostFixtureState = 'unselected' | 'selected' | 'pending';
 type RepostPlaygroundState = Exclude<RepostFixtureState, 'pending'>;
@@ -103,6 +104,7 @@ const unselectedSource = {
   __typename: 'Post',
   content: { __typename: 'PostContent', id: 'content-source' },
   id: sourcePostId,
+  slug: sourcePostSlug,
   profile: { __typename: 'Profile', id: 'profile-author', relativeHandle: '@author' },
   state: 'ACTIVE',
   repostCount: 12_345,
@@ -764,7 +766,7 @@ function PostActionBarPlayground({
   repostState,
 }: PlaygroundProps) {
   const copyLinkItem = usePostMoreMenuItem({
-    postId: sourcePostId,
+    postSlug: sourcePostSlug,
     relativeHandle: '@kosmo',
   });
 
@@ -1831,7 +1833,10 @@ export const NoSelectedProfileDisablesReaction: Story = {
     expect(trigger).toBeDisabled();
     expect(heartSummary).toBeDisabled();
     expect(moreProfiles).toBeEnabled();
-    expect(moreProfiles).toHaveAttribute('href', '/@author/post-source/reactions');
+    expect(moreProfiles).toHaveAttribute(
+      'href',
+      `/${unselectedSource.profile.relativeHandle}/${unselectedSource.slug}/reactions`,
+    );
     trigger.click();
     heartSummary.click();
     expect(screen.queryByRole('dialog', { name: '반응 선택' })).toBeNull();

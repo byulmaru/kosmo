@@ -374,7 +374,7 @@ export const VisitorMenuContract: Story = {
     await userEvent.click(body.getByRole('menuitem', { name: '링크 복사' }));
     await waitFor(() =>
       expect(getCopiedStrings()).toEqual([
-        `${window.location.origin}/${storyPost.profile.relativeHandle}/${storyPost.id}`,
+        `${window.location.origin}/${storyPost.profile.relativeHandle}/${storyPost.slug}`,
       ]),
     );
   },

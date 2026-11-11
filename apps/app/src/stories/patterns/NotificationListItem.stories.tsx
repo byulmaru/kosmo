@@ -834,7 +834,7 @@ export const ReplyLayoutContract: Story = {
     await userEvent.tab();
     await expect(document.activeElement).toHaveAttribute(
       'href',
-      '/@starlight/notification-reply-post',
+      `/${replyPost.profile.relativeHandle}/${replyPost.slug}`,
     );
   },
 };
@@ -918,7 +918,7 @@ export const ReplyActionsContract: Story = {
     await userEvent.click(within(menu).getByRole('menuitem', { name: '링크 복사' }));
     await waitFor(() =>
       expect(getCopiedStrings()).toEqual([
-        `${window.location.origin}/@starlight/notification-reply-post`,
+        `${window.location.origin}/${replyPost.profile.relativeHandle}/${replyPost.slug}`,
       ]),
     );
     await expect(args.onNavigate).not.toHaveBeenCalled();
@@ -957,7 +957,10 @@ export const ReplyRailActivationContract: Story = {
     const canvas = within(canvasElement);
     const rail = canvas.getByTestId('reply-notification-rail');
     const kind = canvas.getByTestId('reply-notification-kind');
-    await expect(rail).toHaveAttribute('href', '/@starlight/notification-reply-post');
+    await expect(rail).toHaveAttribute(
+      'href',
+      `/${replyPost.profile.relativeHandle}/${replyPost.slug}`,
+    );
     await expect(kind).toHaveStyle({ height: '48px', width: '48px' });
     await expect(rail.getBoundingClientRect().height).toBeGreaterThan(
       kind.getBoundingClientRect().height,
@@ -1050,7 +1053,10 @@ export const PostNotificationRailActivationContract: Story = {
       const railBounds = rail.getBoundingClientRect();
       const iconBounds = icon.getBoundingClientRect();
 
-      await expect(rail).toHaveAttribute('href', '/@starlight/notification-reply-post');
+      await expect(rail).toHaveAttribute(
+        'href',
+        `/${replyPost.profile.relativeHandle}/${replyPost.slug}`,
+      );
       expect(railBounds.width).toBe(48);
       expect(railBounds.height).toBeGreaterThan(iconBounds.height);
       expect(iconBounds.width).toBe(48);

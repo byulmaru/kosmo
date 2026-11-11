@@ -36,7 +36,7 @@ test('로컬에서 게시글·반응 상세를 왕복하면 목록과 위치를 
   await expect(page).toHaveURL('/local');
   await expect(localTab).toHaveAttribute('aria-selected', 'true');
 
-  const postPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', post.id)}`;
+  const postPath = `/@${viewer.profile!.handle}/${post.slug}`;
   const localPost = page.getByRole('article').filter({ hasText: postBody });
   await expect(localPost).toBeVisible();
   await localPost.scrollIntoViewIfNeeded();
@@ -126,7 +126,7 @@ test('목록에서 People로 이동하고 Type과 프로필 방문 후 원래 �
   }
   await setE2ESessionCookie(context, viewer.token);
   await page.goto('/home');
-  const peoplePath = `/@${viewer.profile!.handle}/${toGlobalId('Post', post.id)}/reactions`;
+  const peoplePath = `/@${viewer.profile!.handle}/${post.slug}/reactions`;
   const entry = page.locator(`a[href="${peoplePath}"]`);
   await entry.scrollIntoViewIfNeeded();
   const previousScroll = await page.evaluate(() => window.scrollY);
@@ -176,7 +176,7 @@ test('guest 직접 진입은 순수 Repost 원문과 Type을 정규화한다', a
   await db.insert(Reactions).values({ postId: post.id, profileId: reactor.id, type: '❤️' });
   await page.goto(`/wrong-handle/${toGlobalId('Post', repost.id)}/reactions?type=invalid`);
 
-  const sourcePath = `/@${author.handle}/${toGlobalId('Post', post.id)}`;
+  const sourcePath = `/@${author.handle}/${post.slug}`;
   await expect
     .poll(() => decodeURIComponent(new URL(page.url()).pathname))
     .toBe(`${sourcePath}/reactions`);
@@ -217,7 +217,7 @@ test('Wide Viewer에서 People로 이동하면 Viewer를 닫고 새 화면으로
     { postId: reply.id, profileId: reactor.id, type: '❤️' },
   ]);
   await setE2ESessionCookie(context, viewer.token);
-  const postPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', post.id)}`;
+  const postPath = `/@${viewer.profile!.handle}/${post.slug}`;
   await page.goto(postPath);
   await page.getByRole('button', { name: 'People 테스트 이미지 크게 보기' }).click();
   const dialog = page.getByRole('dialog');
@@ -238,7 +238,7 @@ test('Wide Viewer에서 People로 이동하면 Viewer를 닫고 새 화면으로
 
   await page.setViewportSize({ height: 900, width: 1440 });
   await page.getByRole('button', { name: 'People 테스트 이미지 크게 보기' }).click();
-  const replyPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', reply.id)}`;
+  const replyPath = `/@${viewer.profile!.handle}/${reply.slug}`;
   await dialog.locator(`a[href="${replyPath}/reactions"]`).click();
   await expect(heading).toBeFocused();
   await expect(dialog).toHaveCount(0);

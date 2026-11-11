@@ -22,6 +22,7 @@ const loadReplyAncestors = async (post: PostRow, ctx: UserContext): Promise<Post
     WITH RECURSIVE reply_ancestor AS (
       SELECT
         ${Posts.id},
+        ${Posts.slug},
         ${Posts.profileId},
         ${Posts.visibility},
         ${Posts.state},
@@ -44,6 +45,7 @@ const loadReplyAncestors = async (post: PostRow, ctx: UserContext): Promise<Post
 
       SELECT
         ${Posts.id},
+        ${Posts.slug},
         ${Posts.profileId},
         ${Posts.visibility},
         ${Posts.state},
@@ -65,6 +67,7 @@ const loadReplyAncestors = async (post: PostRow, ctx: UserContext): Promise<Post
     )
     SELECT
       id,
+      slug,
       profile_id AS "profileId",
       visibility,
       state,

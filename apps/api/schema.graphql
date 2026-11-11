@@ -524,6 +524,7 @@ type Post implements Node {
   replyParent: Post
   repostCount: Int!
   repostSource: Post
+  slug: String!
   smartFilterProbability: Float
   state: PostState!
   viewerBookmark: Bookmark
@@ -784,6 +785,7 @@ type Query {
   me: Account
   node(id: ID!): Node
   nodes(ids: [ID!]!): [Node]!
+  postByReference(reference: String!): Post
   profileByHandle(handle: String!): Profile
   searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
   smartFilterResults(

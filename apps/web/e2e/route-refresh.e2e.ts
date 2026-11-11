@@ -6,7 +6,7 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { isGraphQLOperation, toGlobalId } from './graphql';
+import { isGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
 const historyStorageKey = 'kosmo-e2e-route-history';
@@ -91,7 +91,7 @@ async function createRoutes(): Promise<RouteCase[]> {
     body: '새로고침 URL 회귀 게시물',
     profileId: profile.id,
   });
-  const postPath = `/@${profile.handle}/${toGlobalId('Post', post.id)}`;
+  const postPath = `/@${profile.handle}/${post.slug}`;
 
   return [
     {

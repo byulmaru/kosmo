@@ -188,6 +188,7 @@ const postData = {
   },
   createdAt: '2026-10-14T00:00:00.000Z',
   id: 'post-1',
+  slug: 'ListItem0001',
   profile: {
     avatar: null,
     displayName: 'Profile',
@@ -353,7 +354,7 @@ for (const os of ['ios', 'android']) {
       assert.ok(feedbackIsPressed());
       await release(t);
       assertFeedbackRest();
-      assert.deepEqual(navigations, ['/@profile/post-1']);
+      assert.deepEqual(navigations, ['/@profile/ListItem0001']);
 
       await touchDown(tag);
       assert.ok(feedbackIsPressed());
@@ -361,17 +362,17 @@ for (const os of ['ios', 'android']) {
       assertFeedbackRest();
       await act(async () => nativeHarness.touchMove({ x: 20, y: 20 }));
       await release(t);
-      assert.deepEqual(navigations, ['/@profile/post-1']);
+      assert.deepEqual(navigations, ['/@profile/ListItem0001']);
 
       await touchDown(tag);
       assert.ok(feedbackIsPressed());
       await cancel(t);
       assertFeedbackRest();
-      assert.deepEqual(navigations, ['/@profile/post-1']);
+      assert.deepEqual(navigations, ['/@profile/ListItem0001']);
       await touchDown(tag);
       await release(t);
       assertFeedbackRest();
-      assert.deepEqual(navigations, ['/@profile/post-1', '/@profile/post-1']);
+      assert.deepEqual(navigations, ['/@profile/ListItem0001', '/@profile/ListItem0001']);
     });
   }
 }
@@ -390,7 +391,7 @@ for (const [variant, content, repostSource] of [
     assert.ok(feedbackIsPressed());
     await release(t);
     assertFeedbackRest();
-    assert.deepEqual(navigations, ['/@profile/post-1']);
+    assert.deepEqual(navigations, ['/@profile/ListItem0001']);
   });
 }
 
@@ -403,7 +404,7 @@ for (const os of ['ios', 'android']) {
         nativeHarness.render(
           createElement(
             PostActionBackgroundPressContext.Provider,
-            { value: () => navigations.push('/@profile/post-1') },
+            { value: () => navigations.push('/@profile/ListItem0001') },
             createElement(
               PostActionBackground,
               { testID: 'action-background' },
@@ -442,7 +443,7 @@ for (const os of ['ios', 'android']) {
       assert.deepEqual(navigations, []);
       await touchDown(background);
       await release(t);
-      assert.deepEqual(navigations, ['/@profile/post-1']);
+      assert.deepEqual(navigations, ['/@profile/ListItem0001']);
     });
   }
 }

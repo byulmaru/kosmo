@@ -16,31 +16,30 @@ import type { Href } from 'expo-router';
 import type { ReactionPeopleRouteQuery } from './__generated__/ReactionPeopleRouteQuery.graphql';
 
 const reactionPeopleRouteQuery = graphql`
-  query ReactionPeopleRouteQuery($postId: ID!) {
-    node(id: $postId) {
-      __typename
-      ... on Post {
+  query ReactionPeopleRouteQuery($reference: String!) {
+    postByReference(reference: $reference) {
+      id
+      slug
+      state
+      profile {
+        relativeHandle
+      }
+      content {
         id
-        state
+      }
+      replyParent {
+        id
+      }
+      repostSource {
+        id
+        slug
         profile {
           relativeHandle
         }
-        content {
-          id
-        }
-        replyParent {
-          id
-        }
-        repostSource {
-          id
-          profile {
-            relativeHandle
-          }
-        }
-        reactionCounts {
-          type
-          count
-        }
+      }
+      reactionCounts {
+        type
+        count
       }
     }
   }
@@ -54,14 +53,14 @@ export default function ReactionPeopleRoute() {
     type?: string | string[];
   }>();
   const router = useRouter();
-  const postId = firstParam(params.postId);
+  const postReference = firstParam(params.postId);
   const rawProfileHandle = firstParam(params.profileHandle);
   const requestedType = firstParam(params.type);
   const handle = normalizeProfileHandle(rawProfileHandle);
   const routeRelativeHandle = rawProfileHandle.startsWith('@')
     ? rawProfileHandle
     : `@${rawProfileHandle}`;
-  const fallbackPostHref = `/${routeRelativeHandle}/${postId}` as Href;
+  const fallbackPostHref = `/${routeRelativeHandle}/${postReference}` as Href;
   const onBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -71,16 +70,16 @@ export default function ReactionPeopleRoute() {
   }, [fallbackPostHref, router]);
 
   return (
-    <ReactionPeopleRouteFrame onBack={onBack} scrollKey={postId}>
+    <ReactionPeopleRouteFrame onBack={onBack} scrollKey={postReference}>
       <RouteBoundary
         error={(retry) => <ReactionPeopleRouteState onRetry={retry} state="error" />}
-        key={`${handle}:${postId}`}
+        key={`${handle}:${postReference}`}
         loading={<ReactionPeopleRouteState state="loading" />}
         title="반응한 프로필을 불러오지 못했어요"
       >
         <ReactionPeopleRouteContent
           active={active}
-          postId={postId}
+          postReference={postReference}
           requestedType={requestedType}
           routeRelativeHandle={routeRelativeHandle}
         />
@@ -91,12 +90,12 @@ export default function ReactionPeopleRoute() {
 
 function ReactionPeopleRouteContent({
   active,
-  postId,
+  postReference,
   requestedType,
   routeRelativeHandle,
 }: {
   active: boolean;
-  postId: string;
+  postReference: string;
   requestedType: string;
   routeRelativeHandle: string;
 }) {
@@ -104,20 +103,20 @@ function ReactionPeopleRouteContent({
   const router = useRouter();
   const data = useLazyLoadQuery<ReactionPeopleRouteQuery>(
     reactionPeopleRouteQuery,
-    { postId },
+    { reference: postReference },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
-  const post = data.node?.__typename === 'Post' ? data.node : null;
+  const post = data.postByReference;
   const pureRepostSource = post && !post.content && !post.replyParent ? post.repostSource : null;
   const pureRepostSourceHref = pureRepostSource
     ? getReactionPeopleHref(
         pureRepostSource.profile.relativeHandle,
-        pureRepostSource.id,
+        pureRepostSource.slug,
         requestedType || undefined,
       )
     : null;
   const canonicalPeopleHref = post
-    ? getReactionPeopleHref(post.profile.relativeHandle, post.id, requestedType || undefined)
+    ? getReactionPeopleHref(post.profile.relativeHandle, post.slug, requestedType || undefined)
     : null;
   const reactionCounts = post?.reactionCounts.filter(({ count }) => count > 0) ?? [];
   const reactionType = resolveReactionPeopleType(reactionCounts, requestedType);
@@ -125,10 +124,13 @@ function ReactionPeopleRouteContent({
   useEffect(() => {
     if (pureRepostSourceHref) {
       router.replace(pureRepostSourceHref);
-    } else if (post && post.profile.relativeHandle !== routeRelativeHandle) {
+    } else if (
+      post &&
+      (post.profile.relativeHandle !== routeRelativeHandle || post.slug !== postReference)
+    ) {
       router.replace(canonicalPeopleHref!);
     }
-  }, [canonicalPeopleHref, post, pureRepostSourceHref, routeRelativeHandle, router]);
+  }, [canonicalPeopleHref, post, postReference, pureRepostSourceHref, routeRelativeHandle, router]);
 
   useEffect(() => {
     if (reactionType && reactionType !== requestedType) {
@@ -136,7 +138,10 @@ function ReactionPeopleRouteContent({
     }
   }, [reactionType, requestedType, router]);
 
-  if (pureRepostSourceHref || (post && post.profile.relativeHandle !== routeRelativeHandle)) {
+  if (
+    pureRepostSourceHref ||
+    (post && (post.profile.relativeHandle !== routeRelativeHandle || post.slug !== postReference))
+  ) {
     return null;
   }
 

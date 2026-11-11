@@ -245,7 +245,7 @@ test('Reaction·Repost 알림 사진과 게시글은 각각 한 번 이동하고
     .returning();
   const reactionNotificationId = toGlobalId('ReactionNotification', reactionNotification!.id);
   const repostNotificationId = toGlobalId('RepostNotification', repostNotification!.id);
-  const relatedPostHref = `/@${recipient.profile.handle}/${toGlobalId('Post', relatedPost.id)}`;
+  const relatedPostHref = `/@${recipient.profile.handle}/${relatedPost.slug}`;
 
   await setE2ESessionCookie(context, recipient.token);
 
@@ -464,7 +464,7 @@ test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번
 
   markReadRequestCount = 0;
   await replyRow.getByTestId('post-list-row-body').click();
-  await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${toGlobalId('Post', reply.id)}`);
+  await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${reply.slug}`);
   await expect.poll(() => markReadRequestCount).toBe(1);
   await expect.poll(() => notificationReadAt(notification.id)).not.toBeNull();
   await page.unroute('**/graphql');
@@ -609,7 +609,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     const correctedDetailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
     await page.goto(`/@stale-reply-author/${sourceId}`);
     await assertQuerySuccess(correctedDetailResponse);
-    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
+    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${source.slug}`);
     await expect(sourceRow).toBeInViewport();
     await expect.poll(sourceHeaderDistance).toBeLessThanOrEqual(1);
 
@@ -620,7 +620,7 @@ test('답글 상세는 모든 진입에서 대상을 보이고 지연 이미지�
     await page.getByRole('link', { name: '홈', exact: true }).first().click();
     await expect(page.getByRole('heading', { name: '홈', exact: true })).toBeVisible();
     await page.goBack();
-    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${sourceId}`);
+    await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${source.slug}`);
     await expect(sourceRow).toBeAttached();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(visibleRootRow.getByText(rootBody, { exact: false })).toBeVisible();

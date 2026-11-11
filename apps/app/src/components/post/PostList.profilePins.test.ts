@@ -183,9 +183,17 @@ async function start() {
   });
   return environment;
 }
+const fixtureSlug = (id: string) => {
+  let hash = 14695981039346656037n;
+  for (const character of id) {
+    hash = BigInt.asUintN(64, (hash ^ BigInt(character.charCodeAt(0))) * 1099511628211n);
+  }
+  return BigInt.asUintN(62, hash).toString(36).padStart(12, '0');
+};
 const postNode = (id: string, isPinned: boolean, kind = 'LOCAL') => ({
   __typename: 'Post',
   id,
+  slug: fixtureSlug(id),
   isPinned,
   createdAt: '2026-09-30T00:00:00Z',
   state: 'ACTIVE',

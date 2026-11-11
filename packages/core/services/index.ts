@@ -30,6 +30,7 @@ export {
 } from './post';
 export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post-quote-consent';
 export { applyPostQuoteConsent } from './post-quote-consent';
+export { withPostSlugRetry } from './post-slug';
 export { disableProfile } from './profile';
 export { assertProfilePairIsNotBlocked, ProfilePairBlockedError } from './profile-block-policy';
 export { followProfile, unfollowProfile } from './profile-follow';

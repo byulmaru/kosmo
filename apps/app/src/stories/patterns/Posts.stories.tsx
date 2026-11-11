@@ -3299,7 +3299,9 @@ export const BodyTimeAndLayoutStates: Story = {
     const canvas = within(canvasElement);
     expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
     expect(
-      canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),
+      canvasElement.querySelector(
+        `a[href="/${remoteAuthorPost.profile.relativeHandle}/${remoteAuthorPost.slug}"]`,
+      ),
     ).toBeInTheDocument();
     const contentLink = canvas.getByRole('link', {
       name: /안전한 외부 링크, https:\/\/example\.com\/path/,
@@ -3911,11 +3913,15 @@ export const ProductionRepostQuoteListIntegration: Story = {
     expect(within(quoteRow!).getByTestId('source-post-preview')).toBeVisible();
     expect(within(replyQuoteRow!).getByTestId('source-post-preview')).toBeVisible();
     expect(
-      replyQuoteRow!.querySelector('a[href="/@source@remote.example/post-source"]'),
+      replyQuoteRow!.querySelector(
+        `a[href="/${sourcePost.profile.relativeHandle}/${sourcePost.slug}"]`,
+      ),
     ).toBeInTheDocument();
     expect(sourceNullQuoteRow!.querySelector('a[href="/@reposter"]')).toBeInTheDocument();
     expect(
-      sourceNullQuoteRow!.querySelector('a[href="/@reposter/post-quote-source-null"]'),
+      sourceNullQuoteRow!.querySelector(
+        `a[href="/${quoteWithoutSource.profile.relativeHandle}/${quoteWithoutSource.slug}"]`,
+      ),
     ).toBeInTheDocument();
     expect(
       within(sourceNullQuoteRow!).queryByTestId('source-post-preview'),
@@ -3929,18 +3935,28 @@ export const ProductionRepostQuoteListIntegration: Story = {
 
     expect(pureRepostRow!.querySelector('a[href="/@reposter"]')).toBeInTheDocument();
     expect(
-      pureRepostRow!.querySelector('a[href="/@source@remote.example/post-source"]'),
+      pureRepostRow!.querySelector(
+        `a[href="/${sourcePost.profile.relativeHandle}/${sourcePost.slug}"]`,
+      ),
     ).toBeInTheDocument();
-    expect(quoteRow!.querySelector('a[href="/@reposter/post-quote"]')).toBeInTheDocument();
+    expect(
+      quoteRow!.querySelector(`a[href="/${quotePost.profile.relativeHandle}/${quotePost.slug}"]`),
+    ).toBeInTheDocument();
     expect(quoteRow!.querySelector('a[href="/@source@remote.example"]')).toBeInTheDocument();
     expect(
-      quoteOfQuoteRow!.querySelector('a[href="/@deep-source@remote.example/post-source-depth-2"]'),
+      quoteOfQuoteRow!.querySelector(
+        `a[href="/${contentWarningSourcePreviewPost.profile.relativeHandle}/${contentWarningSourcePreviewPost.slug}"]`,
+      ),
     ).not.toBeInTheDocument();
     expect(
-      quoteOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
+      quoteOfQuoteRow!.querySelectorAll(
+        `a[href="/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}"]`,
+      ),
     ).toHaveLength(1);
     expect(
-      repostOfQuoteRow!.querySelectorAll('a[href="/@source@remote.example/post-source-quote"]'),
+      repostOfQuoteRow!.querySelectorAll(
+        `a[href="/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}"]`,
+      ),
     ).toHaveLength(1);
     expect(repostOfQuoteRow!.querySelectorAll('[data-testid="source-post-preview"]')).toHaveLength(
       1,
@@ -3984,12 +4000,12 @@ export const ProductionRepostQuoteListIntegration: Story = {
     try {
       await userEvent.click(within(quoteRow!).getByTestId('post-body'));
       expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
-        '/@reposter/post-quote',
+        `/${quotePost.profile.relativeHandle}/${quotePost.slug}`,
       );
 
       await userEvent.click(within(replyQuoteRow!).getByTestId('post-body'));
       expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
-        '/@reposter/post-reply-quote',
+        `/${replyQuotePost.profile.relativeHandle}/${replyQuotePost.slug}`,
       );
 
       await userEvent.click(
@@ -3999,11 +4015,11 @@ export const ProductionRepostQuoteListIntegration: Story = {
       );
       await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
       expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
-        '/@reposter/post-reply-quote',
+        `/${replyQuotePost.profile.relativeHandle}/${replyQuotePost.slug}`,
       );
       await userEvent.click(within(quoteOfQuoteRow!).getByTestId('source-post-body'));
       expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
-        '/@source@remote.example/post-source-quote',
+        `/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}`,
       );
     } finally {
       Linking.openURL = originalOpenURL;
@@ -4176,7 +4192,7 @@ export const ProductionReactionMutationTargets: Story = {
     );
     await waitFor(() =>
       expect(getCopiedStrings()).toEqual([
-        `${storyShareOrigin()}/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.id}`,
+        `${storyShareOrigin()}/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}`,
       ]),
     );
   },
@@ -4243,7 +4259,7 @@ export const ProductionBookmarkPendingGuard: Story = {
     );
     await waitFor(() =>
       expect(getCopiedStrings()).toEqual([
-        `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+        `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
       ]),
     );
     expect(bookmark).toHaveAttribute('aria-busy', 'true');
@@ -4439,7 +4455,7 @@ export const ProductionGuestActionResolution: Story = {
     await waitFor(() => expect(mocked(startWebLogin)).toHaveBeenCalledTimes(4));
     await waitFor(() =>
       expect(getCopiedStrings()).toEqual([
-        `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+        `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
       ]),
     );
     expect(canvas.getByTestId('profile-resolution-count')).toHaveTextContent('0');
@@ -4528,15 +4544,15 @@ export const ProductionMoreShareReferences: Story = {
     const targets = [
       {
         actionBar: ordinaryActionBar,
-        reference: `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+        reference: `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
       },
       {
         actionBar: quoteActionBar,
-        reference: `${storyShareOrigin()}/${quotePost.profile.relativeHandle}/${quotePost.id}`,
+        reference: `${storyShareOrigin()}/${quotePost.profile.relativeHandle}/${quotePost.slug}`,
       },
       {
         actionBar: pureRepostActionBar,
-        reference: `${storyShareOrigin()}/${sourcePost.profile.relativeHandle}/${sourcePost.id}`,
+        reference: `${storyShareOrigin()}/${sourcePost.profile.relativeHandle}/${sourcePost.slug}`,
       },
     ];
 
@@ -4592,7 +4608,7 @@ export const ProductionMoreShareReferences: Story = {
     await expect(canvas.findByRole('alert')).resolves.toHaveTextContent('링크를 복사했어요');
     await waitFor(() => expect(getCopiedStrings()).toHaveLength(4));
     expect(getCopiedStrings()[3]).toBe(
-      `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.id}`,
+      `${storyShareOrigin()}/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
     );
   },
   render: () => <ProductionRepostQuoteLists />,
@@ -4690,21 +4706,21 @@ export const PureRepost: Story = {
     );
 
     const sourceTimestampLink = standardRow.querySelector<HTMLAnchorElement>(
-      'a[href="/@source@remote.example/post-source"]',
+      `a[href="/${sourcePost.profile.relativeHandle}/${sourcePost.slug}"]`,
     );
     expect(sourceTimestampLink).not.toBeNull();
     expect(sourceTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     expect(sourceTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     await userEvent.click(sourceTimestampLink!);
     expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-      '/@source@remote.example/post-source',
+      `/${sourcePost.profile.relativeHandle}/${sourcePost.slug}`,
     );
 
     await userEvent.click(
       within(standardRow).getByText(/원문 작성자의 긴 본문과 줄바꿈을 표시합니다/),
     );
     expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-      '/@source@remote.example/post-source',
+      `/${sourcePost.profile.relativeHandle}/${sourcePost.slug}`,
     );
   },
   render: () => <ProductionPostListItemStory postId="post-repost" presentation="wide" />,
@@ -4745,7 +4761,7 @@ export const PureRepostOfQuote: Story = {
     expect(sourceAuthorLink).toHaveAttribute('href', '/@deep-source@remote.example');
     expect(sourceTimestampLink).toHaveAttribute(
       'href',
-      '/@deep-source@remote.example/content-warning-source-preview-post',
+      `/${contentWarningSourcePreviewPost.profile.relativeHandle}/${contentWarningSourcePreviewPost.slug}`,
     );
     expect(sourceTimestampLink.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(sourceTimestampLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
@@ -4774,11 +4790,11 @@ export const PureRepostOfQuote: Story = {
       );
 
       const quoteTimestampLink = standardRow.querySelector<HTMLAnchorElement>(
-        'a[href="/@source@remote.example/post-source-quote"]',
+        `a[href="/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}"]`,
       )!;
       await userEvent.click(quoteTimestampLink);
       expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-        '/@source@remote.example/post-source-quote',
+        `/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}`,
       );
 
       sourceAuthorLink.focus();
@@ -4789,7 +4805,7 @@ export const PureRepostOfQuote: Story = {
       sourceTimestampLink.focus();
       await userEvent.keyboard('{Enter}');
       expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-        '/@deep-source@remote.example/content-warning-source-preview-post',
+        `/${contentWarningSourcePreviewPost.profile.relativeHandle}/${contentWarningSourcePreviewPost.slug}`,
       );
 
       await userEvent.click(warningButton);
@@ -4807,29 +4823,29 @@ export const PureRepostOfQuote: Story = {
       );
       await expect(openURL).toHaveBeenCalledWith('https://example.com/path');
       expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-        '/@deep-source@remote.example/content-warning-source-preview-post',
+        `/${contentWarningSourcePreviewPost.profile.relativeHandle}/${contentWarningSourcePreviewPost.slug}`,
       );
 
       await userEvent.click(quoteTimestampLink);
       expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-        '/@source@remote.example/post-source-quote',
+        `/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}`,
       );
       await userEvent.click(sourcePreview);
       expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-        '/@source@remote.example/post-source-quote',
+        `/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}`,
       );
       await userEvent.click(
         within(sourcePreview).getByText('가림 해제 뒤 표시되는 원문 프리뷰 본문입니다.'),
       );
       expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-        '/@deep-source@remote.example/content-warning-source-preview-post',
+        `/${contentWarningSourcePreviewPost.profile.relativeHandle}/${contentWarningSourcePreviewPost.slug}`,
       );
 
       await userEvent.click(
         within(standardRow).getByText('첫 번째 direct Source Quote의 본문입니다.'),
       );
       expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-        '/@source@remote.example/post-source-quote',
+        `/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}`,
       );
     } finally {
       Linking.openURL = originalOpenURL;
@@ -4855,7 +4871,7 @@ export const PureRepostOfQuoteWithoutAvailableSource: Story = {
       within(standardRow).getByText('원문이 없어도 유지되는 직접 Quote 본문입니다.'),
     );
     expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-      '/@source@remote.example/post-source-quote-without-preview',
+      `/${sourceQuoteWithoutPreview.profile.relativeHandle}/${sourceQuoteWithoutPreview.slug}`,
     );
   },
   render: () => (
@@ -4903,7 +4919,7 @@ export const Quote: Story = {
 
     await userEvent.click(postBody);
     expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
-      '/@reposter/post-quote',
+      `/${quotePost.profile.relativeHandle}/${quotePost.slug}`,
     );
     const pathnameBeforePadding = within(canvasElement).getByTestId(
       'presentation-story-pathname',
@@ -5080,13 +5096,13 @@ export const QuoteListItemInternalBackground: Story = {
       { keys: '[MouseLeft>]', target, coords: coords(0) },
       { keys: '[/MouseLeft]', target, coords: coords(0) },
     ]);
-    expect(pathname).toHaveTextContent('/@reposter/post-quote');
+    expect(pathname).toHaveTextContent(`/${quotePost.profile.relativeHandle}/${quotePost.slug}`);
     await userEvent.click(
       canvas.getByRole('link', { name: `${repostAuthor.displayName} 프로필 보기` }),
     );
     expect(pathname.textContent).toBe(`/@reposter`);
     await userEvent.click(canvas.getByRole('link', { name: '원문 게시글 보기' }));
-    expect(pathname.textContent).toBe(`/${sourcePost.profile.relativeHandle}/${sourcePost.id}`);
+    expect(pathname.textContent).toBe(`/${sourcePost.profile.relativeHandle}/${sourcePost.slug}`);
   },
   render: () => <ProductionPostListItemStory postId="post-quote" presentation="wide" />,
 };
@@ -5126,7 +5142,7 @@ export const QuoteOfQuote: Story = {
     expect(root.querySelector('[role="link"] [role="link"]')).toBeNull();
     await userEvent.click(canvas.getByTestId('source-post-body'));
     expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
-      '/@source@remote.example/post-source-quote',
+      `/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}`,
     );
   },
   render: () => <RepostQuotePresentationStory postId="post-quote-of-quote" />,
@@ -5141,7 +5157,7 @@ export const ReplyQuote: Story = {
 
     await userEvent.click(canvas.getByTestId('post-body'));
     expect(within(canvasElement).getByTestId('presentation-story-pathname')).toHaveTextContent(
-      '/@reposter/post-reply-quote',
+      `/${replyQuotePost.profile.relativeHandle}/${replyQuotePost.slug}`,
     );
   },
   render: () => <RepostQuotePresentationStory postId="post-reply-quote" />,
@@ -5216,7 +5232,7 @@ export const VisibilityListRows: Story = {
 
       expect(timestampLink).toHaveAttribute(
         'href',
-        `/${postFixture.profile.relativeHandle}/${postFixture.id}`,
+        `/${postFixture.profile.relativeHandle}/${postFixture.slug}`,
       );
       expect(timestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
       expect(timestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
@@ -5252,7 +5268,7 @@ export const VisibilityListRows: Story = {
     expect(quoteTimestampStyle.fontWeight).toBe(publicTimestampStyle.fontWeight);
     expect(quoteTimestampLink).toHaveAttribute(
       'href',
-      `/${visibilityOwnershipQuotePost.profile.relativeHandle}/${visibilityOwnershipQuotePost.id}`,
+      `/${visibilityOwnershipQuotePost.profile.relativeHandle}/${visibilityOwnershipQuotePost.slug}`,
     );
     expect(quoteTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(quoteTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
@@ -5278,14 +5294,14 @@ export const VisibilityListRows: Story = {
     expect(within(sourcePreview).queryByRole('img', { name: '공개' })).not.toBeInTheDocument();
     expect(within(sourcePreview).getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
       'href',
-      `/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}`,
+      `/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.slug}`,
     );
 
     const repostRow = canvas.getByTestId('visibility-pure-repost-row');
     const repostSourceRow = within(repostRow).getByTestId('post-list-standard-row');
     const repostSourceIcon = within(repostSourceRow).getByRole('img', { name: '공개' });
     const repostSourceTimestamp = repostSourceRow.querySelector<HTMLAnchorElement>(
-      `a[href="/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}"]`,
+      `a[href="/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.slug}"]`,
     );
     expect(
       within(repostRow).queryByRole('img', { name: '언급한 프로필만' }),
@@ -5317,12 +5333,16 @@ export const OrdinaryPost: Story = {
     expect(article).toHaveStyle({ paddingLeft: '8px', paddingRight: '8px' });
     expect(bodyShortcut).not.toHaveAttribute('role', 'link');
     expect(bodyShortcut.closest('[role="link"]')).toBeNull();
-    const timestampLink = standardRow.querySelector<HTMLAnchorElement>('a[href="/@kosmo/short"]');
+    const timestampLink = standardRow.querySelector<HTMLAnchorElement>(
+      `a[href="/${shortPost.profile.relativeHandle}/${shortPost.slug}"]`,
+    );
     expect(timestampLink).not.toBeNull();
     expect(timestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     expect(timestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     await userEvent.click(bodyShortcut);
-    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent('/@kosmo/short');
+    expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
+      `/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
+    );
   },
   render: () => <ProductionPostListItemStory postId="short" presentation="wide" />,
 };
@@ -5802,7 +5822,7 @@ export const LinkedSourceQuoteInteraction: Story = {
 
       await userEvent.click(within(postBody).getByText(/두 번째 문단입니다\./));
       expect(canvas.getByTestId('presentation-story-pathname')).toHaveTextContent(
-        '/@reposter/post-quote-linked-source',
+        `/${linkedSourceQuote.profile.relativeHandle}/${linkedSourceQuote.slug}`,
       );
     } finally {
       Linking.openURL = originalOpenURL;
@@ -5876,7 +5896,7 @@ export const LinkedBodyKeepsDetailNavigationIsolated: Story = {
 
       await userEvent.click(canvas.getByTestId('post-list-row-body'));
       await expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
-        '/@kosmo/linked',
+        `/${linkedPost.profile.relativeHandle}/${linkedPost.slug}`,
       );
     } finally {
       Linking.openURL = originalOpenURL;
@@ -6033,7 +6053,7 @@ export const PostDetailThreadRoute: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
-            node: {
+            postByReference: {
               ...routeCurrentPost,
               reactionCounts: routeCurrentPostReactionCounts,
               replyAncestors: [
@@ -6056,10 +6076,10 @@ export const PostDetailThreadRoute: Story = {
     },
     router: {
       params: {
-        postId: routeCurrentPost.id,
+        postId: routeCurrentPost.slug,
         profileHandle: routeCurrentPost.profile.relativeHandle,
       },
-      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.slug}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -6103,7 +6123,7 @@ export const PostDetailThreadRoute: Story = {
     );
     await waitFor(() =>
       expect(getCopiedStrings()).toContain(
-        `${storyShareOrigin()}/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+        `${storyShareOrigin()}/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.slug}`,
       ),
     );
     expect(currentMore).toHaveAttribute('aria-expanded', 'false');
@@ -6206,9 +6226,13 @@ export const PostDetailThreadRoute: Story = {
       canvas.queryByTestId('post-thread-connector-route-child-route-sibling-after'),
     ).toBeNull();
     await userEvent.click(canvas.getByText('Child 본문'));
-    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-child');
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${routeChildPost.profile.relativeHandle}/${routeChildPost.slug}`,
+    );
     await userEvent.click(descendantQuote.getByTestId('source-post-body'));
-    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent('/@kosmo/route-source');
+    expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
+      `/${routeSourcePost.profile.relativeHandle}/${routeSourcePost.slug}`,
+    );
   },
   render: () => (
     <>
@@ -6243,7 +6267,7 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
-            node: {
+            postByReference: {
               ...withReactionViewerState(quotePost),
               reactionCounts: [],
               replyAncestors: [],
@@ -6258,10 +6282,10 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
     },
     router: {
       params: {
-        postId: quotePost.id,
+        postId: quotePost.slug,
         profileHandle: quotePost.profile.relativeHandle,
       },
-      pathname: `/${quotePost.profile.relativeHandle}/${quotePost.id}`,
+      pathname: `/${quotePost.profile.relativeHandle}/${quotePost.slug}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -6283,7 +6307,7 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
     expect(
       currentQuote
         .queryByText('이 원문에 덧붙이는 인용자의 본문입니다.')
-        ?.closest(`a[href="/${quotePost.profile.relativeHandle}/${quotePost.id}"]`),
+        ?.closest(`a[href="/${quotePost.profile.relativeHandle}/${quotePost.slug}"]`),
     ).toBeNull();
 
     await userEvent.click(
@@ -6295,12 +6319,12 @@ export const PostDetailCurrentQuoteSourceNavigation: Story = {
 
     await userEvent.click(currentQuote.getByRole('link', { name: '원문 게시글 보기' }));
     expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
-      `/${sourceAuthor.relativeHandle}/${sourcePost.id}`,
+      `/${sourceAuthor.relativeHandle}/${sourcePost.slug}`,
     );
 
     await userEvent.click(currentQuote.getByTestId('source-post-body'));
     expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
-      `/${sourceAuthor.relativeHandle}/${sourcePost.id}`,
+      `/${sourceAuthor.relativeHandle}/${sourcePost.slug}`,
     );
   },
   render: () => (
@@ -6318,7 +6342,7 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
-            node: {
+            postByReference: {
               ...withReactionViewerState(pureRepost),
               reactionCounts: [],
               replyAncestors: [],
@@ -6333,17 +6357,17 @@ export const PureRepostDetailCanonicalizesToSource: Story = {
     },
     router: {
       params: {
-        postId: pureRepost.id,
+        postId: pureRepost.slug,
         profileHandle: pureRepost.profile.relativeHandle,
       },
-      pathname: `/${pureRepost.profile.relativeHandle}/${pureRepost.id}`,
+      pathname: `/${pureRepost.profile.relativeHandle}/${pureRepost.slug}`,
     },
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await waitFor(() => {
       expect(canvas.getByTestId('current-story-pathname')).toHaveTextContent(
-        '/@source@remote.example/post-source',
+        `/${sourcePost.profile.relativeHandle}/${sourcePost.slug}`,
       );
     });
     expect(canvas.queryByTestId('post-thread')).not.toBeInTheDocument();
@@ -6364,7 +6388,7 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
-            node: {
+            postByReference: {
               ...routeBoundaryCurrentPostWithoutReactions,
               replyAncestors: [routeVisibleParentPost],
               replyDescendants: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
@@ -6375,10 +6399,10 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
     },
     router: {
       params: {
-        postId: routeBoundaryCurrentPost.id,
+        postId: routeBoundaryCurrentPost.slug,
         profileHandle: routeBoundaryCurrentPost.profile.relativeHandle,
       },
-      pathname: `/${routeBoundaryCurrentPost.profile.relativeHandle}/${routeBoundaryCurrentPost.id}`,
+      pathname: `/${routeBoundaryCurrentPost.profile.relativeHandle}/${routeBoundaryCurrentPost.slug}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -6421,7 +6445,7 @@ export const PostDetailReplyTargetedRefetch: Story = {
               id: 'session',
               selectedProfile: composerProfile,
             },
-            node: {
+            postByReference: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -6435,10 +6459,10 @@ export const PostDetailReplyTargetedRefetch: Story = {
     },
     router: {
       params: {
-        postId: routeCurrentPost.id,
+        postId: routeCurrentPost.slug,
         profileHandle: routeCurrentPost.profile.relativeHandle,
       },
-      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.slug}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -6489,7 +6513,7 @@ export const PostDetailThreadShortContentAutoFills: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
-            node: {
+            postByReference: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -6517,10 +6541,10 @@ export const PostDetailThreadShortContentAutoFills: Story = {
     },
     router: {
       params: {
-        postId: routeCurrentPost.id,
+        postId: routeCurrentPost.slug,
         profileHandle: routeCurrentPost.profile.relativeHandle,
       },
-      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.slug}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -6537,7 +6561,7 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
         PostDetailQuery: {
           data: {
             currentSession: null,
-            node: {
+            postByReference: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -6582,10 +6606,10 @@ export const PostDetailThreadDocumentScrollLoadsOnce: Story = {
     },
     router: {
       params: {
-        postId: routeCurrentPost.id,
+        postId: routeCurrentPost.slug,
         profileHandle: routeCurrentPost.profile.relativeHandle,
       },
-      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.slug}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -6612,7 +6636,7 @@ export const PostDetailThreadPageLoading: Story = {
         PostDetailQuery: {
           data: {
             currentSession: defaultSession.currentSession,
-            node: {
+            postByReference: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -6630,10 +6654,10 @@ export const PostDetailThreadPageLoading: Story = {
     },
     router: {
       params: {
-        postId: routeCurrentPost.id,
+        postId: routeCurrentPost.slug,
         profileHandle: routeCurrentPost.profile.relativeHandle,
       },
-      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.slug}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -6655,7 +6679,7 @@ export const PostDetailThreadPageFailureRetries: Story = {
         PostDetailQuery: {
           data: {
             currentSession: defaultSession.currentSession,
-            node: {
+            postByReference: {
               ...routeCurrentPostWithoutReactions,
               replyAncestors: [],
               replyDescendants: {
@@ -6687,10 +6711,10 @@ export const PostDetailThreadPageFailureRetries: Story = {
     },
     router: {
       params: {
-        postId: routeCurrentPost.id,
+        postId: routeCurrentPost.slug,
         profileHandle: routeCurrentPost.profile.relativeHandle,
       },
-      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.id}`,
+      pathname: `/${routeCurrentPost.profile.relativeHandle}/${routeCurrentPost.slug}`,
     },
   },
   play: async ({ canvasElement }) => {
@@ -7138,7 +7162,7 @@ export const ContentWarningProductionConsumersShareRevealStateInteraction: Story
     const canvas = within(canvasElement);
     const listSurface = within(canvas.getByTestId('content-warning-list-surface'));
     const layoutSurface = within(canvas.getByTestId('content-warning-layout-surface'));
-    const detailPath = `/${contentWarningPost.profile.relativeHandle}/${contentWarningPost.id}`;
+    const detailPath = `/${contentWarningPost.profile.relativeHandle}/${contentWarningPost.slug}`;
     expect(canvas.queryByText(contentWarningPost.content!.bodyText)).not.toBeInTheDocument();
 
     const row = listSurface.getByTestId('post-list-standard-row');
@@ -9893,16 +9917,29 @@ function reactionSummaryNavigationStory(postId: string, expectedPath: string): S
 }
 
 export const ReactionSummaryPostNavigation: Story = {
-  ...reactionSummaryNavigationStory('short', '/@kosmo/short'),
+  ...reactionSummaryNavigationStory(
+    'short',
+    `/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
+  ),
 };
 export const ReactionSummaryQuoteNavigation: Story = {
-  ...reactionSummaryNavigationStory('post-quote', '/@reposter/post-quote'),
+  ...reactionSummaryNavigationStory(
+    'post-quote',
+    `/${quotePost.profile.relativeHandle}/${quotePost.slug}`,
+  ),
 };
 export const ReactionSummaryRepostNavigation: Story = {
-  ...reactionSummaryNavigationStory('post-repost', '/@source@remote.example/post-source'),
+  ...reactionSummaryNavigationStory(
+    'post-repost',
+    `/${sourcePost.profile.relativeHandle}/${sourcePost.slug}`,
+  ),
 };
 
-function actionBarNavigationStory(postId: string, expectedPath: string): Story {
+function actionBarNavigationStory(
+  postId: string,
+  expectedPath: string,
+  targetPostId = postId,
+): Story {
   return {
     render: () => <ProductionPostListItemStory postId={postId} presentation="wide" />,
     parameters: {
@@ -9917,7 +9954,7 @@ function actionBarNavigationStory(postId: string, expectedPath: string): Story {
                   id: 'action-bar-bookmark',
                   post: {
                     __typename: 'Post',
-                    id: expectedPath.split('/').at(-1),
+                    id: targetPostId,
                     viewerBookmark: { __typename: 'Bookmark', id: 'action-bar-bookmark' },
                   },
                 },
@@ -10025,7 +10062,7 @@ function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
         expect(link).not.toBeNull();
         link.scrollIntoView({ block: 'center' });
         const profilePath = `/${targetPost.profile.relativeHandle}`;
-        const detailPath = `${profilePath}/${targetPost.id}`;
+        const detailPath = `${profilePath}/${targetPost.slug}`;
         expect(link).toHaveAttribute('href', profilePath);
         const bounds = link.getBoundingClientRect();
         expect(bounds.width).toBeGreaterThan(0);
@@ -10091,18 +10128,23 @@ function authorNavigationStory(surfacePost: StoryPost, width = 600): Story {
   };
 }
 
-export const ActionBarPostNavigation: Story = actionBarNavigationStory('short', '/@kosmo/short');
+export const ActionBarPostNavigation: Story = actionBarNavigationStory(
+  'short',
+  `/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
+);
 export const ActionBarQuoteNavigation: Story = actionBarNavigationStory(
   'post-quote',
-  '/@reposter/post-quote',
+  `/${quotePost.profile.relativeHandle}/${quotePost.slug}`,
 );
 export const ActionBarRepostNavigation: Story = actionBarNavigationStory(
   'post-repost',
-  '/@source@remote.example/post-source',
+  `/${sourcePost.profile.relativeHandle}/${sourcePost.slug}`,
+  sourcePost.id,
 );
 export const ActionBarRepostOfQuoteNavigation: Story = actionBarNavigationStory(
   'post-repost-of-quote',
-  '/@source@remote.example/post-source-quote',
+  `/${sourceQuotePost.profile.relativeHandle}/${sourceQuotePost.slug}`,
+  sourceQuotePost.id,
 );
 
 export const ActionBarPendingNavigation: Story = {
@@ -10129,7 +10171,9 @@ export const ActionBarPendingNavigation: Story = {
     const slot = canvas.getByTestId('post-action-bookmark-slot').getBoundingClientRect();
     await pressActionBarPoint(canvasElement, { x: slot.left + 1, y: (slot.top + slot.bottom) / 2 });
     expect(actionBarNavigationObserver).toHaveBeenCalledTimes(1);
-    expect(actionBarNavigationObserver).toHaveBeenLastCalledWith('/@kosmo/short');
+    expect(actionBarNavigationObserver).toHaveBeenLastCalledWith(
+      `/${shortPost.profile.relativeHandle}/${shortPost.slug}`,
+    );
     expect(bookmark).toHaveAttribute('aria-busy', 'true');
   },
 };
@@ -10166,20 +10210,22 @@ export const ActionBarThreadNavigation: Story = {
       .getByTestId('post-detail-scroll')
       .closest<HTMLElement>('[tabindex="-1"]')!;
     let count = 0;
-    for (const [rowId, postId] of [
-      ['post-thread-item-route-root', 'route-root'],
-      ['post-thread-item-route-parent', 'route-parent'],
-      ['post-thread-current-route-current', 'route-current'],
-      ['post-thread-item-route-child', 'route-child'],
-      ['post-thread-item-route-reply-quote', 'route-reply-quote'],
-    ]) {
-      const row = canvas.getByTestId(rowId!);
+    for (const [rowId, targetPost] of [
+      ['post-thread-item-route-root', routeRootPost],
+      ['post-thread-item-route-parent', routeParentPost],
+      ['post-thread-current-route-current', routeCurrentPost],
+      ['post-thread-item-route-child', routeChildPost],
+      ['post-thread-item-route-reply-quote', routeReplyQuotePost],
+    ] as const) {
+      const row = canvas.getByTestId(rowId);
       // A pointer click must survive focus moving from the screen ancestor to its background host.
       routeFocus.focus({ preventScroll: true });
       expect(routeFocus).toHaveFocus();
       await checkActionBarWhitespace(row, () => {
         expect(actionBarNavigationObserver).toHaveBeenCalledTimes(++count);
-        expect(actionBarNavigationObserver).toHaveBeenLastCalledWith(`/@kosmo/${postId}`);
+        expect(actionBarNavigationObserver).toHaveBeenLastCalledWith(
+          `/${targetPost.profile.relativeHandle}/${targetPost.slug}`,
+        );
       });
     }
     const toolbar = within(current).getByRole('toolbar', { name: '액션 바' });
