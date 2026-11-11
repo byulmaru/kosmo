@@ -52,13 +52,7 @@ export const LargeImageGeometry: Story = {
       const imageRect = imageFrame.getBoundingClientRect();
       const titleRect = title.getBoundingClientRect();
       const imageStyle = view.getComputedStyle(imageFrame);
-      const cardStyle = view.getComputedStyle(card);
-      const availableWidth =
-        card.clientWidth -
-        Number.parseFloat(cardStyle.paddingLeft) -
-        Number.parseFloat(cardStyle.paddingRight);
-
-      expect(imageRect.width).toBeCloseTo(availableWidth, 0);
+      expect(imageRect.width).toBeCloseTo(card.clientWidth, 0);
       expect(imageRect.width / imageRect.height).toBeCloseTo(16 / 9, 2);
       expect(imageRect.bottom).toBeLessThan(titleRect.top);
       expect(imageStyle.backgroundSize).toBe('cover');

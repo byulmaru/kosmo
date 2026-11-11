@@ -38,7 +38,14 @@ export function PostLinkPreviewCard({
   );
   const copy = (
     <View style={[styles.copy, largeImage ? styles.largeCopy : undefined]}>
-      <Text numberOfLines={1} style={[textStyles.uiCopyS, { color: theme.foregroundSecondary }]}>
+      <Text
+        numberOfLines={1}
+        style={[
+          textStyles.uiCopyS,
+          largeImage ? styles.largeHostname : undefined,
+          { color: theme.foregroundSecondary },
+        ]}
+      >
         {hostname}
       </Text>
       <Text numberOfLines={2} style={[textStyles.uiLabelM, { color: theme.foregroundPrimary }]}>
@@ -137,7 +144,15 @@ const styles = StyleSheet.create({
   },
   copy: { flex: 1, gap: space[4], minWidth: 0 },
   image: { borderRadius: radius[8], flexShrink: 0, height: 96, width: 96 },
-  largeCard: { alignItems: 'stretch', flexDirection: 'column' },
-  largeCopy: { flex: 0 },
-  largeImage: { aspectRatio: 16 / 9, borderRadius: radius[8], width: '100%' },
+  largeCard: {
+    alignItems: 'stretch',
+    borderRadius: radius[16],
+    flexDirection: 'column',
+    gap: space[4],
+    overflow: 'hidden',
+    padding: space[0],
+  },
+  largeCopy: { flex: 0, paddingHorizontal: space[12], paddingVertical: space[8] },
+  largeHostname: { textAlign: 'right' },
+  largeImage: { aspectRatio: 16 / 9, width: '100%' },
 });
