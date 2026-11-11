@@ -34,6 +34,7 @@ export const Post = createObjectRef(
 
 Post.implement({
   fields: (t) => ({
+    slug: t.expose('slug', { type: 'String' }),
     visibility: t.expose('visibility', { type: PostVisibility }),
     state: t.expose('state', { type: PostState }),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),

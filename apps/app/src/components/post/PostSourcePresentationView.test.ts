@@ -280,6 +280,7 @@ function postWithContent(
     },
     createdAt: '2026-09-14T00:00:00.000Z',
     id: 'post-source-presentation',
+    slug: 'Source000001',
     profile: {
       avatar: null,
       displayName: 'Author',

@@ -25,6 +25,7 @@ const post = {
   },
   createdAt: '2026-11-09T00:00:00Z',
   id: 'post-one',
+  slug: 'SmFilter0001',
   profile: {
     avatar: null,
     displayName: '게시자',
@@ -203,7 +204,7 @@ it('renders and opens an actual PostListItem with the production providers', asy
   const body = renderer!.root.find((node) => node.children.includes('확인할 게시글'));
   assert.ok(body);
   await act(async () => (body.props.onPress as () => void)());
-  assert.deepEqual(navigations, ['/@author/post-one']);
+  assert.deepEqual(navigations, ['/@author/SmFilter0001']);
 
   await act(async () => renderer?.unmount());
   renderer = null;

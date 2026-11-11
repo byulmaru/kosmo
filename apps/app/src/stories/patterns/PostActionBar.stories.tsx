@@ -64,6 +64,7 @@ const actionBarProps = {
 const replyAccessibilityLabel = `답글, ${formatPostActionCount(actionBarProps.reply.count)}`;
 
 const sourcePostId = 'post-source';
+const sourcePostSlug = 'Action000001';
 const activeRepostId = 'post-repost-active';
 type RepostFixtureState = 'unselected' | 'selected' | 'pending';
 type RepostPlaygroundState = Exclude<RepostFixtureState, 'pending'>;
@@ -764,7 +765,7 @@ function PostActionBarPlayground({
   repostState,
 }: PlaygroundProps) {
   const copyLinkItem = usePostMoreMenuItem({
-    postId: sourcePostId,
+    postSlug: sourcePostSlug,
     relativeHandle: '@kosmo',
   });
 

@@ -434,6 +434,9 @@ export const Posts = pgTable(
   'post',
   {
     id: id(),
+    slug: text('slug')
+      .notNull()
+      .default(sql`generate_post_slug()`),
     actorAccountId: uuid('actor_account_id').references(() => Accounts.id, {
       onDelete: 'set null',
     }),
@@ -453,6 +456,8 @@ export const Posts = pgTable(
     deletedAt: datetime('deleted_at'),
   },
   (table) => [
+    check('post_slug_format', sql`${table.slug} ~ '^[A-Za-z0-9]{12}$'`),
+    uniqueIndex('post_slug_unique').on(table.slug),
     check(
       'post_reply_parent_not_self',
       sql`${table.replyParentId} IS NULL OR ${table.replyParentId} <> ${table.id}`,

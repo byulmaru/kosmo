@@ -838,7 +838,7 @@ test('Post Activity retries a committed ActivityPub Post before revalidating par
     result: { authorProfileId: author.profile.id, postId, status: 'created' },
   });
   const storedPost = await db
-    .select({ createdAt: Posts.createdAt, replyParentId: Posts.replyParentId })
+    .select({ createdAt: Posts.createdAt, replyParentId: Posts.replyParentId, slug: Posts.slug })
     .from(Posts)
     .where(eq(Posts.id, postId))
     .then(firstOrThrow);
@@ -856,6 +856,7 @@ test('Post Activity retries a committed ActivityPub Post before revalidating par
     Temporal.Instant.from(input.publishedAt!).toString(),
   );
   assert.equal(storedPost.replyParentId, parentPostId);
+  assert.match(storedPost.slug, /^[A-Za-z0-9]{12}$/);
   assert.equal(
     storedContent.createdAt.toString(),
     Temporal.Instant.from(input.receivedAt).toString(),
@@ -874,6 +875,15 @@ test('Post Activity retries a committed ActivityPub Post before revalidating par
 
   await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, parentPostId));
   assert.deepEqual(await createPostActivity({ input, postId }), committed);
+  assert.equal(
+    await db
+      .select({ slug: Posts.slug })
+      .from(Posts)
+      .where(eq(Posts.id, postId))
+      .then(firstOrThrow)
+      .then(({ slug }) => slug),
+    storedPost.slug,
+  );
   assert.equal(
     await db
       .select()

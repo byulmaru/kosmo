@@ -15,9 +15,9 @@ export function resolveReactionPeopleType(
 
 export function getReactionPeopleHref(
   relativeHandle: string,
-  postId: string,
+  postSlug: string,
   reactionType?: string | null,
 ): Href {
   const query = reactionType ? `?type=${encodeURIComponent(reactionType)}` : '';
-  return `/${relativeHandle}/${postId}/reactions${query}` as Href;
+  return `/${relativeHandle}/${postSlug}/reactions${query}` as Href;
 }

@@ -19,7 +19,7 @@ import type { ReactNode } from 'react';
 import type { PostDetailQuery } from './__generated__/PostDetailQuery.graphql';
 
 const PostQuery = graphql`
-  query PostDetailQuery($postId: ID!) {
+  query PostDetailQuery($reference: String!) {
     currentSession {
       id
       selectedProfile {
@@ -27,29 +27,28 @@ const PostQuery = graphql`
         ...ReplyComposerSurface_profile
       }
     }
-    node(id: $postId) {
-      __typename
-      ... on Post {
+    postByReference(reference: $reference) {
+      id
+      slug
+      state
+      profile {
         id
-        state
+        relativeHandle
+      }
+      content {
+        id
+      }
+      replyParent {
+        id
+      }
+      repostSource {
+        id
+        slug
         profile {
-          id
           relativeHandle
         }
-        content {
-          id
-        }
-        replyParent {
-          id
-        }
-        repostSource {
-          id
-          profile {
-            relativeHandle
-          }
-        }
-        ...PostDetailThread_post @arguments(count: 20) @alias(as: "thread")
       }
+      ...PostDetailThread_post @arguments(count: 20) @alias(as: "thread")
     }
   }
 `;
@@ -60,7 +59,7 @@ export default function PostDetailScreen() {
     postId: string;
     profileHandle: string;
   }>();
-  const postId = params.postId ?? '';
+  const postReference = params.postId ?? '';
   const routeRelativeHandle = params.profileHandle ?? '';
   const header = <PostDetailHeader />;
 
@@ -76,7 +75,7 @@ export default function PostDetailScreen() {
           />
         </PostDetailFrame>
       )}
-      key={`${routeRelativeHandle}:${postId}`}
+      key={`${routeRelativeHandle}:${postReference}`}
       loading={
         <PostDetailFrame header={header}>
           <StateView loading title="게시글을 불러오는 중입니다." />
@@ -87,7 +86,7 @@ export default function PostDetailScreen() {
       <PostDetailContent
         active={active}
         header={header}
-        postId={postId}
+        postReference={postReference}
         routeRelativeHandle={routeRelativeHandle}
       />
     </RouteBoundary>
@@ -126,12 +125,12 @@ function PostDetailHeader() {
 function PostDetailContent({
   active,
   header,
-  postId,
+  postReference,
   routeRelativeHandle,
 }: {
   active: boolean;
   header: ReactNode;
-  postId: string;
+  postReference: string;
   routeRelativeHandle: string;
 }) {
   const router = useRouter();
@@ -139,14 +138,14 @@ function PostDetailContent({
   const [locallyDeleted, setLocallyDeleted] = useState(false);
   const data = useLazyLoadQuery<PostDetailQuery>(
     PostQuery,
-    { postId },
+    { reference: postReference },
     { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const { isHistoryEntryRestoration } = usePrimaryNavigationScroll();
-  const post = data.node?.__typename === 'Post' ? data.node : null;
+  const post = data.postByReference;
   const pureRepostSource = post && !post.content && !post.replyParent ? post.repostSource : null;
   const pureRepostSourceHref: Href | null = pureRepostSource
-    ? `/${pureRepostSource.profile.relativeHandle}/${pureRepostSource.id}`
+    ? `/${pureRepostSource.profile.relativeHandle}/${pureRepostSource.slug}`
     : null;
 
   useEffect(() => {
@@ -156,10 +155,13 @@ function PostDetailContent({
   useEffect(() => {
     if (pureRepostSourceHref) {
       router.replace(pureRepostSourceHref);
-    } else if (post && post.profile.relativeHandle !== routeRelativeHandle) {
-      router.replace(`/${post.profile.relativeHandle}/${postId}`);
+    } else if (
+      post &&
+      (post.profile.relativeHandle !== routeRelativeHandle || post.slug !== postReference)
+    ) {
+      router.replace(`/${post.profile.relativeHandle}/${post.slug}`);
     }
-  }, [post, postId, pureRepostSourceHref, routeRelativeHandle, router]);
+  }, [post, postReference, pureRepostSourceHref, routeRelativeHandle, router]);
 
   return pureRepostSourceHref ? null : locallyDeleted ? (
     <PostDetailFrame header={header}>
@@ -187,8 +189,10 @@ function PostDetailContent({
     <PostDetailThread
       active={active}
       header={header}
-      identity={postId}
-      onCurrentPostBackgroundPress={() => router.push(`/${post.profile.relativeHandle}/${post.id}`)}
+      identity={post.id}
+      onCurrentPostBackgroundPress={() =>
+        router.push(`/${post.profile.relativeHandle}/${post.slug}`)
+      }
       onPostDeleted={() => setLocallyDeleted(true)}
       onReplyCreated={refetch}
       post={post.thread}

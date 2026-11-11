@@ -56,7 +56,7 @@ import type {
 } from './postComposerState';
 
 type Visibility = PostComposerVisibility;
-export type PostComposerCreatedPost = Readonly<{ id: string }>;
+export type PostComposerCreatedPost = Readonly<{ id: string; slug: string }>;
 
 const submitFailureMessage = '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.';
 
@@ -97,11 +97,13 @@ const CreatePostMutation = graphql`
     createPost(input: $input) {
       post {
         id
+        slug
       }
       request {
         id
         post {
           id
+          slug
         }
         requestId
         status
@@ -521,9 +523,10 @@ function PostComposerContents({
         }
         const createdPost = response?.createPost?.post;
         const acceptedRequest = response?.createPost?.request;
-        const publishedRequestPostId =
-          acceptedRequest?.status === 'PUBLISHED' ? acceptedRequest.post?.id : undefined;
-        const publishedPostId = createdPost?.id ?? publishedRequestPostId;
+        const publishedRequestPost =
+          acceptedRequest?.status === 'PUBLISHED' ? acceptedRequest.post : undefined;
+        const publishedPost = createdPost ?? publishedRequestPost;
+        const publishedPostId = publishedPost?.id;
         if (acceptedRequest?.id || createdPost?.id) {
           trackAnalytics('post_created', {
             ai_prohibit_image_count: aiProhibitImageCount,
@@ -564,8 +567,8 @@ function PostComposerContents({
               replyParentVisibility,
             ),
           );
-          if (publishedPostId && submittedCreatedCallback) {
-            submittedCreatedCallback({ id: publishedPostId });
+          if (publishedPost && submittedCreatedCallback) {
+            submittedCreatedCallback({ id: publishedPost.id, slug: publishedPost.slug });
           } else if (publishedPostId) {
             showToast('게시했어요', { tone: 'success' });
             submittedCallback?.();

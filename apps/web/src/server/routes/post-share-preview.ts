@@ -2,10 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { db, Instances, Media, PostContents, PostMentions, Posts, Profiles } from '@kosmo/core/db';
 import { MediaState } from '@kosmo/core/enums';
-import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { isValidMediaPublicationRights, mediaUseTermsUrl } from '@kosmo/core/media-metadata';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
+import { parsePostReference } from '@kosmo/core/post-reference';
 import { visiblePostWhere, visibleProfileWhere } from '@kosmo/core/visibility';
 import { resolveActivityPubPostUri } from '@kosmo/fedify';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
@@ -40,18 +40,13 @@ type ShareMetadata = {
 
 const shareRoutes = new Hono();
 
-shareRoutes.on(['GET', 'HEAD'], '/:relativeHandle/:globalId', async (c, next) => {
+shareRoutes.on(['GET', 'HEAD'], '/:relativeHandle/:reference', async (c, next) => {
   if (!acceptsHtmlPreview(c.req.header('accept'))) {
     return next();
   }
 
-  let decodedGlobalId: ReturnType<typeof decodeGlobalId>;
-  try {
-    decodedGlobalId = decodeGlobalId(c.req.param('globalId'));
-  } catch {
-    return next();
-  }
-  if (decodedGlobalId.typename !== 'Post') {
+  const reference = parsePostReference(c.req.param('reference'));
+  if (!reference) {
     return next();
   }
 
@@ -71,7 +66,7 @@ shareRoutes.on(['GET', 'HEAD'], '/:relativeHandle/:globalId', async (c, next) =>
   let metadata = genericMetadata;
   try {
     const configuredLocalInstance = await resolveConfiguredLocalInstance({ publicOrigin: origin });
-    const target = await findShareTarget(decodedGlobalId.id);
+    const target = await findShareTarget(reference);
     if (target) {
       metadata = await createPostMetadata(target, configuredLocalInstance.id, origin);
     }
@@ -103,19 +98,24 @@ type ShareTargetRow = {
   readonly contentDocument: (typeof PostContents.$inferSelect)['document'] | null;
   readonly currentContentId: string | null;
   readonly postId: string;
+  readonly slug: string;
   readonly replyParentId: string | null;
   readonly repostSourceId: string | null;
 };
 
-async function findVisibleContentPost(postId: string): Promise<ShareTargetRow | null> {
-  const row = await findVisiblePost(postId, true);
+type PostReference = NonNullable<ReturnType<typeof parsePostReference>>;
+
+async function findVisibleContentPost(reference: PostReference): Promise<ShareTargetRow | null> {
+  const row = await findVisiblePost(reference, true);
   return row?.contentDocument ? row : null;
 }
 
 async function findVisiblePost(
-  postId: string,
+  reference: PostReference,
   requireContent = false,
 ): Promise<ShareTargetRow | null> {
+  const referenceCondition =
+    'slug' in reference ? eq(Posts.slug, reference.slug) : eq(Posts.id, reference.id);
   const rows = await db
     .select({
       authorDisplayName: Profiles.displayName,
@@ -128,6 +128,7 @@ async function findVisiblePost(
       postId: Posts.id,
       replyParentId: Posts.replyParentId,
       repostSourceId: Posts.repostSourceId,
+      slug: Posts.slug,
     })
     .from(Posts)
     .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
@@ -138,7 +139,7 @@ async function findVisiblePost(
     )
     .where(
       and(
-        eq(Posts.id, postId),
+        referenceCondition,
         requireContent ? isNotNull(Posts.currentContentId) : undefined,
         visiblePostWhere({
           db,
@@ -156,8 +157,8 @@ async function findVisiblePost(
   return rows[0] ?? null;
 }
 
-async function findShareTarget(postId: string): Promise<ShareTargetRow | null> {
-  const post = await findVisiblePost(postId);
+async function findShareTarget(reference: PostReference): Promise<ShareTargetRow | null> {
+  const post = await findVisiblePost(reference);
   if (!post) {
     return null;
   }
@@ -169,7 +170,7 @@ async function findShareTarget(postId: string): Promise<ShareTargetRow | null> {
     return null;
   }
 
-  return findVisibleContentPost(post.repostSourceId);
+  return findVisibleContentPost({ id: post.repostSourceId });
 }
 
 async function createPostMetadata(
@@ -215,7 +216,6 @@ async function createPostMetadata(
 
   const title = `${target.authorDisplayName.trim() || relativeHandle}(${relativeHandle}) on KOSMO`;
   const canonicalHandle = encodeURIComponent(relativeHandle).replace(/%40/gi, '@');
-  const canonicalId = encodeURIComponent(encodeGlobalId('Post', target.postId));
   let activityPubUri: string | undefined;
   try {
     activityPubUri = (await resolveActivityPubPostUri(target.postId))?.href;
@@ -225,7 +225,7 @@ async function createPostMetadata(
 
   return {
     activityPubUri,
-    canonicalUrl: new URL(`${canonicalHandle}/${canonicalId}`, `${origin}/`).toString(),
+    canonicalUrl: new URL(`${canonicalHandle}/${target.slug}`, `${origin}/`).toString(),
     description,
     images,
     title,

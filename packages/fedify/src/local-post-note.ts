@@ -45,6 +45,7 @@ type LocalPostNote = {
   readonly contentDocument: PostContentDocumentV1;
   readonly createdAt: Temporal.Instant;
   readonly id: string;
+  readonly slug: string;
   readonly mediaAttachments: readonly Image[];
   readonly replyParentId: string | null;
   readonly summary: string | null;
@@ -126,6 +127,7 @@ const loadLocalPostNoteForProjection = async (
     contentDocument: row.contentDocument,
     createdAt: row.post.createdAt,
     id: row.post.id,
+    slug: row.post.slug,
     mediaAttachments,
     replyParentId: row.post.replyParentId,
     sensitiveMedia: row.contentDocument.body.attrs?.sensitiveMedia ?? false,
@@ -438,7 +440,7 @@ export const projectLocalPostNote = async (
     sensitive: note.sensitiveMedia,
     ...(tags.length > 0 ? { tags } : {}),
     url: new URL(
-      `/@${encodeURIComponent(note.authorHandle)}/${encodeGlobalId('Post', note.id)}`,
+      `/@${encodeURIComponent(note.authorHandle)}/${note.slug}`,
       configuredLocalInstance.canonicalOrigin,
     ),
   });

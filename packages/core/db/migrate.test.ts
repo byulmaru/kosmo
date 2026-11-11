@@ -728,6 +728,200 @@ CREATE INDEX CONCURRENTLY migration_concurrent_index_idx ON migration_concurrent
   }
 });
 
+test('Post slug migration backfills old rows, retries safely, and enforces the final column contract', async () => {
+  const control = postgres(databaseUrl, { max: 1 });
+  const slugMigrationName = '20261111081537_prod1322_post_slug';
+  const slugMigrationSql = await readFile(
+    new URL(`../../../drizzle/${slugMigrationName}/migration.sql`, import.meta.url),
+    'utf8',
+  );
+  const existingIds = Array.from(
+    { length: 2_005 },
+    (_, index) => `50000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+  );
+  const failAfterFirstBatchId = existingIds[999]!;
+  const baseMigration = {
+    name: '20261111081536_post_slug_base',
+    sql: `
+      CREATE TABLE post (id uuid PRIMARY KEY);
+      CREATE FUNCTION public.fail_post_slug_batch() RETURNS trigger
+      LANGUAGE plpgsql AS $function$
+      BEGIN
+        IF OLD.slug IS NULL AND NEW.id > '${failAfterFirstBatchId}'::uuid THEN
+          RAISE EXCEPTION 'Injected Post slug backfill failure';
+        END IF;
+        RETURN NEW;
+      END
+      $function$;
+      CREATE TRIGGER fail_post_slug_batch
+      BEFORE UPDATE ON post
+      FOR EACH ROW EXECUTE FUNCTION public.fail_post_slug_batch();
+    `,
+  };
+  const baseMigrations = await migrationFolder([baseMigration]);
+  const slugMigrations = await migrationFolder([
+    baseMigration,
+    { name: slugMigrationName, sql: slugMigrationSql },
+  ]);
+
+  try {
+    await control.unsafe('DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA public CASCADE;');
+    await control.unsafe('CREATE SCHEMA public;');
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
+    await control`
+      INSERT INTO post (id)
+      SELECT id::uuid
+      FROM unnest(${control.array(existingIds)}::text[]) AS ids(id)
+    `;
+
+    await assert.rejects(
+      runDatabaseMigrations({ databaseUrl, migrationsFolder: slugMigrations }),
+      (error: unknown) => {
+        const migrationError = error as { cause?: unknown };
+        return (
+          migrationError.cause instanceof Error &&
+          migrationError.cause.message.includes('Injected Post slug backfill failure')
+        );
+      },
+    );
+    const [{ sluggedCount, nullCount }] = await control<
+      {
+        sluggedCount: number;
+        nullCount: number;
+      }[]
+    >`
+      SELECT
+        count(*) FILTER (WHERE slug IS NOT NULL)::integer AS "sluggedCount",
+        count(*) FILTER (WHERE slug IS NULL)::integer AS "nullCount"
+      FROM post
+    `;
+    assert.equal(sluggedCount, 1_000);
+    assert.equal(nullCount, existingIds.length - 1_000);
+    const historyAfterFailure = Array.from(
+      await control<{ name: string }[]>`
+        SELECT name FROM drizzle.__drizzle_migrations ORDER BY id
+      `,
+    );
+    assert.deepEqual(historyAfterFailure, [{ name: baseMigration.name }]);
+    const committedBatchRows = Array.from(
+      await control<{ id: string; slug: string }[]>`
+        SELECT id::text AS id, slug
+        FROM post
+        WHERE slug IS NOT NULL
+        ORDER BY id
+      `,
+    );
+    assert.equal(committedBatchRows.length, 1_000);
+
+    await control.unsafe(
+      'DROP TRIGGER fail_post_slug_batch ON public.post; DROP FUNCTION public.fail_post_slug_batch();',
+    );
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: slugMigrations });
+
+    const existingRows = Array.from(
+      await control<{ id: string; slug: string }[]>`
+        SELECT id::text AS id, slug
+        FROM post
+        ORDER BY id
+      `,
+    );
+    assert.deepEqual(
+      existingRows.map(({ id }) => id),
+      existingIds,
+    );
+    assert.ok(existingRows.every(({ slug }) => /^[A-Za-z0-9]{12}$/.test(slug)));
+    assert.equal(new Set(existingRows.map(({ slug }) => slug)).size, existingRows.length);
+    assert.deepEqual(existingRows.slice(0, committedBatchRows.length), committedBatchRows);
+
+    const [columnState] = await control<
+      {
+        isNotNull: boolean;
+        formatConstraintValidated: boolean;
+        notNullConstraintValidated: boolean;
+      }[]
+    >`
+      SELECT
+        attribute.attnotnull AS "isNotNull",
+        format_constraint.convalidated AS "formatConstraintValidated",
+        not_null_constraint.convalidated AS "notNullConstraintValidated"
+      FROM pg_attribute AS attribute
+      JOIN pg_class AS table_relation ON table_relation.oid = attribute.attrelid
+      JOIN pg_constraint AS format_constraint
+        ON format_constraint.conrelid = table_relation.oid
+        AND format_constraint.conname = 'post_slug_format'
+      JOIN pg_constraint AS not_null_constraint
+        ON not_null_constraint.conrelid = table_relation.oid
+        AND not_null_constraint.conname = 'post_slug_not_null'
+      WHERE table_relation.oid = 'public.post'::regclass
+        AND attribute.attname = 'slug'
+    `;
+    assert.deepEqual(columnState, {
+      isNotNull: true,
+      formatConstraintValidated: true,
+      notNullConstraintValidated: true,
+    });
+
+    const [newPost] = await control<{ id: string; slug: string }[]>`
+      INSERT INTO post (id)
+      VALUES ('50000000-0000-4000-8000-000000002006')
+      RETURNING id::text AS id, slug
+    `;
+    assert.ok(newPost);
+    assert.match(newPost.slug, /^[A-Za-z0-9]{12}$/);
+
+    const existingSlug = existingRows[0]!.slug;
+    await assert.rejects(
+      control`
+        INSERT INTO post (id, slug)
+        VALUES ('50000000-0000-4000-8000-000000002007', ${existingSlug})
+      `,
+      (error: unknown) => {
+        const postgresError = error as { code?: string; constraint_name?: string };
+        return (
+          postgresError.code === '23505' && postgresError.constraint_name === 'post_slug_unique'
+        );
+      },
+    );
+    await assert.rejects(
+      control`
+        UPDATE post
+        SET slug = 'short'
+        WHERE id = ${existingIds[0]}
+      `,
+      (error: unknown) => {
+        const postgresError = error as { code?: string; constraint_name?: string };
+        return (
+          postgresError.code === '23514' && postgresError.constraint_name === 'post_slug_format'
+        );
+      },
+    );
+    await assert.rejects(
+      control`
+        INSERT INTO post (id, slug)
+        VALUES ('50000000-0000-4000-8000-000000002008', NULL)
+      `,
+      (error: unknown) => {
+        const postgresError = error as { code?: string; constraint_name?: string };
+        return postgresError.code === '23502';
+      },
+    );
+
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: slugMigrations });
+    const rowsAfterRerun = Array.from(
+      await control<{ id: string; slug: string }[]>`
+        SELECT id::text AS id, slug
+        FROM post
+        ORDER BY id
+      `,
+    );
+    assert.deepEqual(rowsAfterRerun.slice(0, existingRows.length), existingRows);
+  } finally {
+    await control.end({ timeout: 5 });
+    await rm(baseMigrations, { force: true, recursive: true });
+    await rm(slugMigrations, { force: true, recursive: true });
+  }
+});
+
 test('비트랜잭션 파일의 일부 DDL 실패를 수동 정리한 뒤 재시도한다', async () => {
   const control = postgres(databaseUrl, { max: 1 });
   const failedMigration = {

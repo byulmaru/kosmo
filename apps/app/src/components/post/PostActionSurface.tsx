@@ -36,6 +36,7 @@ type Props = Readonly<{
 const postActionSurfaceFragment = graphql`
   fragment PostActionSurface_post on Post {
     id
+    slug
     visibility
     ...ProfilePinAction_post @alias(as: "profilePin")
     profile {
@@ -86,7 +87,7 @@ export function PostActionSurface({
   const pinOrder = useContext(ProfilePinOrderContext);
   const pinOrderMenu = pinOrder?.postId === target.id ? pinOrder : null;
   const copyLinkItem = usePostMoreMenuItem({
-    postId: target.id,
+    postSlug: target.slug,
     relativeHandle: target.profile.relativeHandle,
   });
   const reportItem = useContentReportMenuItem({

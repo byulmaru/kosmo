@@ -212,6 +212,47 @@ try {
     'Profile pin ordering must use the profile and pin id index.',
   );
 
+  const instanceId = '51000000-0000-4000-8000-000000000001';
+  const profileId = '52000000-0000-4000-8000-000000000001';
+  await sql`
+    INSERT INTO instance (id, domain, kind, state)
+    VALUES (${instanceId}, 'post-slug-runtime.example', 'LOCAL', 'ACTIVE')
+  `;
+  await sql`
+    INSERT INTO profile (
+      id,
+      instance_id,
+      handle,
+      normalized_handle,
+      display_name,
+      follow_policy
+    )
+    VALUES (
+      ${profileId},
+      ${instanceId},
+      'post-slug-runtime',
+      'post-slug-runtime',
+      'Post slug runtime',
+      'OPEN'
+    )
+  `;
+  await sql`SET ROLE kosmo_runtime`;
+  try {
+    const [{ roleName }] = await sql<{ roleName: string }[]>`
+      SELECT current_user AS "roleName"
+    `;
+    assert.equal(roleName, 'kosmo_runtime');
+    const [runtimePost] = await sql<{ slug: string }[]>`
+      INSERT INTO post (profile_id, visibility, state)
+      VALUES (${profileId}, 'PUBLIC', 'ACTIVE')
+      RETURNING slug
+    `;
+    assert.ok(runtimePost);
+    assert.match(runtimePost.slug, /^[A-Za-z0-9]{12}$/);
+  } finally {
+    await sql`RESET ROLE`;
+  }
+
   await assertRuntimeAcl(sql);
 } finally {
   await sql.end({ timeout: 5 });

@@ -252,6 +252,7 @@ const reactionNotificationFragment = graphql`
     }
     post {
       id
+      slug
       profile {
         relativeHandle
       }
@@ -292,7 +293,7 @@ export function ReactionNotificationListItem({
   return (
     <NotificationListItemView
       actors={[actor(data.profile)]}
-      href={`/${post.profile.relativeHandle}/${post.id}`}
+      href={`/${post.profile.relativeHandle}/${post.slug}`}
       kind="reaction"
       onNavigate={() => markRead(data.id)}
       preview={toPreview(post)}
@@ -396,6 +397,7 @@ const repostNotificationFragment = graphql`
     }
     post {
       id
+      slug
       profile {
         relativeHandle
       }
@@ -436,7 +438,7 @@ export function RepostNotificationListItem({
   return (
     <NotificationListItemView
       actors={[actor(data.profile)]}
-      href={`/${post.profile.relativeHandle}/${post.id}`}
+      href={`/${post.profile.relativeHandle}/${post.slug}`}
       kind="repost"
       onNavigate={() => markRead(data.id)}
       preview={toPreview(post)}

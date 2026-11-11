@@ -29,6 +29,7 @@ import {
   createPostInTransaction,
   isActivityPubPostUriConflict,
   ProfilePairBlockedError,
+  withPostSlugRetry,
 } from '@kosmo/core/services';
 import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, sql } from 'drizzle-orm';
@@ -128,21 +129,23 @@ const createPostTransaction = async (
   revalidateAuthorization: boolean,
 ): Promise<PostCreateActivityResult> =>
   db.transaction(async (tx) => {
-    const claimed = await tx
-      .insert(Posts)
-      .values({
-        actorAccountId: input.origin === 'LOCAL' ? (input.accountId ?? null) : null,
-        currentContentId: null,
-        id: postId,
-        profileId: input.profileId,
-        replyParentId: null,
-        repostSourceId: null,
-        state: PostState.ACTIVE,
-        visibility: input.visibility,
-      })
-      .onConflictDoNothing({ target: Posts.id })
-      .returning({ id: Posts.id })
-      .then(first);
+    const claimed = await withPostSlugRetry(tx, (claimTx) =>
+      claimTx
+        .insert(Posts)
+        .values({
+          actorAccountId: input.origin === 'LOCAL' ? (input.accountId ?? null) : null,
+          currentContentId: null,
+          id: postId,
+          profileId: input.profileId,
+          replyParentId: null,
+          repostSourceId: null,
+          state: PostState.ACTIVE,
+          visibility: input.visibility,
+        })
+        .onConflictDoNothing({ target: Posts.id })
+        .returning({ id: Posts.id })
+        .then(first),
+    );
 
     if (!claimed) {
       const existing = await tx

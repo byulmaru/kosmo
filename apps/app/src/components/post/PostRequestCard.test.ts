@@ -39,7 +39,7 @@ type RequestData = {
     url: string | null;
   } | null>;
   id: string;
-  post: { id: string; profile: { relativeHandle: string } } | null;
+  post: { id: string; slug: string; profile: { relativeHandle: string } } | null;
   requestId: string;
   sensitiveMedia: boolean;
   status: string;
@@ -428,7 +428,10 @@ describe('PostRequestCard', () => {
   });
 
   for (const [label, post] of [
-    ['with a Post projection', { id: 'post-id', profile: { relativeHandle: '@writer' } }],
+    [
+      'with a Post projection',
+      { id: 'post-id', slug: 'ReqPst000001', profile: { relativeHandle: '@writer' } },
+    ],
     ['without a Post projection', null],
   ] as const) {
     it(`emits completion only after an active-to-published transition ${label}`, async () => {
@@ -437,7 +440,7 @@ describe('PostRequestCard', () => {
       await renderCard(published, { onPublished });
 
       if (post) {
-        assert.equal(findAllByType('Link')[0]?.props.href, '/@writer/post-id');
+        assert.equal(findAllByType('Link')[0]?.props.href, '/@writer/ReqPst000001');
       } else {
         assert.equal(findAllByType('Link').length, 0);
       }
@@ -493,7 +496,7 @@ describe('PostRequestCard', () => {
 
     await updateCard(
       makeRequest('PUBLISHED', {
-        post: { id: 'post-id', profile: { relativeHandle: '@writer' } },
+        post: { id: 'post-id', slug: 'ReqPst000001', profile: { relativeHandle: '@writer' } },
       }),
     );
     await act(async () => mock.timers.tick(POLL_INTERVAL_MS * 2));

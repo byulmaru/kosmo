@@ -15,7 +15,7 @@ let composerProps:
   | {
       initialBodyText?: string;
       onRequestClose?: (event?: unknown) => void;
-      onPostCreated?: (post: { id: string }) => void;
+      onPostCreated?: (post: { id: string; slug: string }) => void;
       onPostRequestAccepted?: () => void;
       onSubmittingChange?: (submitting: boolean) => void;
       registerNativeBackHandler?: (handler: (() => void) | null) => void;
@@ -444,7 +444,10 @@ test('Native 실제 Reply와 Quote는 modal dismissal 뒤 toast·callback·Store
       storeReviewCalls = 0;
       const closeEvents: (boolean | undefined)[] = [];
       const createdPosts: string[] = [];
-      const post = { id: `post-${mode}` };
+      const post = {
+        id: `post-${mode}`,
+        slug: mode === 'reply' ? 'ReplyAb12345' : 'QuoteAbc1234',
+      };
       await act(async () => {
         renderer = create(
           createElement(ReplyComposerSurface, {
@@ -488,7 +491,7 @@ test('Native 실제 Reply와 Quote는 modal dismissal 뒤 toast·callback·Store
       const routeAction = toastEvents.at(-1)?.action?.onPress;
       assert.ok(routeAction);
       await act(async () => routeAction());
-      assert.deepEqual(pushedRoutes, [`/@writing/${post.id}`]);
+      assert.deepEqual(pushedRoutes, [`/@writing/${post.slug}`]);
 
       const frame = frames.shift();
       assert.ok(frame);
@@ -541,7 +544,7 @@ test('Web actual post keeps the immediate close and deferred callback without St
         }),
       );
     });
-    await act(async () => composerProps?.onPostCreated?.({ id: 'post-web' }));
+    await act(async () => composerProps?.onPostCreated?.({ id: 'post-web', slug: 'WebPst001234' }));
 
     assert.deepEqual(closeEvents, [false]);
     assert.equal(toastEvents.at(-1)?.message, '답글을 게시했어요');

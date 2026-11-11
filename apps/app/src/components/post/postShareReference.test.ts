@@ -2,17 +2,17 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 describe('Post Share Reference', () => {
-  it('configured canonical origin과 Post route identity만 결합한다', async () => {
+  it('configured canonical origin과 Post slug만 결합한다', async () => {
     const shareReference = await import('./postShareReference').catch(() => null);
 
     assert.ok(shareReference, 'postShareReference builder가 구현되어야 한다.');
     assert.equal(
-      shareReference.createPostShareReference('https://kosmo.example', '@alice', 'post-id'),
-      'https://kosmo.example/@alice/post-id',
+      shareReference.createPostShareReference('https://kosmo.example', '@alice', 'AbCdEf123456'),
+      'https://kosmo.example/@alice/AbCdEf123456',
     );
     assert.equal(
-      shareReference.createPostShareReference('https://kosmo.example/', '@alice', 'post-id'),
-      'https://kosmo.example/@alice/post-id',
+      shareReference.createPostShareReference('https://kosmo.example/', '@alice', 'AbCdEf123456'),
+      'https://kosmo.example/@alice/AbCdEf123456',
     );
   });
 
@@ -44,9 +44,9 @@ describe('Post Share Reference', () => {
         shareReference.createPostShareReference(
           'https://canonical.example',
           '@source@remote.example',
-          'source-id',
+          'SrcAbc123456',
         ),
-        'https://canonical.example/@source@remote.example/source-id',
+        'https://canonical.example/@source@remote.example/SrcAbc123456',
       );
     } finally {
       if (originalWindow) {

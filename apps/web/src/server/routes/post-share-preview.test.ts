@@ -17,8 +17,10 @@ vi.mock('@kosmo/fedify', () => ({ resolveActivityPubPostUri: vi.fn() }));
 vi.mock('../sentry', () => ({ captureUnexpectedError: vi.fn() }));
 
 const postId = '00000000-0000-8000-8000-000000000001';
+const postSlug = 'Abc123dEf456';
 const mediaId = '00000000-0000-8000-8000-000000000002';
 const path = `/@alice/${encodeGlobalId('Post', postId)}`;
+const slugPath = `/@alice/${postSlug}`;
 let staticRoot: string;
 let routes: Hono;
 
@@ -70,6 +72,51 @@ test.each([
   }
 });
 
+test('slug and legacy global-ID URLs resolve to the same canonical Post preview', async () => {
+  vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
+  vi.mocked(resolveConfiguredLocalInstance).mockResolvedValue({ id: 'local' } as never);
+  vi.mocked(resolveActivityPubPostUri).mockResolvedValue(
+    new URL(`https://ap.example/notes/${postId}`),
+  );
+  const row = {
+    authorDisplayName: 'Alice',
+    authorHandle: 'alice',
+    authorInstanceId: 'local',
+    authorInstanceJoinedId: 'local',
+    authorInstanceDomain: 'kos.moe',
+    contentDocument: postContentDocumentFromTextAndMedia('public body', []),
+    currentContentId: 'content',
+    postId,
+    slug: postSlug,
+    replyParentId: null,
+    repostSourceId: null,
+  };
+  vi.spyOn(db, 'select').mockImplementation(() => {
+    const result = Promise.resolve([row]);
+    const query = {
+      from: () => query,
+      innerJoin: () => query,
+      leftJoin: () => query,
+      where: () => query,
+      limit: () => result,
+      then: result.then.bind(result),
+    };
+    return query as unknown as ReturnType<typeof db.select>;
+  });
+
+  const legacyResponse = await routes.request(path);
+  const slugResponse = await routes.request(slugPath);
+  const legacyHtml = await legacyResponse.text();
+  const slugHtml = await slugResponse.text();
+
+  expect(legacyResponse.status).toBe(200);
+  expect(slugResponse.status).toBe(200);
+  expect(slugHtml).toBe(legacyHtml);
+  expect(slugHtml).toContain(`property="og:url" content="https://kos.moe/@alice/${postSlug}"`);
+  expect(slugHtml).toContain(`href="https://ap.example/notes/${postId}"`);
+  expect(slugHtml).toContain('public body');
+});
+
 test.each([
   [
     'https://media.example/image.png',
@@ -119,6 +166,7 @@ test.each([
         contentDocument: postContentDocumentFromTextAndMedia('public body', [{ mediaId }]),
         currentContentId: 'content',
         postId,
+        slug: postSlug,
         replyParentId: null,
         repostSourceId: null,
       },
@@ -170,6 +218,7 @@ test('escapes hostile image alt text in share metadata attributes', async () => 
         contentDocument: postContentDocumentFromTextAndMedia('public body', [{ mediaId }]),
         currentContentId: 'content',
         postId,
+        slug: postSlug,
         replyParentId: null,
         repostSourceId: null,
       },
@@ -244,6 +293,7 @@ test.each([
         ),
         currentContentId: 'content',
         postId,
+        slug: postSlug,
         replyParentId: null,
         repostSourceId: null,
       },
@@ -291,7 +341,9 @@ test('uses stored Media attribution metadata for every visible image on a repost
   vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
   vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);
   const sourcePostId = '00000000-0000-8000-8000-000000000003';
+  const sourceSlug = 'source123abc';
   const repostPostId = '00000000-0000-8000-8000-000000000004';
+  const repostSlug = 'repost123abc';
   const secondMediaId = '00000000-0000-8000-8000-000000000005';
   const originalImageUrl = 'https://media.example/original.png';
   const secondImageUrl = 'https://media.example/second.png';
@@ -309,6 +361,7 @@ test('uses stored Media attribution metadata for every visible image on a repost
         contentDocument: null,
         currentContentId: null,
         postId: repostPostId,
+        slug: repostSlug,
         replyParentId: null,
         repostSourceId: sourcePostId,
       },
@@ -326,6 +379,7 @@ test('uses stored Media attribution metadata for every visible image on a repost
         ]),
         currentContentId: 'source-content',
         postId: sourcePostId,
+        slug: sourceSlug,
         replyParentId: null,
         repostSourceId: null,
       },

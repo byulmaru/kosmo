@@ -149,6 +149,66 @@ describe('Post Reply GraphQL 경계', () => {
     }
   });
 
+  test('slug and legacy Post ID return the same local and remote Posts', async () => {
+    const localAuthor = await createAuthenticatedSession();
+    const remoteAuthor = await createRemoteActorProfile('remote-post-reference');
+    const posts = [
+      await createContentPost(localAuthor.profile.id),
+      await createContentPost(remoteAuthor.id),
+    ];
+
+    for (const post of posts) {
+      assert.match(post.slug, /^[A-Za-z0-9]{12}$/);
+
+      for (const reference of [post.slug, encodeGlobalId('Post', post.id)]) {
+        const result = await requestPostByReference(reference);
+
+        assertNoGraphQLErrors(result);
+        assert.deepEqual(result.data?.postByReference, {
+          id: encodeGlobalId('Post', post.id),
+          slug: post.slug,
+        });
+      }
+    }
+
+    const existingPost = posts[0]!;
+    const invalidReferences = [
+      'ZZZZZZZZZZZZ',
+      'bad_slug_123',
+      encodeGlobalId('Profile', existingPost.id),
+      existingPost.id,
+      encodeGlobalId('Post', crypto.randomUUID()),
+    ];
+
+    for (const reference of invalidReferences) {
+      const result = await requestPostByReference(reference);
+
+      assertNoGraphQLErrors(result);
+      assert.equal(result.data?.postByReference, null);
+    }
+  });
+
+  test('private Post visibility applies to both slug and legacy Post ID', async () => {
+    const author = await createAuthenticatedSession();
+    const post = await createContentPost(author.profile.id, { visibility: PostVisibility.DIRECT });
+    const expected = {
+      id: encodeGlobalId('Post', post.id),
+      slug: post.slug,
+    };
+
+    for (const reference of [post.slug, encodeGlobalId('Post', post.id)]) {
+      const guestResult = await requestPostByReference(reference);
+
+      assertNoGraphQLErrors(guestResult);
+      assert.equal(guestResult.data?.postByReference, null);
+
+      const authorResult = await requestPostByReference(reference, author.token);
+
+      assertNoGraphQLErrors(authorResult);
+      assert.deepEqual(authorResult.data?.postByReference, expected);
+    }
+  });
+
   test('replyParentId 생략은 기존 일반 Post 계약을 유지한다', async () => {
     const auth = await createAuthenticatedSession();
     const hashtagName = `tag${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
@@ -3102,6 +3162,15 @@ const requestGraphQL = async <TData>(
   assert.equal(response.status, 200);
   return (await response.json()) as GraphQLResult<TData>;
 };
+
+const requestPostByReference = (reference: string, token?: string) =>
+  requestGraphQL<{ postByReference: { id: string; slug: string } | null }>(
+    `query PostByReference($reference: String!) {
+      postByReference(reference: $reference) { id slug }
+    }`,
+    { reference },
+    token,
+  );
 
 const requestCreatePost = (
   input: {

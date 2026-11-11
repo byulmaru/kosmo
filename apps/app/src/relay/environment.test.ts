@@ -10,6 +10,7 @@ import {
   handlePotentialSnapshotErrors,
 } from 'relay-runtime';
 import PostDetailQueryArtifact from '../app/(tabs)/(post)/[profileHandle]/__generated__/PostDetailQuery.graphql';
+import PostDetailThreadIdentityStoryQueryArtifact from '../stories/patterns/__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import ProfileSwitcherFragment from '../components/shell/__generated__/ProfileSwitcher_query.graphql';
 import UniversalShellQueryArtifact from '../components/shell/__generated__/UniversalShellQuery.graphql';
 import type { RelayFieldLogger } from 'relay-runtime';
@@ -164,10 +165,13 @@ describe('Relay environment diagnostics', () => {
   });
 });
 
-describe('Relay Post node cache', () => {
+describe('Relay Post cache', () => {
   it('links Query.node to a cached Post only in the current environment store', () => {
     const postId = 'cached-post';
-    const operation = createOperationDescriptor(getRequest(PostDetailQueryArtifact), { postId });
+    const operation = createOperationDescriptor(
+      getRequest(PostDetailThreadIdentityStoryQueryArtifact),
+      { postId },
+    );
     const actorAEnvironment = createRelayEnvironment(null, 'profile-a');
     const actorBEnvironment = createRelayEnvironment(null, 'profile-b');
 
@@ -188,12 +192,9 @@ describe('Relay Post node cache', () => {
     assert.equal(readPostNodeId(wrongTypeEnvironment, operation), undefined);
   });
 
-  it('uses the network when the requested node is absent or is not a Post', async () => {
+  it('uses the network when a requested reference is not cached', async () => {
     const environment = createRelayEnvironment(null);
-    const wrongTypeId = 'profile-instead-of-post';
-    environment.commitUpdate((store) => {
-      store.create(wrongTypeId, 'Profile').setValue(wrongTypeId, 'id');
-    });
+    const references = ['NoMatch000001', 'legacyPostGlobalID123456789'];
 
     const originalFetch = globalThis.fetch;
     const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -208,7 +209,7 @@ describe('Relay Post node cache', () => {
         JSON.stringify({
           data: {
             currentSession: { id: 'session-1', selectedProfile: null },
-            node: null,
+            postByReference: null,
           },
         }),
         { headers: { 'content-type': 'application/json' }, status: 200 },
@@ -216,18 +217,14 @@ describe('Relay Post node cache', () => {
     };
 
     try {
-      await fetchQuery(
-        environment,
-        PostDetailQueryArtifact,
-        { postId: 'missing-post' },
-        { fetchPolicy: 'store-or-network' },
-      ).toPromise();
-      await fetchQuery(
-        environment,
-        PostDetailQueryArtifact,
-        { postId: wrongTypeId },
-        { fetchPolicy: 'store-or-network' },
-      ).toPromise();
+      for (const reference of references) {
+        await fetchQuery(
+          environment,
+          PostDetailQueryArtifact,
+          { reference },
+          { fetchPolicy: 'store-or-network' },
+        ).toPromise();
+      }
 
       assert.equal(requestCount, 2);
     } finally {
@@ -242,13 +239,15 @@ describe('Relay Post node cache', () => {
 
   it('keeps the store-and-network refresh when a Post is cached', async () => {
     const environment = createRelayEnvironment(null, 'profile-a');
-    const postId = 'cached-post';
-    const operation = createOperationDescriptor(getRequest(PostDetailQueryArtifact), { postId });
+    const postId = 'cached-post-id';
+    const reference = 'AbCdEf123456';
+    const operation = createOperationDescriptor(getRequest(PostDetailQueryArtifact), { reference });
     environment.commitUpdate((store) => {
-      store.create(postId, 'Post').setValue(postId, 'id');
+      const post = store.create(postId, 'Post').setValue(postId, 'id').setValue(reference, 'slug');
+      store.getRoot().setLinkedRecord(post, 'postByReference', { reference });
     });
     environment.check(operation);
-    assert.equal(readPostNodeId(environment, operation), postId);
+    assert.equal(readPostByReferenceId(environment, operation), postId);
 
     const originalFetch = globalThis.fetch;
     const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -259,10 +258,13 @@ describe('Relay Post node cache', () => {
     });
     globalThis.fetch = async () => {
       requestCount += 1;
-      return new Response(JSON.stringify({ data: { currentSession: null, node: null } }), {
-        headers: { 'content-type': 'application/json' },
-        status: 200,
-      });
+      return new Response(
+        JSON.stringify({ data: { currentSession: null, postByReference: null } }),
+        {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        },
+      );
     };
 
     let queryReference: ReturnType<typeof loadQuery> | undefined;
@@ -270,7 +272,7 @@ describe('Relay Post node cache', () => {
       queryReference = loadQuery(
         environment,
         PostDetailQueryArtifact,
-        { postId },
+        { reference },
         { fetchPolicy: 'store-and-network' },
       );
       await new Promise<void>((resolve) => setImmediate(resolve));
@@ -297,6 +299,16 @@ async function readPartialProfile(
     fieldErrors?: unknown;
   };
   handlePotentialSnapshotErrors(environment, snapshot.fieldErrors as never, undefined as never);
+}
+
+function readPostByReferenceId(
+  environment: ReturnType<typeof createRelayEnvironment>,
+  operation: ReturnType<typeof createOperationDescriptor>,
+): string | undefined {
+  const data = environment.lookup(operation.fragment).data as {
+    postByReference?: { id?: string } | null;
+  } | null;
+  return data?.postByReference?.id;
 }
 
 function readPostNodeId(

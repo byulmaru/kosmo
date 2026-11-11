@@ -7,18 +7,18 @@ import { createPostShareReference } from './postShareReference';
 import type { ActionMenuItem } from '@/components/ui/ActionMenu';
 
 type Props = Readonly<{
-  postId: string;
+  postSlug: string;
   relativeHandle: string;
 }>;
 
 const copyFailureMessage = '링크를 복사하지 못했습니다. 잠시 후 다시 시도해 주세요.';
 const copySuccessMessage = '링크를 복사했어요';
 
-export function usePostMoreMenuItem({ postId, relativeHandle }: Props): ActionMenuItem {
+export function usePostMoreMenuItem({ postSlug, relativeHandle }: Props): ActionMenuItem {
   const { showToast } = useToast();
   const copyReference = useCallback(async () => {
     try {
-      const reference = createPostShareReference(getPublicWebOrigin(), relativeHandle, postId);
+      const reference = createPostShareReference(getPublicWebOrigin(), relativeHandle, postSlug);
       const copied = await setStringAsync(reference);
       if (!copied) {
         throw new Error('Clipboard did not confirm the copy.');
@@ -27,7 +27,7 @@ export function usePostMoreMenuItem({ postId, relativeHandle }: Props): ActionMe
     } catch {
       showToast(copyFailureMessage, { tone: 'danger' });
     }
-  }, [postId, relativeHandle, showToast]);
+  }, [postSlug, relativeHandle, showToast]);
 
   return {
     accessibilityLabel: '링크 복사',

@@ -58,6 +58,7 @@ type PresentationContent = {
 const PostSourcePreviewFragment = graphql`
   fragment PostSourcePreview_source on Post {
     id
+    slug
     createdAt
     content {
       bodyText
@@ -97,6 +98,7 @@ const PostSourcePreviewFragment = graphql`
 const PostSourcePresentationViewFragment = graphql`
   fragment PostSourcePresentationView_post on Post {
     id
+    slug
     createdAt
     visibility
     content {
@@ -169,7 +171,7 @@ export function PostSourcePresentationView({
   const kind = presentationKind(post);
 
   const postProfileHref = `/${post.profile.relativeHandle}` as Href;
-  const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as Href;
+  const postDetailHref = `/${post.profile.relativeHandle}/${post.slug}` as Href;
   const openPost = useCallback(() => router.push(postDetailHref), [postDetailHref, router]);
   if (kind === 'invalid') {
     return null;
@@ -259,7 +261,7 @@ export function PostSourcePreview({
   const router = useRouter();
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
-  const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
+  const sourcePostHref = `/${source.profile.relativeHandle}/${source.slug}` as Href;
   const previewStyle = [styles.preview, style, { borderColor: theme.borderDefault }];
   const authorTopInset = interactive ? spacing.md : 0;
   const openSource = useCallback(() => router.push(sourcePostHref), [router, sourcePostHref]);

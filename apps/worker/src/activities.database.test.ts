@@ -1794,7 +1794,7 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
     assert.deepEqual(payload.data, {
       notificationId: encodeGlobalId('ReactionNotification', notificationId),
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
-      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
+      href: `/@yeeun/${post.slug}`,
     });
     assert.ok('token' in payload);
     assert.equal('fid' in payload, false);
@@ -1823,7 +1823,7 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
     assert.deepEqual(webPayload.data, {
       notificationId: encodeGlobalId('ReactionNotification', notificationId),
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
-      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
+      href: `/@yeeun/${post.slug}`,
       title: '혜주',
       body: '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. Read the article',
     });
@@ -2037,7 +2037,6 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
         id,
       );
     const encodeProfileId = (id: string) => encodeGlobalId('Profile', id);
-    const encodePostId = (id: string) => encodeGlobalId('Post', id);
     t.mock.method(messaging, 'send', async (message: FcmMessage) => {
       sent.push(message);
       return 'projects/kosmo-push-test/messages/summary-test';
@@ -2076,7 +2075,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
           title: '행위자',
           body: '행위자(@actor) 님이 수신자(@recipient) 님에게 😂를 남겼습니다. target',
           data: {
-            href: `/@recipient/${encodePostId(target.id)}`,
+            href: `/@recipient/${target.slug}`,
             notificationId: dataFor(NotificationKind.REACTION, notifications[2]!.id),
             recipientProfileId: encodeProfileId(recipient.id),
           },
@@ -2085,7 +2084,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
           title: '행위자',
           body: '행위자(@actor) 님이 수신자(@recipient) 님의 게시글을 재게시했습니다. target',
           data: {
-            href: `/@recipient/${encodePostId(target.id)}`,
+            href: `/@recipient/${target.slug}`,
             notificationId: dataFor(NotificationKind.REPOST, notifications[3]!.id),
             recipientProfileId: encodeProfileId(recipient.id),
           },
@@ -2094,7 +2093,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
           title: '행위자',
           body: '행위자(@actor) 님이 수신자(@recipient) 님의 게시글에 답글을 달았습니다. reply',
           data: {
-            href: `/@actor/${encodePostId(reply.id)}`,
+            href: `/@actor/${reply.slug}`,
             notificationId: dataFor(NotificationKind.REPLY, notifications[4]!.id),
             recipientProfileId: encodeProfileId(recipient.id),
           },
@@ -2103,7 +2102,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
           title: '행위자',
           body: '행위자(@actor) 님이 수신자(@recipient) 님의 게시글을 인용했습니다. quote',
           data: {
-            href: `/@actor/${encodePostId(quote.id)}`,
+            href: `/@actor/${quote.slug}`,
             notificationId: dataFor(NotificationKind.QUOTE, notifications[5]!.id),
             recipientProfileId: encodeProfileId(recipient.id),
           },
@@ -2392,7 +2391,7 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     assert.deepEqual(payload.data, {
       notificationId: encodeGlobalId('MentionNotification', notificationId),
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
-      href: `/@${author.handle}@${authorInstance.domain}/${encodeGlobalId('Post', post.id)}`,
+      href: `/@${author.handle}@${authorInstance.domain}/${post.slug}`,
     });
   } finally {
     if (postId) {
