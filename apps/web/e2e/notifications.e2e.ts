@@ -245,7 +245,7 @@ test('Reaction·Repost 알림 사진과 게시글은 각각 한 번 이동하고
     .returning();
   const reactionNotificationId = toGlobalId('ReactionNotification', reactionNotification!.id);
   const repostNotificationId = toGlobalId('RepostNotification', repostNotification!.id);
-  const relatedPostHref = `/@${recipient.profile.handle}/${toGlobalId('Post', relatedPost.id)}`;
+  const relatedPostHref = `/@${recipient.profile.handle}/${relatedPost.slug}`;
 
   await setE2ESessionCookie(context, recipient.token);
 
@@ -464,7 +464,7 @@ test('Reply 알림 작성자 Ctrl/Cmd 새 탭과 본문 이동은 각각 한 번
 
   markReadRequestCount = 0;
   await replyRow.getByTestId('post-list-row-body').click();
-  await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${toGlobalId('Post', reply.id)}`);
+  await expect(page).toHaveURL(`/@${replyAuthor.profile.handle}/${reply.slug}`);
   await expect.poll(() => markReadRequestCount).toBe(1);
   await expect.poll(() => notificationReadAt(notification.id)).not.toBeNull();
   await page.unroute('**/graphql');

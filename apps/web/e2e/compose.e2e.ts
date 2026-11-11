@@ -226,8 +226,8 @@ for (const mode of ['reply', 'quote'] as const) {
       profileId: viewer.profile!.id,
       replyParentId: parent.id,
     });
-    const parentPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', parent.id)}`;
-    const childPath = `/@${viewer.profile!.handle}/${toGlobalId('Post', child.id)}`;
+    const parentPath = `/@${viewer.profile!.handle}/${parent.slug}`;
+    const childPath = `/@${viewer.profile!.handle}/${child.slug}`;
 
     await setE2ESessionCookie(context, viewer.token);
     await page.setViewportSize({ width: 390, height: 844 });
@@ -468,7 +468,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
   await expect(
     page
       .getByTestId('post-detail-scroll')
-      .getByTestId(`post-thread-current-${publishedPath.split('/').at(-1)}`)
+      .getByTestId(`post-thread-current-${createdPostId}`)
       .getByText(body),
   ).toBeVisible();
   const publishedPostResponse = waitForGraphQLOperation(page, 'PostDetailQuery').then(
@@ -476,8 +476,7 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
       response,
       body: (await response.json()) as {
         data?: {
-          node?: {
-            __typename?: string | null;
+          postByReference?: {
             id?: string | null;
             profile?: { relativeHandle?: string | null } | null;
             replyParent?: { id?: string | null } | null;
@@ -492,11 +491,9 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
   const publishedOperation = readGraphQLOperation(publishedPost.request().postData());
   expect(publishedPost.ok(), JSON.stringify(publishedBody, null, 2)).toBe(true);
   expect(publishedBody.errors, JSON.stringify(publishedBody, null, 2)).toBeUndefined();
-  expect(publishedOperation?.variables?.postId).toEqual(expect.any(String));
-  expect(publishedOperation?.variables?.postId).toBe(publishedPath.split('/').at(-1));
-  expect(publishedBody.data?.node).toMatchObject({
-    __typename: 'Post',
-    id: publishedOperation?.variables?.postId,
+  expect(publishedOperation?.variables?.reference).toBe(publishedPath.split('/').at(-1));
+  expect(publishedBody.data?.postByReference).toMatchObject({
+    id: createdPostId,
     profile: { relativeHandle: '@e2e-composer' },
     replyParent: null,
   });
@@ -856,8 +853,9 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   await expect(publishedPostRow).toBeVisible();
   await publishedPostRow.getByRole('link').last().click();
   await expect(page).toHaveURL(/\/@e2e-composer-profile-b\/[^/]+$/);
-  const publishedPostPathId = new URL(page.url()).pathname.split('/').at(-1);
-  const publishedPostId = decodeURIComponent(publishedPostPathId ?? '');
+  const publishedPostReference = decodeURIComponent(
+    new URL(page.url()).pathname.split('/').at(-1) ?? '',
+  );
   const publishedArticle = page.getByRole('article').filter({ hasText: contentWarning }).first();
   const showBody = publishedArticle.getByRole('button', {
     name: `${contentWarning}, 본문, 보기`,
@@ -872,8 +870,7 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
       response,
       body: (await response.json()) as {
         data?: {
-          node?: {
-            __typename?: string | null;
+          postByReference?: {
             id?: string | null;
             profile?: { relativeHandle?: string | null } | null;
             replyParent?: { id?: string | null } | null;
@@ -888,10 +885,9 @@ test('Composer 프로필 선택은 draft와 공개 범위를 유지하고 선택
   const detailOperation = readGraphQLOperation(detail.request().postData());
   expect(detail.ok(), JSON.stringify(detailBody, null, 2)).toBe(true);
   expect(detailBody.errors, JSON.stringify(detailBody, null, 2)).toBeUndefined();
-  expect(detailOperation?.variables?.postId).toBe(publishedPostId);
-  expect(detailBody.data?.node).toMatchObject({
-    __typename: 'Post',
-    id: publishedPostId,
+  expect(detailOperation?.variables?.reference).toBe(publishedPostReference);
+  expect(detailBody.data?.postByReference).toMatchObject({
+    id: createdPostId,
     profile: { relativeHandle: `@${selectedProfile.handle}` },
     replyParent: null,
   });

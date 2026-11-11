@@ -338,7 +338,7 @@ test('하단 CTA 닫힘은 공개 링크 이동과 새로고침에서 유지되�
     handle: 'guest_reader_author',
   });
   const post = await createE2EPost({ body: 'E2E guest reading path', profileId: author.id });
-  const postPath = `/@guest_reader_author/${toGlobalId('Post', post.id)}`;
+  const postPath = `/@guest_reader_author/${post.slug}`;
   const postRow = page.getByRole('article').filter({
     has: page.getByText('E2E guest reading path', { exact: true }),
   });
@@ -517,8 +517,11 @@ for (const { entry, publicRoute } of [
           : publicRoute === 'profile'
             ? '/@guest_entry_author'
             : `/@guest_entry_author/${toGlobalId('Post', post.id)}`;
+      const canonicalPublicPath =
+        publicRoute === 'post' ? `/@guest_entry_author/${post.slug}` : publicPath;
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(publicPath);
+      await expect(page).toHaveURL((url) => url.pathname === canonicalPublicPath);
       const entryLink = page.getByRole('link', { name: entry, exact: true });
       await expect(entryLink).toHaveAttribute('href', '/login');
       const loginRequest = context.waitForEvent('request', {
@@ -535,7 +538,7 @@ for (const { entry, publicRoute } of [
           signupTab.getByRole('heading', { name: /나만의 핸들을\s*정해 주세요/ }),
         ).toBeVisible();
         if (newTab) {
-          await expect(page).toHaveURL((url) => url.pathname === publicPath);
+          await expect(page).toHaveURL((url) => url.pathname === canonicalPublicPath);
         }
       } finally {
         if (newTab) {

@@ -2300,13 +2300,23 @@ describe('Post Reply GraphQL 경계', () => {
     });
     const reply = await createContentfulPost(author.id, { replyParentId: replyQuote.id });
 
-    const result = await requestPostAncestors(reply.id);
+    const result = await requestGraphQL<{
+      node: { id: string; replyAncestors: Array<{ id: string; slug: string }> } | null;
+    }>(
+      `query PostReplyAncestorsWithSlugs($postId: ID!) {
+        node(id: $postId) {
+          ... on Post { id replyAncestors { id slug } }
+        }
+      }`,
+      { postId: encodeGlobalId('Post', reply.id) },
+    );
 
     assertNoGraphQLErrors(result);
     assert.deepEqual(result.data?.node, {
       id: encodeGlobalId('Post', reply.id),
-      replyAncestors: [replyQuote.id, root.id].map((id) => ({
+      replyAncestors: [replyQuote, root].map(({ id, slug }) => ({
         id: encodeGlobalId('Post', id),
+        slug,
       })),
     });
   });

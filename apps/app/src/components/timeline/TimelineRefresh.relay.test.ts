@@ -344,6 +344,13 @@ const profile = {
   private: { defaultPostVisibility: 'PUBLIC' },
   viewerState: { blockedBy: false, isSelf: true, profileBlock: null, profileMute: null },
 };
+const fixtureSlug = (id: string) => {
+  let hash = 14695981039346656037n;
+  for (const character of id) {
+    hash = BigInt.asUintN(64, (hash ^ BigInt(character.charCodeAt(0))) * 1099511628211n);
+  }
+  return BigInt.asUintN(62, hash).toString(36).padStart(12, '0');
+};
 function payload(
   field: string,
   ids: string[],
@@ -359,6 +366,7 @@ function payload(
         node: {
           __typename: 'Post',
           id,
+          slug: fixtureSlug(id),
           createdAt: '2026-09-26T00:00:00Z',
           profile,
           content: {

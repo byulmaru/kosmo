@@ -85,11 +85,9 @@ for (const width of [390, 1440]) {
               if (destination === 'post-body') {
                 await card.getByText(body, { exact: true })[interaction]();
               } else {
-                await card
-                  .locator(`a[href="/@${author.handle}/${toGlobalId('Post', post.id)}"]`)
-                  [interaction]();
+                await card.locator(`a[href="/@${author.handle}/${post.slug}"]`)[interaction]();
               }
-              await expect(page).toHaveURL(`/@${author.handle}/${toGlobalId('Post', post.id)}`);
+              await expect(page).toHaveURL(`/@${author.handle}/${post.slug}`);
               await expect(
                 page.getByTestId(`post-thread-current-${toGlobalId('Post', post.id)}`),
               ).toBeInViewport();
@@ -97,7 +95,7 @@ for (const width of [390, 1440]) {
               let profileSurface = card;
               if (destination.startsWith('profile-from-detail-')) {
                 await card.getByText(body, { exact: true })[interaction]();
-                await expect(page).toHaveURL(`/@${author.handle}/${toGlobalId('Post', post.id)}`);
+                await expect(page).toHaveURL(`/@${author.handle}/${post.slug}`);
                 profileSurface = page.getByTestId(
                   `post-thread-current-${toGlobalId('Post', post.id)}`,
                 );
@@ -131,7 +129,7 @@ for (const width of [390, 1440]) {
             await expect.poll(() => page.evaluate(() => window.scrollY)).toBeLessThanOrEqual(1);
             await page.goBack();
             if (destination.startsWith('profile-from-detail-')) {
-              await expect(page).toHaveURL(`/@${author.handle}/${toGlobalId('Post', post.id)}`);
+              await expect(page).toHaveURL(`/@${author.handle}/${post.slug}`);
               await page.goBack();
             }
             await expect(page).toHaveURL('/home');
@@ -242,7 +240,7 @@ for (const width of [390, 1440]) {
                   })
                   [interaction]();
               }
-              await expect(page).toHaveURL(`/@${author.handle}/${toGlobalId('Post', post.id)}`);
+              await expect(page).toHaveURL(`/@${author.handle}/${post.slug}`);
               await expect(
                 page.getByTestId(`post-thread-current-${toGlobalId('Post', post.id)}`),
               ).toBeInViewport();
