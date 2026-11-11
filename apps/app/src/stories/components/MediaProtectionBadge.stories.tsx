@@ -1,10 +1,17 @@
 import { ImageBackground, StyleSheet, View } from 'react-native';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { MediaProtectionBadge } from '@/components/post/MediaProtectionBadge';
+import { PostMediaImage } from '@/components/post/PostMediaImage';
 import { spacing } from '@/theme/tokens';
 import mediaImage from '../../../public/og-default.png?url';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+const imageOpen = fn();
+
 const meta = {
+  beforeEach: () => {
+    imageOpen.mockClear();
+  },
   component: MediaProtectionBadge,
   parameters: { layout: 'centered' },
   render: () => (
@@ -22,7 +29,41 @@ type Story = StoryObj<typeof meta>;
 
 export const Playground: Story = {};
 
+export const OpensFilteredImage: Story = {
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const badge = canvas.getByTestId('media-protection-badge');
+
+    const bounds = badge.getBoundingClientRect();
+    const pointerTarget = badge.ownerDocument.elementFromPoint(
+      bounds.left + 1,
+      bounds.top + bounds.height / 2,
+    );
+    expect(pointerTarget).toBe(badge);
+
+    await userEvent.hover(badge);
+    await userEvent.click(badge);
+    expect(imageOpen).toHaveBeenCalledOnce();
+    expect(imageOpen).toHaveBeenCalledWith(2, expect.any(Object));
+  },
+  render: () => (
+    <View style={styles.interactivePreview}>
+      <PostMediaImage
+        index={2}
+        item={{
+          aiProhibitFilterApplied: true,
+          altText: '필터가 적용된 이미지',
+          id: 'media-protection-badge-interaction',
+          url: mediaImage,
+        }}
+        onOpen={imageOpen}
+      />
+    </View>
+  ),
+};
+
 const styles = StyleSheet.create({
   badgePlacement: { alignItems: 'flex-end', flex: 1, padding: spacing.sm },
+  interactivePreview: { width: 320 },
   preview: { height: 156, width: 156 },
 });

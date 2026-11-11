@@ -11,6 +11,7 @@ export function MediaProtectionBadge() {
       accessibilityElementsHidden
       aria-hidden
       importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
       style={[styles.badge, { backgroundColor: theme.overlayScrim }]}
       testID="media-protection-badge"
     >

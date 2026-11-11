@@ -287,7 +287,7 @@ export function PostRequestCard({
                 style={[styles.thumbnail, { backgroundColor: theme.backgroundSurface }]}
               />
               {thumbnail.aiProhibitFilterApplied ? (
-                <View pointerEvents="none" style={styles.thumbnailProtectionBadgePosition}>
+                <View pointerEvents="box-none" style={styles.thumbnailProtectionBadgePosition}>
                   <MediaProtectionBadge />
                 </View>
               ) : null}

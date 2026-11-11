@@ -150,7 +150,7 @@ function PostMediaImageSource({
         />
       ) : null}
       {item.aiProhibitFilterApplied === true ? (
-        <View pointerEvents="none" style={styles.protectionBadgePosition}>
+        <View pointerEvents="box-none" style={styles.protectionBadgePosition}>
           <MediaProtectionBadge />
         </View>
       ) : null}

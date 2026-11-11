@@ -114,7 +114,7 @@ export function ViewerImage({
         testID={testID}
       />
       {aiProhibitFilterApplied && status !== 'error' ? (
-        <View pointerEvents="none" style={styles.protectionBadgePosition}>
+        <View pointerEvents="box-none" style={styles.protectionBadgePosition}>
           <MediaProtectionBadge />
         </View>
       ) : null}
