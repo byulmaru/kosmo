@@ -10,9 +10,9 @@ import {
   handlePotentialSnapshotErrors,
 } from 'relay-runtime';
 import PostDetailQueryArtifact from '../app/(tabs)/(post)/[profileHandle]/__generated__/PostDetailQuery.graphql';
-import PostDetailThreadIdentityStoryQueryArtifact from '../stories/patterns/__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import ProfileSwitcherFragment from '../components/shell/__generated__/ProfileSwitcher_query.graphql';
 import UniversalShellQueryArtifact from '../components/shell/__generated__/UniversalShellQuery.graphql';
+import PostDetailThreadIdentityStoryQueryArtifact from '../stories/patterns/__generated__/PostDetailThreadIdentityStoryQuery.graphql';
 import type { RelayFieldLogger } from 'relay-runtime';
 import type { createRelayEnvironment as CreateRelayEnvironment } from './environment';
 
