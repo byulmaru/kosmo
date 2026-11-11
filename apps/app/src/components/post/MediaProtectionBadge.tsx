@@ -8,7 +8,7 @@ export function MediaProtectionBadge() {
   const theme = useTheme();
 
   return (
-    <Tooltip label="AI 학습방지 필터가 적용되었어요. 이 표시는 나에게만 보여요.">
+    <Tooltip label={'AI 학습방지 필터가 적용되었어요.\n이 표시는 나에게만 보여요.'}>
       <View
         accessibilityElementsHidden
         aria-hidden
