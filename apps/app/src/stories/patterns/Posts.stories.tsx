@@ -3299,7 +3299,9 @@ export const BodyTimeAndLayoutStates: Story = {
     const canvas = within(canvasElement);
     expect(canvasElement.querySelector('a[href="/@user@remote.example"]')).toBeInTheDocument();
     expect(
-      canvasElement.querySelector('a[href="/@user@remote.example/detail-remote"]'),
+      canvasElement.querySelector(
+        `a[href="/${remoteAuthorPost.profile.relativeHandle}/${remoteAuthorPost.slug}"]`,
+      ),
     ).toBeInTheDocument();
     const contentLink = canvas.getByRole('link', {
       name: /안전한 외부 링크, https:\/\/example\.com\/path/,
