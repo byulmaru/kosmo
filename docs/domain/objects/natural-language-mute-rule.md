@@ -2,9 +2,9 @@
 
 ## 정의
 
-Natural Language Mute Rule은 Owner Profile이 자연어로 입력한 조건을 기준으로 Home Post List에 새로 추가할
-Post의 노출을 개인적으로 제어하는 규칙이다. 이 규칙은 조건에 의미상 해당하는 Post만 제외하며, 다른 Profile의
-Post 직접 조회나 상호작용 권한을 바꾸지 않는다.
+Natural Language Mute Rule은 Owner Profile이 자연어로 입력한 조건에 따라 Home Post List에 새로 추가할 Post를
+판정하는 규칙이다. 현재 Rule이 있는 경우 Local Post List는 저장된 Exclude 판정을 재사용해 후보를 더 숨길 수
+있지만, 새 판정은 Home 추가 경로에서만 만든다. 이 규칙은 다른 Profile의 Post 직접 조회나 상호작용 권한을 바꾸지 않는다.
 
 ## 상태
 
@@ -48,8 +48,8 @@ Post 직접 조회나 상호작용 권한을 바꾸지 않는다.
 
 ## 조회 정책
 
-- Natural Language Mute Rule은 Home Post List에 Post를 새로 추가할 때만 적용한다. 일반 적재, Follow 보정에 따른
-  추가, Home 목록의 cache 재구성에서 새로 추가하는 경우에도 같은 정책을 적용한다.
+- Natural Language Mute Rule이 새 의미 판정을 만드는 범위는 Home Post List에 Post를 새로 추가할 때다. 일반 적재,
+  Follow 보정에 따른 추가, Home 목록의 cache 재구성에서 새로 추가하는 경우에도 같은 정책을 적용한다.
 - 기존 Post Visibility, Post Eligibility, Profile Block, Profile Mute와 조회할 수 없는 Media 정책을 먼저 적용한다.
   이 규칙은 기존 접근·제외 정책을 통과한 항목만 추가로 제외할 수 있으며 접근 범위를 넓히지 않는다.
 - 판정 대상은 Content가 있는 Post 자체다. Quote도 자체 판정 대상이며, viewer가 대상 Post의 작성자이면 의미 판정과
@@ -68,14 +68,18 @@ Post 직접 조회나 상호작용 권한을 바꾸지 않는다.
   이전에 Repost 자체를 대상으로 저장한 판정은 재사용하지 않으며, 기존 만료 시각까지 유지된 뒤 만료한다. 확률 추정값은
   판정 정확도를 뜻하지 않으며, 판정 시각은 보존하지 않는다. 자연어 조건, 판정 모델, 임계값, Post Content 수정은 기존
   판정을 무효화하지 않는다. cache 만료나 유실 뒤에는 당시의 Rule과 Content로 다시 판정할 수 있다.
+- Local Post List는 현재 선택한 viewer Profile에 Rule이 있을 때 후보 Post 자체의 저장된 유효 Exclude 판정만
+  재사용해 추가로 숨긴다. Local 조회는 새 의미 판정을 만들지 않으며 cache 유효기간도 연장하지 않는다. Content가 있는
+  Quote는 direct Source가 아닌 Quote 자체의 판정을 사용한다. viewer 작성 Post, 유효한 Exclude 판정이 없는 Post,
+  선택 Profile이 없거나 현재 Rule이 없는 경우에는 기존 Local 정책을 적용하며, Rule 삭제 뒤 남아 있는 판정도 무시한다.
 - Smart Filter 결과 목록의 대상·접근 권한·시점은 [Home Post List 정책](../policies/post-list.md#home-post-list)을
   따른다. 단일 Post의 `smartFilterProbability`는 기존 cache 값을 fallback으로 조회할 수 있으며, 이 조회는 Rule을 재평가하거나
   cache 만료 시간을 연장하지 않는다.
 - Rule 생성·변경·제거와 판정 대상 식별 방식 변경은 이미 Home에 추가된 Post를 소급 재판정하거나 제거하지 않으며,
   기존 판정도 무효화하거나 다른 Post ID로 이전하지 않는다.
   현재 Rule이 없으면 이후 새 Home 추가는 기존 정책을 따른다. Rule을 다시 만들면 아직 유효한 이전 판정을 재사용할 수 있다.
-- Natural Language Mute Rule은 Local, Profile, Hashtag Post List, 검색, Notification, Bookmark, Post 직접 조회와
-  상호작용에는 적용하지 않는다.
+- Natural Language Mute Rule은 Home 신규 추가 외에는 Local의 저장 Exclude 판정 재사용에만 적용한다. Profile,
+  Hashtag Post List, 검색, Notification, Bookmark, Post 직접 조회와 상호작용에는 적용하지 않는다.
 
 ## 확정 용어
 
@@ -87,5 +91,5 @@ Post 직접 조회나 상호작용 권한을 바꾸지 않는다.
 
 - 저장 완료 뒤 응답 유실로 재시도되는 경우, 제거 뒤 늦은 생성 재시도로 Rule이 다시 생기거나 이전 변경 재시도가
   최신 조건을 덮을 수 있는 드문 경합은 허용하고 보류한다.
-- 프로필당 복수 Rule, 다른 목록·검색·알림 Scope, 만료 설정, 개별 Post 예외·전환 동작, 판정 설명, 판정 지표는 현재
-  범위에서 제공하지 않는다.
+- 프로필당 복수 Rule, Local 외의 다른 목록·검색·알림에서 저장 판정을 소비하는 Scope, 만료 설정, 개별 Post
+  예외·전환 동작, 판정 설명, 판정 지표는 현재 범위에서 제공하지 않는다.

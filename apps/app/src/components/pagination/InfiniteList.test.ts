@@ -43,13 +43,63 @@ let PaginationScrollView: ComponentType<{
 let latestLoadError = false;
 let latestRetry: (() => void) | null = null;
 
+type MockFlatListProps<Item> = {
+  data: ReadonlyArray<Item>;
+  ListEmptyComponent?: ReactNode;
+  ListFooterComponent?: ReactNode;
+  ListHeaderComponent?: ReactNode;
+  renderItem: (params: { index: number; item: Item }) => ReactNode;
+  [key: string]: unknown;
+};
+
+function MockFlatList<Item>({
+  data,
+  ListEmptyComponent,
+  ListFooterComponent,
+  ListHeaderComponent,
+  renderItem,
+  ...props
+}: MockFlatListProps<Item>) {
+  return createElement(
+    'FlatList',
+    { data, ListEmptyComponent, ListFooterComponent, ListHeaderComponent, renderItem, ...props },
+    ListHeaderComponent,
+    data.length === 0 ? ListEmptyComponent : data.map((item, index) => renderItem({ item, index })),
+    ListFooterComponent,
+  );
+}
+
+function MockButton({
+  accessibilityLabel,
+  children,
+  ...props
+}: {
+  accessibilityLabel?: string;
+  children?: ReactNode;
+  [key: string]: unknown;
+}) {
+  return createElement(
+    'Button',
+    {
+      ...props,
+      accessibilityLabel:
+        accessibilityLabel ?? (typeof children === 'string' ? children : undefined),
+      accessibilityRole: 'button',
+    },
+    children,
+  );
+}
+
 mock.module('react-native', {
   exports: {
-    FlatList: 'FlatList',
+    FlatList: MockFlatList,
     Platform: platform,
     ScrollView: 'ScrollView',
     View: 'View',
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/ui/Button', {
+  exports: { Button: MockButton },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 before(async () => {
@@ -97,6 +147,11 @@ function flatList() {
 async function update(nextProps: InfiniteListProps<Item>) {
   assert.ok(renderer);
   await act(async () => renderer?.update(createElement(InfiniteList, nextProps)));
+}
+
+function loadMoreButton() {
+  assert.ok(renderer);
+  return renderer.root.findByProps({ accessibilityLabel: '더 보기', accessibilityRole: 'button' });
 }
 
 describe('InfiniteList', () => {
@@ -184,6 +239,59 @@ describe('InfiniteList', () => {
 
     await act(async () => list.props.onEndReached());
     assert.equal(loadRequests.length, 2, 'page 완료 뒤 다음 endReached를 처리한다');
+  });
+
+  it('native load-more action continues empty and no-growth pages through the guarded loader', async () => {
+    const existingFooter = createElement('ExistingFooter');
+
+    await act(async () => {
+      renderer = create(
+        createElement(
+          InfiniteList,
+          props({
+            data: [],
+            empty: createElement('Empty'),
+            footer: existingFooter,
+            showLoadMoreButton: true,
+          }),
+        ),
+      );
+    });
+
+    const initialAction = loadMoreButton();
+    assert.ok(renderer?.root.find((node) => (node.type as unknown) === 'ExistingFooter'));
+    await act(async () => initialAction.props.onPress());
+    await act(async () => initialAction.props.onPress());
+    assert.equal(loadRequests.length, 1, 'a pending empty page cannot be requested twice');
+    assert.equal(loadRequests[0]?.count, 20);
+
+    await act(async () => loadRequests[0]?.onComplete(null));
+    await update(props({ data: [], empty: createElement('Empty'), showLoadMoreButton: true }));
+    const nextAction = loadMoreButton();
+    const onPressNext = nextAction.props.onPress as () => void;
+    await act(async () => onPressNext());
+    assert.equal(loadRequests.length, 2, 'the same visible page can continue from the next cursor');
+
+    await update(
+      props({
+        data: [],
+        empty: createElement('Empty'),
+        footer: createElement('LoadingFooter'),
+        hasNext: true,
+        isLoadingNext: true,
+        showLoadMoreButton: true,
+      }),
+    );
+    assert.ok(renderer?.root.find((node) => (node.type as unknown) === 'LoadingFooter'));
+    await act(async () => onPressNext());
+    assert.equal(loadRequests.length, 2, 'a pending Relay page cannot be requested again');
+
+    await act(async () => loadRequests[1]?.onComplete(null));
+    await update(
+      props({ data: [], empty: createElement('Empty'), hasNext: false, showLoadMoreButton: true }),
+    );
+    await act(async () => onPressNext());
+    assert.equal(loadRequests.length, 2, 'the guarded loader cannot request after the final page');
   });
 
   it('native endReached는 실패 뒤 자동 재요청하지 않고 onLoadErrorChange retry만 허용한다', async () => {

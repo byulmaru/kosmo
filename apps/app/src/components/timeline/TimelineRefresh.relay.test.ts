@@ -204,6 +204,8 @@ mockModule('react-native', {
   FlatList: (props: {
     data: unknown[];
     keyExtractor: (item: unknown, index: number) => string;
+    ListEmptyComponent?: ReactNode;
+    ListFooterComponent?: ReactNode;
     ListHeaderComponent?: ReactNode;
     renderItem: (value: object) => ReactNode;
   }) =>
@@ -211,13 +213,16 @@ mockModule('react-native', {
       'FlatList',
       props,
       props.ListHeaderComponent,
-      props.data.map((item, index) =>
-        createElement(
-          Fragment,
-          { key: props.keyExtractor(item, index) },
-          props.renderItem({ item, index }),
-        ),
-      ),
+      props.data.length === 0
+        ? props.ListEmptyComponent
+        : props.data.map((item, index) =>
+            createElement(
+              Fragment,
+              { key: props.keyExtractor(item, index) },
+              props.renderItem({ item, index }),
+            ),
+          ),
+      props.ListFooterComponent,
     ),
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
@@ -259,7 +264,27 @@ mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => shel
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
 });
-mockModule('@/components/ui/Button', { Button: (props: object) => createElement('Button', props) });
+mockModule('@/components/ui/Button', {
+  Button: ({
+    accessibilityLabel,
+    children,
+    ...props
+  }: {
+    accessibilityLabel?: string;
+    children?: ReactNode;
+    [key: string]: unknown;
+  }) =>
+    createElement(
+      'Button',
+      {
+        ...props,
+        accessibilityLabel:
+          accessibilityLabel ?? (typeof children === 'string' ? children : undefined),
+        accessibilityRole: 'button',
+      },
+      children,
+    ),
+});
 mockModule('@/components/ui/StateView', {
   Skeleton: () => null,
   StateView: (props: object) => createElement('StateView', props),
@@ -458,6 +483,10 @@ function createTimelineNetwork() {
 function list() {
   assert.ok(renderer);
   return renderer.root.find((node) => (node.type as unknown) === 'FlatList');
+}
+function loadMoreButton() {
+  assert.ok(renderer);
+  return renderer.root.findByProps({ accessibilityLabel: '더 보기', accessibilityRole: 'button' });
 }
 function assertConnection(
   environment: Environment,
@@ -914,6 +943,50 @@ describe('Timeline refresh and pagination with real Relay', () => {
     assert.equal(requests.length, 3, 'pagination stops when the visible page has no successor');
   });
 
+  it('Local: load-more continues from the Relay cursor after a page adds no visible posts', async () => {
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    const cursorA = 'db:00000000-0000-4000-8000-000000000001';
+    const cursorB = 'db:00000000-0000-4000-8000-000000000002';
+    const cursorC = 'db:00000000-0000-4000-8000-000000000003';
+
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Local'),
+        }),
+      );
+    });
+    await respond(latest('LocalPageQuery'), payload('localTimeline', [], true, cursorA));
+    assertConnection(environment, 'localTimeline', [], true, cursorA);
+
+    const initialButton = loadMoreButton();
+    await act(async () => initialButton.props.onPress());
+    const firstNextPage = latest('PostListLocalNextPageQuery');
+    assert.equal(firstNextPage.variables.cursor, cursorA);
+    await respond(firstNextPage, payload('localTimeline', ['visible'], true, cursorB));
+    assertConnection(environment, 'localTimeline', ['visible'], true, cursorB);
+
+    await act(async () => list().props.onEndReached());
+    const noGrowthPage = latest('PostListLocalNextPageQuery');
+    assert.notEqual(noGrowthPage, firstNextPage);
+    assert.equal(noGrowthPage.variables.cursor, cursorB);
+    await respond(noGrowthPage, payload('localTimeline', [], true, cursorC));
+    assertConnection(environment, 'localTimeline', ['visible'], true, cursorC);
+
+    const moreButton = loadMoreButton();
+    await act(async () => moreButton.props.onPress());
+    const finalPage = latest('PostListLocalNextPageQuery');
+    assert.equal(finalPage.variables.cursor, cursorC);
+    await respond(finalPage, payload('localTimeline', ['next-visible'], false));
+    assertConnection(environment, 'localTimeline', ['visible', 'next-visible'], false);
+
+    assert.throws(loadMoreButton, 'terminal pagination removes the More action');
+  });
+
   for (const timeline of ['Home', 'Local'] as const) {
     for (const first of ['pagination', 'refresh'] as const) {
       it(`${timeline}: ${first} completes first without stale connection edges or cursor`, async () => {
@@ -1042,7 +1115,7 @@ describe('Guest Local with real Relay', () => {
     await respond(latest('LocalPageQuery'), guestPayload(['a', 'b']));
     assertConnection(environment, 'localTimeline', ['a', 'b']);
     assert.equal(renderer!.root.findAllByType(TimelineTabs).length, 0);
-    assert.equal(renderer!.root.findAllByType('Button' as never).length, 0);
+    assert.ok(loadMoreButton());
 
     await scrollGuestNearEnd();
     const next = latest('PostListLocalNextPageQuery');
@@ -1050,6 +1123,7 @@ describe('Guest Local with real Relay', () => {
     assert.equal(next.variables.count, 20);
     await respond(next, guestPayload(['c'], false));
     assertConnection(environment, 'localTimeline', ['a', 'b', 'c'], false);
+    assert.throws(loadMoreButton, 'terminal pagination removes the More action');
     const requestCount = requests.length;
     await scrollGuestNearEnd();
     assert.equal(requests.length, requestCount);

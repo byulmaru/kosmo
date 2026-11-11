@@ -1,5 +1,6 @@
-import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { db, first, Instances, NaturalLanguageMuteRules, Posts, Profiles } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
+import { getNaturalLanguageMuteDecision } from '@kosmo/core/home-timeline/natural-language-mute-cache';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
@@ -18,7 +19,7 @@ builder.queryField('localTimeline', (t) =>
       resolve: async (_, args, ctx) => {
         const localInstance = await resolveConfiguredLocalInstance();
 
-        return resolveCursorConnection<Promise<PostRow[]>>(
+        const connection = await resolveCursorConnection<Promise<PostRow[]>>(
           {
             args,
             defaultSize: 20,
@@ -48,6 +49,40 @@ builder.queryField('localTimeline', (t) =>
               .orderBy(inverted ? asc(Posts.id) : desc(Posts.id))
               .limit(limit),
         );
+
+        const profileId = ctx.session?.profile?.id;
+        if (!profileId || connection.edges.length === 0) {
+          return connection;
+        }
+
+        const activeRule = await db
+          .select({ id: NaturalLanguageMuteRules.id })
+          .from(NaturalLanguageMuteRules)
+          .where(eq(NaturalLanguageMuteRules.ownerProfileId, profileId))
+          .limit(1)
+          .then(first);
+        if (!activeRule) {
+          return connection;
+        }
+
+        const excludedPostIds = new Set<string>();
+        await Promise.all(
+          connection.edges.map(async ({ node }) => {
+            if (node.profileId === profileId) {
+              return;
+            }
+
+            const decision = await getNaturalLanguageMuteDecision(profileId, node.id);
+            if (decision?.decision === 'exclude') {
+              excludedPostIds.add(node.id);
+            }
+          }),
+        );
+
+        return {
+          ...connection,
+          edges: connection.edges.filter(({ node }) => !excludedPostIds.has(node.id)),
+        };
       },
     },
     PostConnection as never,

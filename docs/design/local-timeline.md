@@ -85,7 +85,7 @@ Local은 refresh token을 사용하고 `onComplete` 오류를 공용 Relay fail-
 계속 읽는다. 실패·재시도 때 경계는 refetch와 Toast만 교체하며, 목록과 열린 답글 작성창·입력 내용은 재마운트하지
 않는다. Relay refetch lifecycle을 사용한다. 사용자가 다시 시도할 수 있는 Local hard refresh 오류는 unexpected-error
 reporter에 별도 보고하지 않는다. HTTP 200의 `data + errors`는 Relay가 처리하며 사용 가능한 부분 데이터를 적용한다.
-`localTimeline: null`이면 목록의 빈 상태를 표시할 수 있다. query·cursor·filtering 정책과 추가 페이지 로딩 동작은 유지한다.
+`localTimeline: null`이면 목록의 빈 상태를 표시할 수 있다. Local은 선택한 Profile에 규칙이 있는 경우 기존 제외 판정이 있는 다른 Profile 게시글만 숨기며, 자기 게시글과 판정이 없는 게시글은 표시한다. 다음 페이지가 더 있어도 보이는 게시글이 늘지 않으면 `더 보기`로 이어서 볼 수 있다. 기존 접근 권한과 cursor 기준은 유지한다.
 
 Local query가 성공 결과를 렌더링하기 전 발생한 오류는 Web의 빈 목록 영역 또는 Android/iOS Native의 2행 skeleton과
 공용 persistent Toast로 표시한다. 성공 결과에는 빈 목록과 route 재진입 뒤 Relay cache에서 렌더링한 목록도 포함한다.

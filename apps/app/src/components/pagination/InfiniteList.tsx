@@ -1,6 +1,7 @@
 import { Component, Fragment, useCallback, useEffect, useRef } from 'react';
 import { FlatList, Platform, View } from 'react-native';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
+import { Button } from '@/components/ui/Button';
 import {
   usePaginationScrollContext,
   usePaginationScrollRegistration,
@@ -26,6 +27,7 @@ export type InfiniteListProps<Item> = Readonly<{
   renderItem: (params: { index: number; item: Item }) => ReactElement | null;
   refreshing?: boolean;
   reselectDestination?: TabReselectionDestination;
+  showLoadMoreButton?: boolean;
   style?: StyleProp<ViewStyle>;
   footer?: ReactElement | null;
   empty?: ReactElement | null;
@@ -120,6 +122,7 @@ export function InfiniteList<Item>({
   renderItem,
   refreshing,
   reselectDestination,
+  showLoadMoreButton = false,
   style,
 }: InfiniteListProps<Item>) {
   const scrollRef = useRef<FlatList<Item>>(null);
@@ -188,6 +191,16 @@ export function InfiniteList<Item>({
     onLoadErrorChange?.(loadError, loadNextPage);
   }, [loadError, loadNextPage, onLoadErrorChange]);
 
+  const listFooter =
+    showLoadMoreButton && active && hasNext && !isLoadingNext ? (
+      <>
+        {footer}
+        <Button onPress={loadNextPage}>더 보기</Button>
+      </>
+    ) : (
+      footer
+    );
+
   if (Platform.OS === 'web' || hasNativeScrollParent) {
     const itemKeys =
       Platform.OS === 'web' && maintainVisibleContentPosition ? data.map(keyExtractor) : undefined;
@@ -201,7 +214,7 @@ export function InfiniteList<Item>({
                 {renderItem({ index, item })}
               </Fragment>
             ))}
-        {footer}
+        {listFooter}
       </View>
     );
 
@@ -222,7 +235,7 @@ export function InfiniteList<Item>({
       ListHeaderComponent={header}
       keyExtractor={keyExtractor}
       keyboardShouldPersistTaps="handled"
-      ListFooterComponent={footer}
+      ListFooterComponent={listFooter}
       maintainVisibleContentPosition={
         maintainVisibleContentPosition
           ? { minIndexForVisible: 0, autoscrollToTopThreshold: 0 }
