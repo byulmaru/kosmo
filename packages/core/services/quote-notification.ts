@@ -23,6 +23,7 @@ import {
   QuoteNotificationJudgmentOutcome,
 } from './quote-notification-coordination';
 import type { Database, Transaction } from '../db';
+import type { NotificationEventCollector } from '../notification/events';
 
 export const QUOTE_NOTIFICATION_ROLLOUT_KEY = 'QUOTE_NOTIFICATION';
 
@@ -70,6 +71,7 @@ const isVisibleToProfile = ({
 export const materializeQuoteNotificationIfEligible = async (
   database: Transaction,
   quotePostId: string,
+  eventCollector?: NotificationEventCollector,
 ): Promise<string[]> => {
   const source = await database
     .select({
@@ -130,13 +132,22 @@ export const materializeQuoteNotificationIfEligible = async (
   // accepts the Local Source; Kosmo does not have a per-Quote manual approval
   // state for Local Sources.
 
-  const replyNotification = await materializeReplyNotificationIfEligible(database, quotePostId);
+  const replyNotification = await materializeReplyNotificationIfEligible(
+    database,
+    quotePostId,
+    eventCollector,
+  );
   if (replyNotification?.recipientProfileId === source.sourceProfileId) {
     return [];
   }
 
   // Only the Source Author's eligible typed Mention can represent this Quote.
-  await materializeMentionNotificationIfEligible(database, quotePostId, source.sourceProfileId);
+  await materializeMentionNotificationIfEligible(
+    database,
+    quotePostId,
+    source.sourceProfileId,
+    eventCollector,
+  );
 
   const followsQuoteAuthor =
     (
@@ -173,24 +184,29 @@ export const materializeQuoteNotificationIfEligible = async (
     source.activatedAt !== null &&
     Temporal.Instant.compare(source.quoteCreatedAt, source.activatedAt) < 0;
 
-  return materializeCoordinatedNotification(database, {
-    actorAccountId: source.actorAccountId,
-    eligible: quoteIsVisible && sourceIsAvailable && quoteAuthorIsAvailable,
-    kind: NotificationKind.QUOTE,
-    quotePostId: source.quotePostId,
-    recipientProfileId: source.sourceProfileId,
-    relatedProfileId: source.quoteAuthorId,
-    sourceId: quotePostId,
-    suppressedOutcome: isPrelaunch
-      ? QuoteNotificationJudgmentOutcome.EXCLUDED_PRELAUNCH
-      : undefined,
-  });
+  return materializeCoordinatedNotification(
+    database,
+    {
+      actorAccountId: source.actorAccountId,
+      eligible: quoteIsVisible && sourceIsAvailable && quoteAuthorIsAvailable,
+      kind: NotificationKind.QUOTE,
+      quotePostId: source.quotePostId,
+      recipientProfileId: source.sourceProfileId,
+      relatedProfileId: source.quoteAuthorId,
+      sourceId: quotePostId,
+      suppressedOutcome: isPrelaunch
+        ? QuoteNotificationJudgmentOutcome.EXCLUDED_PRELAUNCH
+        : undefined,
+    },
+    eventCollector,
+  );
 };
 
 export const createQuoteNotification = async (
   quotePostId: string,
   handle?: Database,
+  eventCollector?: NotificationEventCollector,
 ): Promise<string[]> =>
   getDatabaseConnection(handle).transaction((database) =>
-    materializeQuoteNotificationIfEligible(database, quotePostId),
+    materializeQuoteNotificationIfEligible(database, quotePostId, eventCollector),
   );

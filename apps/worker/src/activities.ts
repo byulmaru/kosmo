@@ -19,7 +19,16 @@ export {
 } from './activities/local-post-create';
 export { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
 export { executeNaturalLanguageMuteRuleActivity } from './activities/natural-language-mute-rule';
-export { createNotificationActivity } from './activities/notification';
+export {
+  createFollowNotificationActivity,
+  createFollowRequestNotificationActivity,
+  createMentionNotificationActivity,
+  createNotificationActivity,
+  createQuoteNotificationActivity,
+  createReactionNotificationActivity,
+  createReplyNotificationActivity,
+  createRepostNotificationActivity,
+} from './activities/notification';
 export {
   captureOperationalNotificationAudienceActivity,
   dispatchOperationalNotificationPageActivity,
@@ -84,22 +93,11 @@ export {
   verifyProfileFollowRemoval as verifyProfileFollowRemovalActivity,
 } from '@kosmo/core/services';
 export {
-  createFollowNotification as createFollowNotificationActivity,
-  createFollowRequestNotification as createFollowRequestNotificationActivity,
   deleteFollowNotification as deleteFollowNotificationActivity,
   deleteFollowRequestNotification as deleteFollowRequestNotificationActivity,
 } from '@kosmo/core/services';
-export { createReplyNotification as createReplyNotificationActivity } from '@kosmo/core/services';
-export { createQuoteNotification as createQuoteNotificationActivity } from '@kosmo/core/services';
-export { createMentionNotification as createMentionNotificationActivity } from '@kosmo/core/services';
-export {
-  createReactionNotification as createReactionNotificationActivity,
-  deleteReactionNotification as deleteReactionNotificationActivity,
-} from '@kosmo/core/services';
-export {
-  createRepostNotification as createRepostNotificationActivity,
-  deleteRepostNotification as deleteRepostNotificationActivity,
-} from '@kosmo/core/services';
+export { deleteReactionNotification as deleteReactionNotificationActivity } from '@kosmo/core/services';
+export { deleteRepostNotification as deleteRepostNotificationActivity } from '@kosmo/core/services';
 export { replaceRemoteFeaturedSnapshot as replaceRemoteFeaturedActivity } from '@kosmo/fedify';
 export {
   sendLocalPostCreate as sendLocalPostCreateActivity,

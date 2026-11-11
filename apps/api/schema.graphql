@@ -467,6 +467,11 @@ interface Notification implements Node {
   readAt: DateTime
 }
 
+type NotificationAdded {
+  notification: Notification
+  profile: Profile
+}
+
 type NotificationConnection {
   edges: [NotificationConnectionEdge!]!
   pageInfo: PageInfo!
@@ -476,6 +481,8 @@ type NotificationConnectionEdge {
   cursor: String!
   node: Notification!
 }
+
+union NotificationEvent = NotificationAdded
 
 type OperationalNotification implements Node & Notification {
   body: String
@@ -917,6 +924,7 @@ type SubmitContentReportPayload {
 }
 
 type Subscription {
+  notifications: NotificationEvent
   timeline: TimelineEvent
 }
 

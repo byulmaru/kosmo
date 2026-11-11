@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import { isNativeDrawerSwipeEnabled } from './shellLayout';
 import type { ComponentProps, ElementType, PropsWithChildren, ReactNode } from 'react';
@@ -62,6 +62,8 @@ let shellChromeProps:
     >
   | undefined;
 let rightRailFooterCount = 0;
+let notificationStreamMounts = 0;
+let notificationStreamProfileIds: string[] = [];
 
 function MockBottomTabBar(props: typeof bottomTabBarProps) {
   bottomTabBarProps = props;
@@ -173,6 +175,19 @@ mockModule('@/components/ui/useSafeAreaPadding', {
 });
 mockModule('@/relay/RelayActorProvider', { RelayActorBoundary: PassThrough });
 
+mockModule('@/components/notification/NotificationStreamUpdates', {
+  NotificationStreamUpdates: ({ profileId }: { profileId: string }) => {
+    useEffect(() => {
+      notificationStreamMounts += 1;
+      notificationStreamProfileIds.push(profileId);
+      return () => {
+        notificationStreamMounts -= 1;
+      };
+    }, [profileId]);
+    return null;
+  },
+});
+
 mockModule('@/session/SessionProvider', {
   useSession: () => ({
     accountId,
@@ -267,6 +282,8 @@ afterEach(async () => {
   sessionStatus = null;
   shellChromeProps = undefined;
   rightRailFooterCount = 0;
+  notificationStreamMounts = 0;
+  notificationStreamProfileIds = [];
   router.back.mock.resetCalls();
   router.dismissTo.mock.resetCalls();
   router.push.mock.resetCalls();
@@ -657,6 +674,22 @@ describe('UniversalShell screen fallback focus target', () => {
 
     assert.equal(rightRailProps, undefined);
     assert.equal(rightRailFooterCount, 1);
+  });
+
+  it('keeps one selected Profile notification stream mounted across tab routes', async () => {
+    sessionProfile = { id: 'profile-a' };
+    await renderShell();
+
+    assert.equal(notificationStreamMounts, 1);
+    assert.deepEqual(notificationStreamProfileIds, ['profile-a']);
+
+    pathname = '/notifications';
+    await act(async () => {
+      renderer?.update(createElement(UniversalShell, null, createElement('NotificationsRoute')));
+    });
+
+    assert.equal(notificationStreamMounts, 1);
+    assert.deepEqual(notificationStreamProfileIds, ['profile-a']);
   });
 
   it('compact와 mobile compose control은 route 이동 없이 같은 Host를 연다', async () => {

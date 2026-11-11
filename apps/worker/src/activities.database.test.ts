@@ -35,6 +35,10 @@ import {
 import { MockActivityEnvironment } from '@temporalio/testing';
 import { eq, inArray, sql } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
+import type {
+  NotificationAddedPayload,
+  notificationPubSub as NotificationPubSub,
+} from '@kosmo/core/notification/events';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type {
   createPost as CreatePost,
@@ -80,6 +84,7 @@ let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
 let Notifications: typeof CoreDb.Notifications;
+let notificationPubSub: typeof NotificationPubSub;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
 let OAuthTokens: typeof CoreDb.OAuthTokens;
 let pg: typeof CoreDb.pg;
@@ -144,6 +149,7 @@ before(async () => {
     Reactions,
     Sessions,
   } = await import('@kosmo/core/db'));
+  ({ notificationPubSub } = await import('@kosmo/core/notification/events'));
   ({
     createNotificationActivity,
     createReactionNotificationActivity,
@@ -192,13 +198,29 @@ after(async () => {
   await pg.end();
 });
 
-test('Operational audience capture is stable across retries, payload mismatches, and later signups', async () => {
+test('Operational audience capture is stable across retries, payload mismatches, and later signups', async (t) => {
   const active = await createAccountDeletionFixture({ profileStates: [] });
   const anotherActive = await createAccountDeletionFixture({ profileStates: [] });
   const disabled = await createAccountDeletionFixture({ profileStates: [] });
   const sendId = crypto.randomUUID();
   const data = { href: '/maintenance', title: 'Scheduled maintenance' };
   let lateSignup: Awaited<ReturnType<typeof createAccountDeletionFixture>> | undefined;
+  const publishedNotifications: Array<{
+    readonly recipientAccountId: string;
+    readonly notificationId: string;
+    readonly recipientProfileId: string | null;
+  }> = [];
+  t.mock.method(
+    notificationPubSub,
+    'publish',
+    (
+      _topic: 'notificationAdded',
+      recipientAccountId: string,
+      payload: NotificationAddedPayload,
+    ) => {
+      publishedNotifications.push({ recipientAccountId, ...payload });
+    },
+  );
 
   try {
     await db
@@ -228,6 +250,12 @@ test('Operational audience capture is stable across retries, payload mismatches,
       assert.deepEqual(notification.data, data);
     }
     const notificationIds = notifications.map(({ id }) => id).sort();
+    assert.deepEqual(
+      publishedNotifications
+        .map(({ notificationId, recipientAccountId }) => `${recipientAccountId}:${notificationId}`)
+        .sort(),
+      notifications.map(({ id, recipientAccountId }) => `${recipientAccountId}:${id}`).sort(),
+    );
 
     const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
     const readNotificationId = notifications[0]!.id;
@@ -235,6 +263,7 @@ test('Operational audience capture is stable across retries, payload mismatches,
     lateSignup = await createAccountDeletionFixture({ profileStates: [] });
 
     assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), true);
+    assert.equal(publishedNotifications.length, 2);
     const retriedNotifications = await db
       .select({
         id: Notifications.id,
@@ -1066,6 +1095,63 @@ test('공통 Notification Activity는 저장된 ID로 Push Workflow를 시작하
   assert.equal(startOptions.taskQueue, KOSMO_TASK_QUEUE);
   assert.equal(startOptions.workflowIdConflictPolicy, WorkflowIdConflictPolicy.USE_EXISTING);
   assert.equal(startOptions.workflowIdReusePolicy, WorkflowIdReusePolicy.REJECT_DUPLICATE);
+});
+
+test('Notification events publish only new rows while Push retries retain existing IDs', async (t) => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+  const published: Array<{
+    readonly recipientAccountId: string;
+    readonly notificationId: string;
+    readonly recipientProfileId: string | null;
+  }> = [];
+  const publish = t.mock.method(
+    notificationPubSub,
+    'publish',
+    (
+      _topic: 'notificationAdded',
+      recipientAccountId: string,
+      payload: NotificationAddedPayload,
+    ) => {
+      published.push({ recipientAccountId, ...payload });
+    },
+  );
+  const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+  const input = { kind: NotificationKind.REPLY, sourceId: reply.id } as const;
+
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+
+  const [notification] = await db.select().from(Notifications);
+  assert.ok(notification);
+  assert.deepEqual(published, [
+    {
+      notificationId: notification.id,
+      recipientAccountId: activityTestAccountId,
+      recipientProfileId: recipient.id,
+    },
+  ]);
+  assert.equal(publish.mock.calls.length, 1);
+  assert.equal(start.mock.calls.length, 2);
+});
+
+test('Notification event publish failure preserves the committed string ID result', async (t) => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+  t.mock.method(notificationPubSub, 'publish', () => {
+    throw new Error('Redis event publish failed');
+  });
+
+  const notificationIds = await createReplyNotificationActivity(reply.id);
+
+  assert.equal(notificationIds.length, 1);
+  assert.deepEqual(await db.select({ id: Notifications.id }).from(Notifications), [
+    { id: notificationIds[0] },
+  ]);
 });
 
 test('공통 Notification Activity는 Notification이 materialize되지 않으면 Push를 시작하지 않는다', async (t) => {

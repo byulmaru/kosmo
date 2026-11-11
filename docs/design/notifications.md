@@ -101,6 +101,18 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   Read를 시작하며 이동이 Read 결과를 기다리게 하지 않는다. Push tap은 동일한 목적지 규칙을 따르지만 Read
   State를 변경하지 않는다.
 
+## 실시간 신규 Notification과 미확인 수 · PROD-1320
+
+- 로그인한 계정은 `Subscription.notifications`에서 신규 Notification을 best-effort로 받는다. 선택된 Profile의
+  social 알림만 전달하고, Account Operational 알림은 선택 Profile과 무관하게 전달한다. `NotificationAdded`는
+  알림이 현재도 조회 가능하면 Notification과 현재 선택 Profile을 제공한다. 클라이언트는 로드된 선택 Profile의
+  목록 connection에 새 항목을 prepend하고 해당 Profile의 절대 `unreadNotificationCount`를 적용한다.
+- 실시간 이벤트는 읽음·삭제 이벤트를 포함하지 않는다. Redis Pub/Sub가 연결되지 않았을 때 놓친 신규 이벤트는
+  재생·catch-up·이벤트별 조회로 보정하지 않는다. 따라서 놓친 이벤트 뒤에는 다음 일반 목록·count 조회까지
+  목록 또는 미확인 수가 오래된 상태일 수 있다.
+- 기존 Push 전달과 읽음 처리 동작은 유지한다. 이 구독은 기존 Session 시작 확인과 Session/Profile 종료 처리를
+  공유한다.
+
 ## Native FCM push 권한 요청과 잠금 화면 미리보기 · PROD-875
 
 - 로그인한 Native 앱은 OS 알림 권한이 미결정이면 권한을 요청한다. 신규 설치에서는 최초 로그인 때 요청하며,
