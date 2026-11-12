@@ -51,6 +51,7 @@ const profileFollowRemovalInputSchema = z.strictObject({
 const {
   deleteFollowNotificationActivity,
   executeProfileFollowRemovalActivity,
+  admitHomeTimelineFollowReconciliationActivity,
   invalidateHomeTimelinesActivity,
   reconcileHomeTimelineFollowActivity,
   sendProfileUnfollowActivity,
@@ -163,9 +164,19 @@ export async function profileFollowRemovalWorkflow(input: ProfileFollowPair): Pr
   const homeTimelineReconciliationEnabled = patched(
     'profile-follow-removal-home-timeline-reconcile-v1',
   );
+  const homeTimelineReconciliationCoalescingEnabled = patched(
+    'profile-follow-removal-home-timeline-coalesce-v1',
+  );
   await settleEffects([
     ...(homeTimelineReconciliationEnabled
-      ? [reconcileHomeTimelineFollowActivity({ profileId: effect.input.followerProfileId })]
+      ? [
+          homeTimelineReconciliationCoalescingEnabled
+            ? admitHomeTimelineFollowReconciliationActivity({
+                profileId: effect.input.followerProfileId,
+                followeeProfileId: effect.input.followeeProfileId,
+              })
+            : reconcileHomeTimelineFollowActivity({ profileId: effect.input.followerProfileId }),
+        ]
       : homeTimelineInvalidationEnabled
         ? [invalidateHomeTimelinesActivity({ profileIds: [effect.input.followerProfileId] })]
         : []),

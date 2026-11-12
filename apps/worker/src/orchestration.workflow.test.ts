@@ -1431,6 +1431,7 @@ test(
     const effectReleased = new Promise<void>((resolve) => {
       releaseEffect = resolve;
     });
+    let admissionAttempts = 0;
     let effectStarted!: () => void;
     const effectStartedPromise = new Promise<void>((resolve) => {
       effectStarted = resolve;
@@ -1480,9 +1481,20 @@ test(
           assert.equal('followCandidateId' in input, false);
           return execution;
         },
-        reconcileHomeTimelineFollowActivity: async (input: { readonly profileId: string }) => {
+        admitHomeTimelineFollowReconciliationActivity: async (input: {
+          readonly profileId: string;
+          readonly followeeProfileId: string;
+        }) => {
           assert.equal(input.profileId, pair.followerProfileId);
-          calls.push('reconcile:' + input.profileId);
+          assert.equal(input.followeeProfileId, pair.followeeProfileId);
+          admissionAttempts += 1;
+          if (admissionAttempts === 1) {
+            throw ApplicationFailure.create({
+              message: 'reconciliation admission response was lost',
+              nextRetryDelay: '1ms',
+            });
+          }
+          calls.push('admit:' + input.profileId);
         },
         loadPendingFollowRequestIdActivity: async () => requestId,
         deleteFollowRequestNotificationActivity: async (sourceId: string) => {
@@ -1535,10 +1547,11 @@ test(
         releaseEffect();
         const handle = await startWorkflowOperation.workflowHandle();
         await handle.result();
+        assert.equal(admissionAttempts, 2);
         assert.deepEqual(
           new Set(calls),
           new Set([
-            'reconcile:' + pair.followerProfileId,
+            'admit:' + pair.followerProfileId,
             'delete:' + requestId,
             'notification:' + followId,
             'follow:' + JSON.stringify({ sourceId: followId, sourceKind: 'FOLLOW' }),
@@ -1592,8 +1605,12 @@ test(
             effectPlan: [],
           };
         },
-        reconcileHomeTimelineFollowActivity: async (input: { readonly profileId: string }) => {
+        admitHomeTimelineFollowReconciliationActivity: async (input: {
+          readonly profileId: string;
+          readonly followeeProfileId: string;
+        }) => {
           assert.equal(input.profileId, pair.followerProfileId);
+          assert.equal(input.followeeProfileId, pair.followeeProfileId);
           effectCallCount += 1;
         },
         loadPendingFollowRequestIdActivity: async () => requestId,
@@ -1680,7 +1697,10 @@ test(
     ] as const;
     const followCounts = new Map<string, number>();
     const acceptInputs: ProfileFollowAcceptEffectInput[] = [];
-    let reconcileCalls = 0;
+    const reconciliationInputs: {
+      readonly profileId: string;
+      readonly followeeProfileId: string;
+    }[] = [];
 
     const worker = await Worker.create({
       activities: {
@@ -1736,8 +1756,11 @@ test(
           };
         },
         loadPendingFollowRequestIdActivity: async () => undefined,
-        reconcileHomeTimelineFollowActivity: async () => {
-          reconcileCalls += 1;
+        admitHomeTimelineFollowReconciliationActivity: async (input: {
+          readonly profileId: string;
+          readonly followeeProfileId: string;
+        }) => {
+          reconciliationInputs.push(input);
         },
         sendProfileFollowAcceptActivity: async (input: ProfileFollowAcceptEffectInput) => {
           acceptInputs.push(input);
@@ -1785,7 +1808,7 @@ test(
         throw new Error('Unexpected first Follow result');
       }
       assert.equal(firstResult.result.kind, 'PENDING');
-      assert.equal(reconcileCalls, 0);
+      assert.deepEqual(reconciliationInputs, []);
       const firstHandle = await firstStartHandle;
       await firstHandle.executeUpdate('profileFollowPairUpdate', {
         args: [
@@ -1824,7 +1847,12 @@ test(
         },
       );
       await firstHandle.result();
-      assert.equal(reconcileCalls, 1);
+      assert.deepEqual(reconciliationInputs, [
+        {
+          profileId: firstPair.followerProfileId,
+          followeeProfileId: firstPair.followeeProfileId,
+        },
+      ]);
       assert.equal(
         acceptInputs[0]?.inboundFollow?.activityUri,
         'https://remote.example/activities/latest',
@@ -1858,7 +1886,12 @@ test(
       await secondHandle.executeUpdate('profileFollowPairUpdate', {
         args: [{ kind: 'FOLLOW', origin: 'ACTIVITYPUB' }],
       });
-      assert.equal(reconcileCalls, 1);
+      assert.deepEqual(reconciliationInputs, [
+        {
+          profileId: firstPair.followerProfileId,
+          followeeProfileId: firstPair.followeeProfileId,
+        },
+      ]);
       assert.deepEqual(
         await secondHandle.executeUpdate('profileFollowPairUpdate', {
           args: [
@@ -1882,7 +1915,16 @@ test(
         },
       );
       await secondHandle.result();
-      assert.equal(reconcileCalls, 2);
+      assert.deepEqual(reconciliationInputs, [
+        {
+          profileId: firstPair.followerProfileId,
+          followeeProfileId: firstPair.followeeProfileId,
+        },
+        {
+          profileId: secondPair.followerProfileId,
+          followeeProfileId: secondPair.followeeProfileId,
+        },
+      ]);
       assert.equal(acceptInputs[1]?.pendingRequestId, requestIds[2]);
       assert.equal(acceptInputs[1]?.inboundFollow, undefined);
     });
@@ -2703,9 +2745,13 @@ test(
           effectStarted();
           await effectReleased;
         },
-        reconcileHomeTimelineFollowActivity: async (value: { readonly profileId: string }) => {
+        admitHomeTimelineFollowReconciliationActivity: async (value: {
+          readonly profileId: string;
+          readonly followeeProfileId: string;
+        }) => {
           assert.equal(value.profileId, pair.followerProfileId);
-          calls.push('reconcile:' + value.profileId);
+          assert.equal(value.followeeProfileId, pair.followeeProfileId);
+          calls.push('admit:' + value.profileId);
         },
         sendProfileUnfollowActivity: async (input: unknown) => {
           calls.push('undo:' + JSON.stringify(input));
@@ -2771,7 +2817,7 @@ test(
         assert.deepEqual(
           new Set(calls.slice(3)),
           new Set([
-            'reconcile:' + pair.followerProfileId,
+            'admit:' + pair.followerProfileId,
             'delete:' + followId,
             'undo:' +
               JSON.stringify({

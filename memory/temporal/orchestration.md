@@ -36,6 +36,24 @@
   actor URI와 local actor URI로 ID와 published가 없는 Follow를 구성한다. 누락된 값을 임의로 만들지 않는다. 이는 별도
   Accept delivery 의무이며 일반 CREATE effect를 재구성하는 규칙은 아니다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
+- Home follow reconciliation admission은 `homeTimelineFollowReconciliationWorkflow`를 follower Profile ID로
+  식별한다. Worker Activity는 공용 `runWorkflow`의 Update-with-Start로 `USE_EXISTING` conflict와
+  `ALLOW_DUPLICATE` reuse 정책을 적용하고 Update에 `followeeProfileId`를 전달한다. Update handler는 known field와
+  비어 있지 않은 ID를 검증하고 follower Workflow의 pending Set에 동기적으로 추가해 admission을 응답한다.
+  Coordinator는 pending ID를 snapshot한 뒤 Activity 시작 전에 Set을 비우고, snapshot의 target만 전달하는
+  `reconcileHomeTimelineFollowChangesActivity`를 한 번에 하나씩 실행한다. 실행 중 받은 요청은 같은 target을 포함해 pending Set에
+  다시 들어가 다음 pass에서 합쳐지고, 그 pass 중 새 요청이 오면 다음 pass가 이어진다. `allHandlersFinished` 뒤
+  pending Set이 비었을 때 종료해 닫힌 실행 다음 요청은 새 run이 된다. 새 pair/removal history의 `patched` branch는
+  이전 direct Activity command와 새 admission command를 분리한다. 기존 pair/removal history는
+  `reconcileHomeTimelineFollowActivity` 이름과 follower-only payload를 유지하며, adapter가 canonical Workflow type/ID에서 exact pair를 확인한 뒤 같은 UWS
+  admission으로 넘긴다. 누락·알 수 없는 metadata나 follower 불일치는 broad reconciliation fallback 없이
+  non-retryable internal context failure가 된다. Coordinator Activity는 현재 캐시에서 해당 관계가 영향을 미치는
+  author·reply parent·mention·pure source 항목만 기존 oldest..newest Post ID closed window 안에서 재조정하며,
+  전체 Home timeline 재생성을 하지 않는다.
+- Reconciliation coordinator의 one-at-a-time 보장은 Workflow가 조정하는 Activity 호출 순서에 적용된다. Shared DB
+  client에는 repository-defined `statement_timeout`이 없으므로 Activity timeout 뒤에도 underlying SQL query가
+  실행 중일 수 있고 retry attempt와 물리적으로 겹칠 가능성은 배제되지 않는다. 이 경계만으로 SQL 취소나 물리적
+  동시 실행 차단을 주장하지 않는다.
 - Local GraphQL의 Post·Reply·Quote 작성은 caller, 입력, Media ownership과 optional Media rights를 검증하고 Local Post
   입력을 준비한다. Post 대상 UPLOADING Media의 `mediaUploadWithMetadataWorkflow` type과
   `mediaUploadMetadataPublish` Update-with-Start는 기존 `media-upload:${mediaId}` logical Workflow ID를 대상으로 하며,

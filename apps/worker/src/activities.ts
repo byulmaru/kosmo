@@ -12,6 +12,11 @@ export {
   resolveImportedLocalProfileActivity,
 } from './activities/following-accounts-import';
 export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
+export {
+  admitHomeTimelineFollowReconciliationActivity,
+  reconcileHomeTimelineFollowActivity,
+  reconcileHomeTimelineFollowChangesActivity,
+} from './activities/home-timeline';
 export { collectPostLinkPreviewActivity } from './activities/link-preview';
 export {
   createLocalPostActivity,
@@ -83,7 +88,6 @@ export {
   insertHomeTimelinePost as insertHomeTimelinePostActivity,
   invalidateHomeTimelines as invalidateHomeTimelinesActivity,
   listHomeTimelineRecipientPage as loadHomeTimelineRecipientPageActivity,
-  reconcileHomeTimelineFollow as reconcileHomeTimelineFollowActivity,
   removeHomeTimelinePost as removeHomeTimelinePostActivity,
 } from '@kosmo/core/home-timeline/cache';
 export {

@@ -1,4 +1,4 @@
-import { and, asc, eq, exists, gt, or } from 'drizzle-orm';
+import { and, asc, eq, exists, gt, inArray, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Temporal } from 'temporal-polyfill';
 import { db, Instances, Posts, ProfileFollows, Profiles } from '../db';
@@ -7,7 +7,11 @@ import { homePostListWhere } from '../visibility/home-post-list';
 import { publishHomeTimelinePostAdded } from './events';
 import { getCachedHomeTimelinePostIds, homeTimelineFeedKey as feedKey } from './membership';
 import { filterHomeTimelineMuteCandidates, filterHomeTimelinePosts } from './natural-language-mute';
-import { queryHomeTimeline } from './query';
+import {
+  queryHomeTimeline,
+  queryHomeTimelineForFollowChanges,
+  selectHomeTimelineFollowAffectedPostIds,
+} from './query';
 
 const feedKeyPrefix = feedKey('');
 const legacyReadyMember = '__ready__';
@@ -497,10 +501,12 @@ return 1
 
 export const reconcileHomeTimelineFollow = async ({
   profileId,
+  followeeProfileIds,
 }: {
   readonly profileId: string;
+  readonly followeeProfileIds: readonly string[];
 }): Promise<void> => {
-  if (!process.env.REDIS_URL?.trim()) {
+  if (!process.env.REDIS_URL?.trim() || followeeProfileIds.length === 0) {
     return;
   }
 
@@ -529,17 +535,56 @@ export const reconcileHomeTimelineFollow = async ({
   }
 
   const cachedPostIds = cachedEntries.map(({ postId }) => postId);
+  const sortedCachedPostIds = [...cachedPostIds].sort();
+  const minimumPostId = sortedCachedPostIds[0]!;
+  const maximumPostId = sortedCachedPostIds.at(-1)!;
   const cachedPostIdSet = new Set(cachedPostIds);
-  const currentlyEligiblePosts = await queryHomeTimeline({
-    profileId,
-    postIds: cachedPostIds,
-    limit: maximumEntries,
-  });
+  const [currentFollowRows, affectedCachedPostIds] = await Promise.all([
+    db
+      .select({ followeeProfileId: ProfileFollows.followeeProfileId })
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, profileId),
+          inArray(ProfileFollows.followeeProfileId, followeeProfileIds),
+        ),
+      ),
+    selectHomeTimelineFollowAffectedPostIds({
+      profileId,
+      followeeProfileIds,
+      postIds: cachedPostIds,
+    }),
+  ]);
+  const currentlyFollowedProfileIds = currentFollowRows.map(
+    ({ followeeProfileId }) => followeeProfileId,
+  );
+  const currentlyEligiblePosts =
+    affectedCachedPostIds.length === 0
+      ? []
+      : await queryHomeTimeline({
+          profileId,
+          postIds: affectedCachedPostIds,
+          limit: affectedCachedPostIds.length,
+        });
   const currentlyEligiblePostIds = new Set(currentlyEligiblePosts.map(({ id }) => id));
-  const removePostIds = cachedPostIds.filter((postId) => !currentlyEligiblePostIds.has(postId));
-  const latestEligiblePosts = await queryHomeTimeline({ profileId, limit: maximumEntries });
-  const missingPosts = latestEligiblePosts.filter(({ id }) => !cachedPostIdSet.has(id));
-  const addPosts = await filterHomeTimelinePosts({ profileId, posts: missingPosts });
+  const removePostIds = affectedCachedPostIds.filter(
+    (postId) => !currentlyEligiblePostIds.has(postId),
+  );
+  const eligibleAddCandidates =
+    currentlyFollowedProfileIds.length === 0
+      ? []
+      : await queryHomeTimelineForFollowChanges({
+          profileId,
+          followeeProfileIds: currentlyFollowedProfileIds,
+          minimumPostId,
+          maximumPostId,
+          limit: maximumEntries,
+        });
+  const missingPosts = eligibleAddCandidates.filter(({ id }) => !cachedPostIdSet.has(id));
+  const addPosts =
+    missingPosts.length === 0
+      ? []
+      : await filterHomeTimelinePosts({ profileId, posts: missingPosts });
 
   const result = await runRedisCommand((client) =>
     client.eval(reconcileScript, {

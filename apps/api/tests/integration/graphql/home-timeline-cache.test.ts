@@ -69,7 +69,6 @@ let cacheHomeTimelinePage: typeof HomeTimelineCache.cacheHomeTimelinePage;
 let cacheNaturalLanguageMuteDecision: typeof NaturalLanguageMuteCache.cacheNaturalLanguageMuteDecision;
 let fanoutHomeTimelinePost: typeof HomeTimelineCache.fanoutHomeTimelinePost;
 let insertHomeTimelinePost: typeof HomeTimelineCache.insertHomeTimelinePost;
-let reconcileHomeTimelineFollow: typeof HomeTimelineCache.reconcileHomeTimelineFollow;
 let invalidateHomeTimelines: typeof HomeTimelineCache.invalidateHomeTimelines;
 let removeHomeTimelinePost: typeof HomeTimelineCache.removeHomeTimelinePost;
 let readHomeTimelineCache: typeof HomeTimelineCache.readHomeTimelineCache;
@@ -193,7 +192,6 @@ before(async () => {
     cacheHomeTimelinePage,
     fanoutHomeTimelinePost,
     insertHomeTimelinePost,
-    reconcileHomeTimelineFollow,
     invalidateHomeTimelines,
     removeHomeTimelinePost,
     readHomeTimelineCache,
@@ -1794,7 +1792,6 @@ test(
 
       await insertHomeTimelinePost({ postId: post.id, profileId: viewer.profile.id });
       await fanoutHomeTimelinePost({ postId: post.id });
-      await reconcileHomeTimelineFollow({ profileId: viewer.profile.id });
       assert.equal(calls, 0);
       assert.ok(
         (await readHomeTimelineCache({ profileId: viewer.profile.id, limit: 10 }))?.entries.some(
