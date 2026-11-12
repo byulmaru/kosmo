@@ -16,7 +16,7 @@ Post 목록과 상세는 `PostContent.media`의 document 순서를 그대로 소
 ## Filtered Media
 
 - `Media.aiProhibitFilterApplied === true`인 이미지에는 `Shield` passive badge를 tile의 오른쪽 위 `spacing.sm` inset에 표시한다. 기존 media overlay scrim, fixed white glyph, `iconSizes[16]`와 rounded pill을 사용한다. `false`, `null`, 누락된 값은 badge를 표시하지 않는다.
-- Badge는 모든 플랫폼의 accessibility tree에서 장식으로 숨기며 별도 focus stop이나 활성화 동작을 만들지 않는다. Web에서는 hover하면 공용 [Tooltip](./tooltips.md)이 `AI 학습방지 필터가 적용되었어요.`를 별도의 정보 surface로 표시한다. 이 문구는 accessibility-hidden badge의 시각적 내용이 아니다. Native에서는 badge가 pointer 입력을 가로막지 않는다. 기존 Alt Text 또는 document 순서 fallback과 accessible image name의 `학습방지 필터 적용됨`은 유지하고, tile 활성화와 navigation은 기존 `PostMediaImage`가 소유한다.
+- Badge는 모든 플랫폼의 accessibility tree에서 장식으로 숨기며 별도 focus stop이나 활성화 동작을 만들지 않는다. Web에서는 hover하면 공용 [Tooltip](./tooltips.md)이 `AI 학습방지 필터가 적용되었어요. 이 표시는 나에게만 보여요.`를 별도의 정보 surface로 표시한다. 이 문구는 accessibility-hidden badge의 시각적 내용이 아니다. Native에서는 badge가 pointer 입력을 가로막지 않는다. 기존 Alt Text 또는 document 순서 fallback과 accessible image name의 `학습방지 필터 적용됨`은 유지하고, tile 활성화와 navigation은 기존 `PostMediaImage`가 소유한다.
 - Sensitive Media가 가려져 gallery tile을 mount하지 않는 동안에는 badge도 표시하지 않는다. Gallery에서 공개한 뒤 실제 이미지와 함께 표시한다.
 
 ## Sensitive Media

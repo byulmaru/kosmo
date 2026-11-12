@@ -262,7 +262,7 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
 - 첫 미디어의 `aiProhibitFilterApplied`가 strict `true`이면 썸네일에 passive `Shield` badge를 표시하고
   알림 link name에 `학습방지 필터 적용됨`을 포함한다. Badge는 모든 플랫폼의 accessibility tree에서 숨기며
   별도 focus stop이나 활성화 동작을 만들지 않는다. Web에서는 hover하면 공용 [Tooltip](./tooltips.md)이
-  `AI 학습방지 필터가 적용되었어요.`를 별도의 정보 surface로 표시한다. 이 문구는 accessibility-hidden badge의
+  `AI 학습방지 필터가 적용되었어요. 이 표시는 나에게만 보여요.`를 별도의 정보 surface로 표시한다. 이 문구는 accessibility-hidden badge의
   시각적 내용이 아니다. Native에서는 badge가 pointer 입력을 가로막지 않는다.
   `false`, `null`, 누락 값에서는 badge와 툴팁을 생략하며 기존 사진별 행위자 Profile 이동과 사진 외 게시글
   이동을 유지한다.

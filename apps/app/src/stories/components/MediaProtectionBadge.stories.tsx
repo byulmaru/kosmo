@@ -47,7 +47,9 @@ export const OpensFilteredImage: Story = {
 
     await user.hover(pointerTarget);
     const tooltip = await page.findByRole('tooltip');
-    expect(tooltip).toHaveTextContent('AI 학습방지 필터가 적용되었어요.');
+    expect(tooltip).toHaveTextContent(
+      'AI 학습방지 필터가 적용되었어요. 이 표시는 나에게만 보여요.',
+    );
 
     // user-event omits relatedTarget, so model the portal crossing explicitly.
     await fireEvent.pointerOut(pointerTarget, { relatedTarget: tooltip });
