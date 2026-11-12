@@ -7,6 +7,7 @@ import {
   ProfileFollowRequests,
   ProfileFollows,
   Profiles,
+  withPrimaryDatabase,
 } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { sendProfileFollow, sendProfileFollowAccept, sendProfileUnfollow } from '@kosmo/fedify';
@@ -32,52 +33,54 @@ export const sendProfileFollowActivity = async ({
   sourceKind,
   sourceId,
 }: ProfileFollowCreateEffectInput): Promise<void> => {
-  const sourceTable: FollowProjectionTable =
-    sourceKind === 'FOLLOW' ? ProfileFollows : ProfileFollowRequests;
-  const projection = await db
-    .select({
-      actorInboxUri: FolloweeActors.inboxUri,
-      actorSharedInboxUri: FolloweeActors.sharedInboxUri,
-      actorUri: FolloweeActors.uri,
-      createdAt: sourceTable.createdAt,
-      followeeInstanceKind: FolloweeInstances.kind,
-      followerInstanceKind: FollowerInstances.kind,
-      id: sourceTable.id,
-      senderProfileId: FollowerProfiles.id,
-    })
-    .from(sourceTable)
-    .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, sourceTable.followerProfileId))
-    .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
-    .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, sourceTable.followeeProfileId))
-    .innerJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
-    .leftJoin(FolloweeActors, eq(FolloweeActors.profileId, FolloweeProfiles.id))
-    .where(eq(sourceTable.id, sourceId))
-    .limit(1)
-    .then(first);
-  if (!projection) {
-    return;
-  }
-  if (
-    projection.followerInstanceKind !== InstanceKind.LOCAL ||
-    projection.followeeInstanceKind !== InstanceKind.ACTIVITYPUB
-  ) {
-    return;
-  }
-  if (!projection.actorUri || !projection.actorInboxUri) {
-    throw new TypeError('ActivityPub Follow recipient projection is incomplete.');
-  }
+  await withPrimaryDatabase(async () => {
+    const sourceTable: FollowProjectionTable =
+      sourceKind === 'FOLLOW' ? ProfileFollows : ProfileFollowRequests;
+    const projection = await db
+      .select({
+        actorInboxUri: FolloweeActors.inboxUri,
+        actorSharedInboxUri: FolloweeActors.sharedInboxUri,
+        actorUri: FolloweeActors.uri,
+        createdAt: sourceTable.createdAt,
+        followeeInstanceKind: FolloweeInstances.kind,
+        followerInstanceKind: FollowerInstances.kind,
+        id: sourceTable.id,
+        senderProfileId: FollowerProfiles.id,
+      })
+      .from(sourceTable)
+      .innerJoin(FollowerProfiles, eq(FollowerProfiles.id, sourceTable.followerProfileId))
+      .innerJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
+      .innerJoin(FolloweeProfiles, eq(FolloweeProfiles.id, sourceTable.followeeProfileId))
+      .innerJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
+      .leftJoin(FolloweeActors, eq(FolloweeActors.profileId, FolloweeProfiles.id))
+      .where(eq(sourceTable.id, sourceId))
+      .limit(1)
+      .then(first);
+    if (!projection) {
+      return;
+    }
+    if (
+      projection.followerInstanceKind !== InstanceKind.LOCAL ||
+      projection.followeeInstanceKind !== InstanceKind.ACTIVITYPUB
+    ) {
+      return;
+    }
+    if (!projection.actorUri || !projection.actorInboxUri) {
+      throw new TypeError('ActivityPub Follow recipient projection is incomplete.');
+    }
 
-  await sendProfileFollow({
-    actor: {
-      inboxUri: projection.actorInboxUri,
-      sharedInboxUri: projection.actorSharedInboxUri,
-      uri: projection.actorUri,
-    },
-    outboundFollow: {
-      createdAt: projection.createdAt,
-      id: projection.id,
-    },
-    senderProfileId: projection.senderProfileId,
+    await sendProfileFollow({
+      actor: {
+        inboxUri: projection.actorInboxUri,
+        sharedInboxUri: projection.actorSharedInboxUri,
+        uri: projection.actorUri,
+      },
+      outboundFollow: {
+        createdAt: projection.createdAt,
+        id: projection.id,
+      },
+      senderProfileId: projection.senderProfileId,
+    });
   });
 };
 
@@ -88,53 +91,55 @@ export const sendProfileFollowAcceptActivity = async ({
   inboundFollow,
   profileFollowId,
 }: ProfileFollowAcceptEffectInput): Promise<void> => {
-  const projection = await db
-    .select({
-      actorInboxUri: FollowerActors.inboxUri,
-      actorSharedInboxUri: FollowerActors.sharedInboxUri,
-      actorUri: FollowerActors.uri,
-      followeeInstanceKind: FolloweeInstances.kind,
-      followerInstanceKind: FollowerInstances.kind,
-      senderProfileId: FolloweeProfiles.id,
-    })
-    .from(ProfileFollows)
-    .leftJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
-    .leftJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
-    .leftJoin(FollowerActors, eq(FollowerActors.profileId, FollowerProfiles.id))
-    .leftJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
-    .leftJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
-    .where(
-      and(
-        eq(ProfileFollows.id, profileFollowId),
-        eq(ProfileFollows.followerProfileId, followerProfileId),
-        eq(ProfileFollows.followeeProfileId, followeeProfileId),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  if (!projection) {
-    return;
-  }
+  await withPrimaryDatabase(async () => {
+    const projection = await db
+      .select({
+        actorInboxUri: FollowerActors.inboxUri,
+        actorSharedInboxUri: FollowerActors.sharedInboxUri,
+        actorUri: FollowerActors.uri,
+        followeeInstanceKind: FolloweeInstances.kind,
+        followerInstanceKind: FollowerInstances.kind,
+        senderProfileId: FolloweeProfiles.id,
+      })
+      .from(ProfileFollows)
+      .leftJoin(FollowerProfiles, eq(FollowerProfiles.id, ProfileFollows.followerProfileId))
+      .leftJoin(FollowerInstances, eq(FollowerInstances.id, FollowerProfiles.instanceId))
+      .leftJoin(FollowerActors, eq(FollowerActors.profileId, FollowerProfiles.id))
+      .leftJoin(FolloweeProfiles, eq(FolloweeProfiles.id, ProfileFollows.followeeProfileId))
+      .leftJoin(FolloweeInstances, eq(FolloweeInstances.id, FolloweeProfiles.instanceId))
+      .where(
+        and(
+          eq(ProfileFollows.id, profileFollowId),
+          eq(ProfileFollows.followerProfileId, followerProfileId),
+          eq(ProfileFollows.followeeProfileId, followeeProfileId),
+        ),
+      )
+      .limit(1)
+      .then(first);
+    if (!projection) {
+      return;
+    }
 
-  if (
-    projection.senderProfileId === null ||
-    projection.followerInstanceKind !== InstanceKind.ACTIVITYPUB ||
-    projection.followeeInstanceKind !== InstanceKind.LOCAL
-  ) {
-    throw new TypeError('ActivityPub Follow Accept participant projection is incomplete.');
-  }
-  if (!projection.actorUri || !projection.actorInboxUri) {
-    throw new TypeError('ActivityPub Follow Accept recipient projection is incomplete.');
-  }
+    if (
+      projection.senderProfileId === null ||
+      projection.followerInstanceKind !== InstanceKind.ACTIVITYPUB ||
+      projection.followeeInstanceKind !== InstanceKind.LOCAL
+    ) {
+      throw new TypeError('ActivityPub Follow Accept participant projection is incomplete.');
+    }
+    if (!projection.actorUri || !projection.actorInboxUri) {
+      throw new TypeError('ActivityPub Follow Accept recipient projection is incomplete.');
+    }
 
-  await sendProfileFollowAccept({
-    actor: {
-      inboxUri: projection.actorInboxUri,
-      sharedInboxUri: projection.actorSharedInboxUri,
-      uri: projection.actorUri,
-    },
-    ...(inboundFollow === undefined ? {} : { inboundFollow }),
-    senderProfileId: projection.senderProfileId,
+    await sendProfileFollowAccept({
+      actor: {
+        inboxUri: projection.actorInboxUri,
+        sharedInboxUri: projection.actorSharedInboxUri,
+        uri: projection.actorUri,
+      },
+      ...(inboundFollow === undefined ? {} : { inboundFollow }),
+      senderProfileId: projection.senderProfileId,
+    });
   });
 };
 

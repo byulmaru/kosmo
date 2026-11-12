@@ -3,10 +3,11 @@
 > [!IMPORTANT]
 > 이 문서는 GraphQL operation session과 RLS 전환의 과거 운영·incident·rollback 기록이다. 현재 API, Web,
 > Worker, Fedify consumer와 Admin의 ordinary `PGHOST`는 transaction-mode read-write PgBouncer를 사용한다.
-> Production API, Web, Admin의 ordinary SELECT는 read-only Pooler로 전달되어 인증과 ACL 조회도 replica lag를
-> 허용한다. Worker와 Fedify consumer 및 standby가 없는 dev의 `PGREADHOST`는 비어 있고 local에서는 생략한다.
-> Durable effect가 의존하는 조회, writes, transaction-bound queries와 GraphQL Mutation의 즉시 nested response는
-> primary를 사용한다. Fedify
+> Production API, Web, Admin의 ordinary SELECT는 계속 read-only Pooler를 사용해 인증과 ACL 조회도 replica lag를
+> 허용한다. Worker의 ordinary SELECT도 read-only Pooler를 사용해 replica lag를 허용한다.
+> Worker의 committed-state Activity effect/control 결정 조회, writes, transaction-bound queries, durable effect가
+> 의존하는 조회와 GraphQL Mutation의 즉시 nested response는 primary를 사용한다. Fedify consumer에는 `PGREADHOST`를
+> 설정하지 않고, standby가 없는 dev의 Worker `PGREADHOST`는 비어 있으며 local에서는 생략한다. Fedify
 > MessageQueue의 `FEDIFY_QUEUE_DATABASE_URL`과 migration owner의 `PGHOST`는 direct read-write Service를
 > 사용한다. 현재 target은
 > [ADR 0024](../domain/decisions/0024-application-policy-and-runtime-db-boundary.md)와
