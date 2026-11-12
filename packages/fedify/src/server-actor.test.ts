@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import dns from 'node:dns/promises';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { generateCryptoKeyPair, signRequest, verifyRequest } from '@fedify/fedify';
 import { CryptographicKey, Follow, Person } from '@fedify/vocab';
@@ -16,6 +17,7 @@ import {
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { profileFollowPairWorkflowId } from '@kosmo/core/temporal/follow-command';
 import { eq, inArray, ne } from 'drizzle-orm';
+import type { LookupAddress, LookupAllOptions } from 'node:dns';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
@@ -24,6 +26,8 @@ const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const localProfileId = '019f6f67-1111-7777-8888-123456789abc';
 const remoteProfileId = '019f6f67-2222-7777-8888-123456789abc';
+const officialProfileId = '019f6f67-3333-7777-8888-123456789abc';
+const explicitProfileId = '019f6f67-4444-7777-8888-123456789abc';
 const serverActorUri = new URL('/ap/actor/~instance', publicOrigin);
 const localInstanceActorHandle = 'kosmo.instance';
 const remoteActorUri = new URL(`https://example.com/users/${crypto.randomUUID()}`);
@@ -39,6 +43,7 @@ let ProfileFollowRequests: typeof CoreDb.ProfileFollowRequests;
 let Profiles: typeof CoreDb.Profiles;
 let seedDatabase: typeof CoreSeed.seedDatabase;
 let federation: typeof FederationModule.federation;
+let localInstanceActorIdentifier: typeof FederationModule.localInstanceActorIdentifier;
 let localInstanceId: string;
 const testAccountIds: string[] = [];
 
@@ -59,7 +64,7 @@ describe('local Instance ActivityPub actor', () => {
       Profiles,
     } = await import('@kosmo/core/db'));
     ({ seedDatabase } = await import('@kosmo/core/db/seed'));
-    ({ federation } = await import('./federation'));
+    ({ federation, localInstanceActorIdentifier } = await import('./federation'));
 
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -198,6 +203,182 @@ describe('local Instance ActivityPub actor', () => {
     assert.equal(alternateHostResponse.status, 404);
   });
 
+  test('uses the official local Profile only for contextless Threads.net document GETs', async (t) => {
+    t.mock.method(
+      dns,
+      'lookup',
+      async (hostname: string, options: LookupAllOptions): Promise<LookupAddress[]> => {
+        assert.ok(hostname.length > 0);
+        assert.equal(options.all, true);
+        return [{ address: '1.1.1.1', family: 4 }];
+      },
+    );
+
+    const officialProfile = await createLocalProfile('kosmo', officialProfileId);
+    const explicitProfile = await createLocalProfile('alice', explicitProfileId);
+    const context = federation.createContext(new URL(publicOrigin), undefined);
+    const actorDocuments = new Map<string, unknown>();
+
+    for (const identifier of [
+      localInstanceActorIdentifier,
+      officialProfile.id,
+      explicitProfile.id,
+    ]) {
+      const actorUri = context.getActorUri(identifier);
+      const response = await federation.fetch(
+        new Request(actorUri, { headers: { accept: 'application/activity+json' } }),
+        { contextData: undefined },
+      );
+      assert.equal(response.status, 200);
+      actorDocuments.set(actorUri.href, await response.json());
+    }
+
+    const signedFetches: Array<{ keyId: string; spec: string; url: string }> = [];
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      assert.equal(request.method, 'GET');
+
+      const verifiedKey = await verifyRequest(request, {
+        contextLoader: getDocumentLoader(),
+        documentLoader: async (url) => {
+          const actorUri = new URL(url);
+          actorUri.hash = '';
+          const document = actorDocuments.get(actorUri.href);
+          assert.ok(document, `Unexpected signing actor: ${url}`);
+          return { contextUrl: null, document, documentUrl: url };
+        },
+      });
+      assert.ok(verifiedKey, `Request signature did not verify: ${request.url}`);
+      signedFetches.push({
+        keyId: verifiedKey.id?.href ?? '',
+        spec: request.headers.has('signature-input') ? 'rfc9421' : 'draft-cavage',
+        url: request.url,
+      });
+
+      if (
+        new URL(request.url).origin === 'https://threads.net' &&
+        request.headers.has('signature-input')
+      ) {
+        return new Response(null, { status: 401 });
+      }
+
+      return new Response(
+        JSON.stringify({
+          '@context': 'https://www.w3.org/ns/activitystreams',
+          id: request.url,
+          type: 'Note',
+        }),
+        { headers: { 'content-type': 'application/activity+json' } },
+      );
+    });
+
+    const instanceKeyId = new URL('#main-key', context.getActorUri(localInstanceActorIdentifier))
+      .href;
+    const officialProfileKeyId = new URL('#main-key', context.getActorUri(officialProfile.id)).href;
+    const explicitProfileKeyId = new URL('#main-key', context.getActorUri(explicitProfile.id)).href;
+    const threadsUrl = new URL('https://threads.net/notes/contextless');
+    const instanceLoader = await context.getDocumentLoader({
+      identifier: localInstanceActorIdentifier,
+    });
+    await instanceLoader(threadsUrl.href);
+
+    const initialThreadsFetches = signedFetches.filter(
+      (request) => request.url === threadsUrl.href,
+    );
+    assert.deepEqual(
+      initialThreadsFetches.map((request) => request.spec),
+      ['rfc9421', 'draft-cavage'],
+    );
+    assert.ok(initialThreadsFetches.every((request) => request.keyId === officialProfileKeyId));
+
+    const cachedThreadsUrl = new URL('https://threads.net/notes/cached');
+    const cachedContext = federation.createContext(new URL(publicOrigin), undefined);
+    const cachedInstanceLoader = await cachedContext.getDocumentLoader({
+      identifier: localInstanceActorIdentifier,
+    });
+    await cachedInstanceLoader(cachedThreadsUrl.href);
+    assert.deepEqual(
+      signedFetches
+        .filter((request) => request.url === cachedThreadsUrl.href)
+        .map((request) => request.spec),
+      ['draft-cavage'],
+    );
+    assert.ok(
+      signedFetches
+        .filter((request) => request.url === cachedThreadsUrl.href)
+        .every((request) => request.keyId === officialProfileKeyId),
+    );
+
+    const explicitThreadsUrl = new URL('https://threads.net/notes/explicit-profile');
+    const explicitLoader = await context.getDocumentLoader({ identifier: explicitProfile.id });
+    await explicitLoader(explicitThreadsUrl.href);
+    const explicitThreadsFetches = signedFetches.filter(
+      (request) => request.url === explicitThreadsUrl.href,
+    );
+    assert.ok(explicitThreadsFetches.length > 0);
+    assert.ok(explicitThreadsFetches.every((request) => request.keyId === explicitProfileKeyId));
+
+    for (const uri of [
+      new URL('https://remote.example/notes/direct'),
+      new URL('https://threads.net.example/notes/lookalike'),
+    ]) {
+      await instanceLoader(uri.href);
+      const originFetches = signedFetches.filter((request) => request.url === uri.href);
+      assert.ok(originFetches.length > 0);
+      assert.ok(originFetches.every((request) => request.keyId === instanceKeyId));
+    }
+  });
+
+  test('falls back to the server actor when the official local Profile is unavailable', async (t) => {
+    t.mock.method(
+      dns,
+      'lookup',
+      async (hostname: string, options: LookupAllOptions): Promise<LookupAddress[]> => {
+        assert.ok(hostname.length > 0);
+        assert.equal(options.all, true);
+        return [{ address: '1.1.1.1', family: 4 }];
+      },
+    );
+
+    const context = federation.createContext(new URL(publicOrigin), undefined);
+    const actorUri = context.getActorUri(localInstanceActorIdentifier);
+    const actorResponse = await federation.fetch(
+      new Request(actorUri, { headers: { accept: 'application/activity+json' } }),
+      { contextData: undefined },
+    );
+    assert.equal(actorResponse.status, 200);
+    const actorDocument = await actorResponse.json();
+    const signedKeyIds: string[] = [];
+
+    t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = input instanceof Request ? input : new Request(input, init);
+      const verifiedKey = await verifyRequest(request, {
+        contextLoader: getDocumentLoader(),
+        documentLoader: async (url) => ({
+          contextUrl: null,
+          document: actorDocument,
+          documentUrl: url,
+        }),
+      });
+      assert.ok(verifiedKey, `Request signature did not verify: ${request.url}`);
+      signedKeyIds.push(verifiedKey.id?.href ?? '');
+      return new Response(
+        JSON.stringify({
+          '@context': 'https://www.w3.org/ns/activitystreams',
+          id: request.url,
+          type: 'Note',
+        }),
+        { headers: { 'content-type': 'application/activity+json' } },
+      );
+    });
+
+    const loader = await context.getDocumentLoader({ identifier: localInstanceActorIdentifier });
+    await loader('https://threads.net/notes/no-official-profile');
+
+    assert.ok(signedKeyIds.length > 0);
+    assert.ok(signedKeyIds.every((keyId) => keyId === new URL('#main-key', actorUri).href));
+  });
+
   test('uses the server actor key for shared-inbox AUTHORIZED_FETCH and accepts the Follow', async (t) => {
     const { localProfile, remoteProfile, remoteInstance } = await createInboxFixture();
     const actorResponse = await federation.fetch(
@@ -290,14 +471,14 @@ describe('local Instance ActivityPub actor', () => {
   });
 });
 
-const createLocalProfile = (handle: string) =>
+const createLocalProfile = (handle: string, id = localProfileId) =>
   db
     .insert(Profiles)
     .values({
       displayName: handle,
       followPolicy: ProfileFollowPolicy.OPEN,
       handle,
-      id: localProfileId,
+      id,
       instanceId: localInstanceId,
       normalizedHandle: handle,
     })

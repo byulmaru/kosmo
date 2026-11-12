@@ -65,12 +65,18 @@ import type { Context, Federation } from '@fedify/fedify';
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 export const localInstanceActorIdentifier = '~instance';
 const localInstanceActorHandle = 'kosmo.instance';
-
-export const federation: Federation<void> = createFederation<void>({
+const commonFederationOptions = {
   allowPrivateAddress: false,
   circuitBreaker: { releaseInterval: { seconds: 10 } },
   kv: fedifyKv ?? new MemoryKvStore(),
   meterProvider: fedifyMeterProvider,
+  ...(federationOrigin ? { origin: federationOrigin } : {}),
+};
+
+const documentLoaderFederation = createFederation<void>(commonFederationOptions);
+
+export const federation: Federation<void> = createFederation<void>({
+  ...commonFederationOptions,
   ...(fedifyQueue
     ? {
         // Producer and consumer processes share one durable queue.  Queue
@@ -79,7 +85,48 @@ export const federation: Federation<void> = createFederation<void>({
         manuallyStartQueue: true,
       }
     : {}),
-  ...(federationOrigin ? { origin: federationOrigin } : {}),
+  authenticatedDocumentLoaderFactory: (identity) => {
+    const contextOrigin = new URL(federationOrigin ?? identity.keyId.origin);
+    const defaultContext = documentLoaderFederation.createContext(contextOrigin, undefined);
+    const originalLoader = defaultContext.getDocumentLoader(identity);
+
+    const context = federation.createContext(contextOrigin, undefined);
+    const instanceKeyId = new URL('#main-key', context.getActorUri(localInstanceActorIdentifier));
+    if (identity.keyId.href !== instanceKeyId.href) {
+      return originalLoader;
+    }
+
+    let selectedLoaderPromise: Promise<typeof originalLoader> | undefined;
+    return async (url, options) => {
+      if (new URL(url).origin !== 'https://threads.net') {
+        return originalLoader(url, options);
+      }
+
+      selectedLoaderPromise ??= (async () => {
+        const localInstance = await resolveConfiguredLocalInstance();
+        if (localInstance.canonicalOrigin !== identity.keyId.origin) {
+          return originalLoader;
+        }
+
+        const profileId = await resolveLocalActorIdentifierByHandle('kosmo');
+        if (profileId == null) {
+          return originalLoader;
+        }
+
+        const keyPairs = await context.getActorKeyPairs(profileId);
+        const rsaKeyPair = keyPairs.find(
+          (keyPair) => keyPair.publicKey.algorithm.name === 'RSASSA-PKCS1-v1_5',
+        );
+        if (rsaKeyPair == null) {
+          throw new Error(`Local Profile ${profileId} is missing an RSA key pair.`);
+        }
+
+        return defaultContext.getDocumentLoader(rsaKeyPair);
+      })();
+
+      return (await selectedLoaderPromise)(url, options);
+    };
+  },
 });
 
 const hasCanonicalHost = (context: Pick<Context<void>, 'canonicalOrigin' | 'host'>) =>

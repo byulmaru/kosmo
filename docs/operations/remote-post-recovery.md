@@ -30,7 +30,7 @@ The input may include `signingProfileId` when the remote server requires an auth
 }
 ```
 
-The ID must identify an active local Profile on the configured active local Instance. A Follow relationship is not required. If omitted, the lookup uses the configured local context without selecting a Profile signer. A Featured sync passes the selected follower Profile and the remaining shared document budget to the same child Workflow automatically.
+The ID must identify an active local Profile on the configured active local Instance. A Follow relationship is not required. If omitted, the lookup uses the configured local context and default server identity, subject to the narrow `https://threads.net` compatibility exception documented for [Instance](../domain/objects/instance.md). A Featured sync passes the selected follower Profile and the remaining shared document budget to the same child Workflow automatically.
 
 A standalone lookup uses a 2 MiB parsed-document budget. Featured syncs count collection pages and each Note against the same cumulative budget.
 
@@ -42,7 +42,7 @@ The serialized Post-create input also uses Temporal's configured per-payload lim
 - `duplicate` means the Note already maps to a Post. The result returns that Post and its stored owner without creating another one.
 - `rejected` means the fetched object or Note did not pass the existing materialization checks. The result includes a reason such as an invalid Note or exceeded document budget.
 
-The lookup prepares the fetched Note and creates the Post through a native child Workflow. A newly created Post starts its effects in a detached child; duplicates skip those effects. A signing Profile authenticates retrieval only; it does not authorize a `DIRECT` Note. A `DIRECT` Note still requires an eligible local Mention. The standalone lookup does not replace a Profile's Featured pins, run a bulk import, expose a new API or UI, or apply remote Post Updates.
+The lookup prepares the fetched Note and creates the Post through a native child Workflow. A newly created Post starts its effects in a detached child; duplicates skip those effects. A retrieval identity authenticates fetching only; it does not authorize a `DIRECT` Note. A `DIRECT` Note still requires an eligible local Mention. The standalone lookup does not replace a Profile's Featured pins, run a bulk import, expose a new API or UI, or apply remote Post Updates.
 
 The lookup can only materialize a Note the remote server currently serves. A deleted, invalid, or unavailable Note cannot be reconstructed by this operation; transient request failures may retry before the Workflow fails. During a Featured sync, an earlier child may already have materialized its Note if a later child fails, while the previous Featured pin snapshot remains until the full sync succeeds.
 
