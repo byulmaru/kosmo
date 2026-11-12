@@ -11,8 +11,8 @@ import {
   setE2ESessionCookie,
 } from './db-fixtures';
 import { expect, test } from './fixtures';
-import { isGraphQLOperation, waitForGraphQLOperation } from './graphql';
-import type { Locator, Page } from '@playwright/test';
+import { isGraphQLOperation, toGlobalId, waitForGraphQLOperation } from './graphql';
+import type { Locator, Page, Route } from '@playwright/test';
 
 const recentSearchesKey = 'kosmo:recent-searches';
 
@@ -101,8 +101,12 @@ test('Web 프로필 타임라인을 내려도 풀 사이드바가 화면에 고�
   }
 
   await page.setViewportSize({ height: 720, width: 1440 });
+  const profilePostsResponse = waitForGraphQLOperation(page, 'ProfilePostListPageQuery');
   await page.goto('/@e2e-profile-sticky-sidebar');
-  await expect(page.getByText('Profile sticky sidebar post 0', { exact: false })).toBeVisible();
+  await (await profilePostsResponse).finished();
+  await expect(
+    page.getByText('Profile sticky sidebar post 15', { exact: false }).filter({ visible: true }),
+  ).toBeVisible();
   const navigation = await visiblePrimaryNavigation(page);
   const sidebarTop = () =>
     navigation.evaluate((element) => {
@@ -155,8 +159,12 @@ test('Web Home forward 진입점은 다른 route에서 /home으로 이동하고 
       await page.goto('/settings');
       await expect(page.getByRole('heading', { name: '설정', exact: true })).toBeVisible();
     } else {
+      const profilePostsResponse = waitForGraphQLOperation(page, 'ProfilePostListPageQuery');
       await page.goto('/@e2e-home-reselection-forward');
-      await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+      await (await profilePostsResponse).finished();
+      await expect(
+        page.getByText('E2E Home reselection post 15').filter({ visible: true }),
+      ).toBeVisible();
     }
     await scrollDocument(page);
 
@@ -168,7 +176,9 @@ test('Web Home forward 진입점은 다른 route에서 /home으로 이동하고 
       await entry.click();
     }
     await expect(page).toHaveURL(/\/home$/);
-    await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+    await expect(
+      page.getByText('E2E Home reselection post 0').filter({ visible: true }),
+    ).toBeVisible();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   }
 });
@@ -184,24 +194,113 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
         profileId: session.profile!.id,
       });
     }
+    const refreshMarkerBody = 'E2E Home reselection refresh readiness marker';
+    const refreshMarker = await createE2EPost({
+      body: refreshMarkerBody,
+      profileId: session.profile!.id,
+    });
 
     await page.setViewportSize(surface.viewport);
-    await page.goto('/home');
-    await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
-    await scrollDocument(page);
-
+    await page.goto('/settings');
+    await expect(page.getByRole('heading', { name: '설정', exact: true }).first()).toBeVisible();
+    let initialHomeQueryInFlightCount = 0;
+    let countHomeRefreshes = false;
+    let homeSubscriptionReady = false;
+    let hideMarkerFromFirstHomeResponse = true;
     let refreshCount = 0;
-    await page.route('**/graphql', async (route) => {
-      if (isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
-        refreshCount += 1;
-      }
-      await route.continue();
-    });
-    const homeRefreshResponse = waitForGraphQLOperation(page, 'HomePageQuery');
 
+    const graphQLRoute = async (route: Route) => {
+      const request = route.request();
+      const operation = request.postData();
+
+      if (
+        request.headers()['accept']?.includes('text/event-stream') &&
+        isGraphQLOperation(operation, 'HomeTimelineSubscription')
+      ) {
+        await route.fulfill({
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+          body: 'event: complete\ndata: \n\n',
+        });
+        homeSubscriptionReady = true;
+        return;
+      }
+
+      if (!isGraphQLOperation(operation, 'HomePageQuery')) {
+        await route.continue();
+        return;
+      }
+
+      const countAsRefresh = countHomeRefreshes;
+      const subscriptionReadyAtRequestStart = homeSubscriptionReady;
+      const withholdReadinessMarker =
+        !countAsRefresh && (hideMarkerFromFirstHomeResponse || !subscriptionReadyAtRequestStart);
+      if (countAsRefresh) {
+        refreshCount += 1;
+      } else {
+        hideMarkerFromFirstHomeResponse = false;
+        initialHomeQueryInFlightCount += 1;
+      }
+
+      try {
+        const response = await route.fetch();
+        if (withholdReadinessMarker) {
+          const body = (await response.json()) as {
+            data?: {
+              homeTimeline?: {
+                edges?: Array<{ node?: { id?: string } | null } | null> | null;
+              } | null;
+            };
+          };
+          if (body.data?.homeTimeline?.edges) {
+            const edges = body.data.homeTimeline.edges;
+            body.data.homeTimeline.edges = edges.filter(
+              (edge) => edge?.node?.id !== toGlobalId('Post', refreshMarker.id),
+            );
+          }
+          await route.fulfill({ response, body: JSON.stringify(body) });
+        } else {
+          await route.fulfill({ response });
+        }
+      } finally {
+        if (!countAsRefresh) {
+          initialHomeQueryInFlightCount -= 1;
+        }
+      }
+    };
+
+    await page.route('**/graphql', graphQLRoute);
     try {
+      const initialHomeResponsePromise = waitForGraphQLOperation(page, 'HomePageQuery');
+      const homeSubscriptionResponsePromise = waitForGraphQLOperation(
+        page,
+        'HomeTimelineSubscription',
+      );
+      const initialEntry = await homeEntry(
+        page,
+        surface.kind === 'header' ? 'navigation' : surface.kind,
+      );
+      if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
+        await initialEntry.tap();
+      } else {
+        await initialEntry.click();
+      }
+      const initialHomeResponse = await initialHomeResponsePromise;
+      await initialHomeResponse.finished();
+      await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
+      const homeSubscriptionResponse = await homeSubscriptionResponsePromise;
+      await homeSubscriptionResponse.finished();
+      await expect(page.getByRole('article').filter({ hasText: refreshMarkerBody })).toBeVisible();
+      await expect.poll(() => initialHomeQueryInFlightCount).toBe(0);
+
+      await scrollDocument(page);
       const entry = await homeEntry(page, surface.kind);
       await expect(entry).toHaveAttribute('href', '/home');
+      await expect.poll(() => initialHomeQueryInFlightCount).toBe(0);
+      const homeRefreshRequestPromise = page.waitForRequest((request) =>
+        isGraphQLOperation(request.postData(), 'HomePageQuery'),
+      );
+      countHomeRefreshes = true;
       if (surface.name === 'mobile bottom tab' || surface.name === 'mobile drawer') {
         await entry.tap();
       } else {
@@ -209,10 +308,13 @@ for (const [index, surface] of homeEntrySurfaces.entries()) {
       }
 
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-      await expect.poll(() => refreshCount).toBe(1);
-      await homeRefreshResponse;
+      const homeRefreshRequest = await homeRefreshRequestPromise;
+      const homeRefreshResponse = await homeRefreshRequest.response();
+      expect(homeRefreshResponse).not.toBeNull();
+      await homeRefreshResponse!.finished();
+      expect(refreshCount).toBe(1);
     } finally {
-      await page.unroute('**/graphql');
+      await page.unroute('**/graphql', graphQLRoute);
     }
   });
 }
@@ -815,16 +917,53 @@ test('current Home refresh error는 timeline을 유지하고 다음 activation�
       profileId: session.profile!.id,
     });
   }
+  const refreshMarkerBody = 'E2E Home reselection refresh marker';
+  const refreshMarker = await createE2EPost({
+    body: refreshMarkerBody,
+    profileId: session.profile!.id,
+  });
 
   await page.setViewportSize({ height: 360, width: 1440 });
   // Enter Home from a mounted shell so initial-document cached revalidation cannot overlap this refresh.
   await page.goto('/settings');
   await expect(page.getByRole('heading', { name: '설정', exact: true }).first()).toBeVisible();
   const entry = await homeEntry(page, 'navigation');
+  let initialHomeQueryCount = 0;
+  let initialHomeQueryInFlightCount = 0;
+  await page.route('**/graphql', async (route) => {
+    if (!isGraphQLOperation(route.request().postData(), 'HomePageQuery')) {
+      await route.continue();
+      return;
+    }
+    initialHomeQueryCount += 1;
+    initialHomeQueryInFlightCount += 1;
+    try {
+      const response = await route.fetch();
+      const body = (await response.json()) as {
+        data?: {
+          homeTimeline?: {
+            edges?: Array<{ node?: { id: string } | null } | null> | null;
+          } | null;
+        };
+      };
+      if (initialHomeQueryCount === 1 && body.data?.homeTimeline?.edges) {
+        body.data.homeTimeline.edges = body.data.homeTimeline.edges.filter(
+          (edge) => edge?.node?.id !== toGlobalId('Post', refreshMarker.id),
+        );
+      }
+      await route.fulfill({ response, body: JSON.stringify(body) });
+    } finally {
+      initialHomeQueryInFlightCount -= 1;
+    }
+  });
+
   const initialHomeResponse = waitForGraphQLOperation(page, 'HomePageQuery');
   await entry.click();
   const initialHome = await initialHomeResponse;
   await initialHome.finished();
+  await expect(page.getByRole('article').filter({ hasText: refreshMarkerBody })).toBeVisible();
+  await expect.poll(() => initialHomeQueryInFlightCount).toBe(0);
+  await page.unroute('**/graphql');
   await expect(page.getByText('E2E Home reselection post 0')).toBeVisible();
   await scrollDocument(page);
 
@@ -921,6 +1060,7 @@ test('search query-only 이동은 document scroll과 입력 focus를 보존하�
 
   await page.goto('/home');
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
+  await expect(page.getByText('E2E navigation history post 0')).toBeVisible();
   await scrollDocument(page);
   const homeScroll = await page.evaluate(() => window.scrollY);
   await (await visiblePrimaryNavigation(page))

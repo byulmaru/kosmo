@@ -130,8 +130,8 @@ export const UnblockFailureRetry: Story = {
     await expect(canvas.findByRole('button', { name: '팔로우' })).resolves.toBeEnabled();
     expect(unblockRequests).toHaveBeenCalledTimes(2);
     expect(unblockRequests.mock.calls.map(([, variables]) => variables)).toEqual([
-      { id: 'follow-button-block' },
-      { id: 'follow-button-block' },
+      { connections: [], id: 'follow-button-block' },
+      { connections: [], id: 'follow-button-block' },
     ]);
   },
 };

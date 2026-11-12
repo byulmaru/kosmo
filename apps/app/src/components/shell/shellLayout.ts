@@ -1,7 +1,4 @@
 import { breakpoints } from '@/theme/tokens';
-import { getProfileConnectionKind } from '../profile/route';
-
-export const webMobileShellHeaderHeight = 64;
 
 export function getProfileEditActionTargetMetrics(platform: string) {
   if (platform === 'ios') {
@@ -31,24 +28,6 @@ export function getShellLayout(web: boolean, width: number) {
   return width < breakpoints.full ? 'compact' : 'full';
 }
 
-export type WebMobileShellHeader = Readonly<{
-  leading: 'back' | 'menu';
-  title:
-    | '타임라인 둘러보기'
-    | '게시글'
-    | '프로필 설정'
-    | '다른 서비스에서 이전'
-    | '팔로잉 가져오기'
-    | '뮤트 및 차단'
-    | '뮤트한 프로필'
-    | '차단한 프로필'
-    | '테마'
-    | '설정'
-    | '개발 정보'
-    | '알림'
-    | '정보';
-}>;
-
 export function isSettingsRoute(pathname: string) {
   return pathname === '/settings' || pathname.startsWith('/settings/');
 }
@@ -71,81 +50,4 @@ export function getShellRoutePresentation(web: boolean, width: number, pathname:
     settingsWorkspace,
     showRightRail: layout === 'full' && !settingsWorkspace && !retiredComposeRoute,
   } as const;
-}
-
-export function getWebMobileShellHeader(
-  web: boolean,
-  width: number,
-  pathname: string,
-  routeSegments: readonly string[],
-  guestPublicContent = false,
-): WebMobileShellHeader | null {
-  if (!web || getShellLayout(web, width) !== 'mobile') {
-    return null;
-  }
-
-  if (pathname === '/' && guestPublicContent) {
-    return { leading: 'menu', title: '타임라인 둘러보기' };
-  }
-
-  if (pathname === '/notifications') {
-    return { leading: 'menu', title: '알림' };
-  }
-  if (pathname === '/settings') {
-    return { leading: 'menu', title: '설정' };
-  }
-  if (pathname === '/settings/profile' || pathname === '/settings/default-post-visibility') {
-    return { leading: 'back', title: '프로필 설정' };
-  }
-  if (pathname === '/settings/profile-migration') {
-    return { leading: 'back', title: '다른 서비스에서 이전' };
-  }
-  if (pathname === '/settings/following-import') {
-    return { leading: 'back', title: '팔로잉 가져오기' };
-  }
-  if (pathname === '/settings/mute-and-block') {
-    return { leading: 'back', title: '뮤트 및 차단' };
-  }
-  if (pathname === '/settings/muted-profiles') {
-    return { leading: 'back', title: '뮤트한 프로필' };
-  }
-  if (pathname === '/settings/blocked-profiles') {
-    return { leading: 'back', title: '차단한 프로필' };
-  }
-  if (pathname === '/settings/theme') {
-    return { leading: 'back', title: '테마' };
-  }
-  if (pathname === '/settings/info') {
-    return { leading: 'back', title: '정보' };
-  }
-  if (pathname === '/settings/developer') {
-    return { leading: 'back', title: '개발 정보' };
-  }
-
-  if (routeSegments.at(-2) === '[profileHandle]' && routeSegments.at(-1) === '[postId]') {
-    return { leading: guestPublicContent ? 'menu' : 'back', title: '게시글' };
-  }
-
-  return null;
-}
-
-export function isWebMobileRouteOwnedHeader(web: boolean, width: number, pathname: string) {
-  const segments = pathname.split('/').filter(Boolean);
-  const isProfileHome =
-    segments.length === 1 && (segments[0]?.length ?? 0) > 1 && segments[0]?.startsWith('@');
-  const isReactionPeopleRoute = segments.length === 3 && segments[2] === 'reactions';
-
-  return (
-    web &&
-    getShellLayout(web, width) === 'mobile' &&
-    (pathname === '/search' ||
-      pathname === '/profile-edit' ||
-      isProfileHome ||
-      isReactionPeopleRoute ||
-      getProfileConnectionKind(pathname) !== null)
-  );
-}
-
-export function getWebMobileShellHeaderStickyOffset(width: number) {
-  return width < breakpoints.compact ? webMobileShellHeaderHeight : 0;
 }

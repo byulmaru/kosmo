@@ -15,7 +15,8 @@ logoutRoutes.post('/logout', async (c) => {
   c.header('Cache-Control', 'no-store');
   c.header('Pragma', 'no-cache');
 
-  await revokeCurrentSession({ token: getCookie(c, sessionName) });
+  const result = await revokeCurrentSession({ token: getCookie(c, sessionName) });
+  await result.postCommit();
 
   deleteCookie(c, sessionName, {
     httpOnly: true,

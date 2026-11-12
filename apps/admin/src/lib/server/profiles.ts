@@ -63,6 +63,7 @@ export interface ProfileListRow {
 export interface ProfileDetail extends ProfileListRow {
   qualifiedHandle: string;
   bio: string | null;
+  defaultPostVisibility: PostVisibility | null;
   headerUrl: string | null;
   remoteUrl: string | null;
   tags: string[];
@@ -134,13 +135,7 @@ const loadPostStats = async (profileIds: string[]) => {
       profileId: Posts.profileId,
     })
     .from(Posts)
-    .where(
-      and(
-        inArray(Posts.profileId, profileIds),
-        eq(Posts.state, PostState.ACTIVE),
-        inArray(Posts.visibility, publicVisibilities),
-      ),
-    )
+    .where(and(inArray(Posts.profileId, profileIds), eq(Posts.state, PostState.ACTIVE)))
     .groupBy(Posts.profileId);
 
   return new Map(rows.map(({ profileId, ...stats }) => [profileId, stats]));
@@ -321,6 +316,7 @@ export const getProfile = async (id: string): Promise<ProfileDetail | undefined>
       handle: Profiles.handle,
       displayName: Profiles.displayName,
       bio: Profiles.bio,
+      defaultPostVisibility: Profiles.defaultPostVisibility,
       originKind: Instances.kind,
       instanceDomain: Instances.domain,
       state: Profiles.state,
@@ -353,12 +349,37 @@ export const getProfile = async (id: string): Promise<ProfileDetail | undefined>
     ...profile,
     qualifiedHandle: qualifiedHandle(row.handle, row.instanceDomain),
     bio: row.bio,
+    defaultPostVisibility: row.defaultPostVisibility,
     headerUrl: media.get(id)?.headerUrl ?? null,
     remoteUrl: origin === 'REMOTE' ? (row.actorProfileUrl ?? row.actorUri) : null,
     tags,
     instanceDomain: row.instanceDomain,
     createdAt: row.createdAt.toString(),
   };
+};
+
+export const updateDefaultPostVisibility = async (
+  id: string,
+  visibility: Exclude<PostVisibility, typeof PostVisibility.DIRECT>,
+): Promise<boolean> => {
+  const rows = await db
+    .update(Profiles)
+    .set({ defaultPostVisibility: visibility })
+    .where(
+      and(
+        eq(Profiles.id, id),
+        inArray(
+          Profiles.instanceId,
+          db
+            .select({ id: Instances.id })
+            .from(Instances)
+            .where(eq(Instances.kind, InstanceKind.LOCAL)),
+        ),
+      ),
+    )
+    .returning({ id: Profiles.id });
+
+  return rows.length > 0;
 };
 
 export const getProfileSummary = async (id: string): Promise<ProfileSummary | undefined> => {

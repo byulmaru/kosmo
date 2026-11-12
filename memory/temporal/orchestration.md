@@ -36,13 +36,92 @@
   actor URI와 local actor URI로 ID와 published가 없는 Follow를 구성한다. 누락된 값을 임의로 만들지 않는다. 이는 별도
   Accept delivery 의무이며 일반 CREATE effect를 재구성하는 규칙은 아니다.
 - Workflow start 실패가 이미 commit된 domain 결과를 바꾸지 않는 capability에서는 start 호출부가 deadline과 오류 격리를 명시한다.
-- Local GraphQL과 inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`를 공유하고 ID는
-  `post-create:${requestId}`로 만든다. Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에
-  `USE_EXISTING`, `REJECT_DUPLICATE`, `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction
-  Activity가 공통 결과를 commit한 뒤 Workflow는 post-create effects를 `ABANDON`으로 start하고 결과를 반환한다.
-  ID가 일치하는 `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
+- Local GraphQL의 Post·Reply·Quote 작성은 caller, 입력, Media ownership과 optional Media rights를 검증하고 Local Post
+  입력을 준비한다. Post 대상 UPLOADING Media의 `mediaUploadWithMetadataWorkflow` type과
+  `mediaUploadMetadataPublish` Update-with-Start는 기존 `media-upload:${mediaId}` logical Workflow ID를 대상으로 하며,
+  generic `runWorkflow`에서 `USE_EXISTING` conflict와 `REJECT_DUPLICATE` reuse policy를 사용한다.
+  `prepareMediaUploadActivity`는 provider 호출 전에 해당 posting Profile의 전체 핸들(`@username@instance.domain`)과 공개 Profile URL, optional rights를
+  `Media.publicationMetadata`로 한 번 고정한다. 이 snapshot에는 Post ID나 Post URL이 없다. 이미 snapshot이 있는
+  UPLOADING retry는 rights 값과 rights 입력 여부가 같아야 하며 원래 attribution을 유지한다. READY Media 재사용은
+  snapshot을 수정하거나 backfill하지 않고 새 rights 입력도 적용하지 않는다. Sync/async Post ID는 모든 대상 Media가
+  READY가 된 뒤 기존 Post 생성 시점에 할당하며 Media 처리 전에 예약하지 않는다. 신규 Workflow는 preparation
+  Activity가 유효한 persisted frozen metadata를 반환하기 전에는 `startUpload`나 public provider operation을 호출하지
+  않는다. Provider 적용 metadata receipt가 누락되거나 snapshot과 다르면 Media READY 전환과 Post 생성을 차단한다.
+  이 type은 READY/filter 확인을 위해 기존 `mediaUploadPublish` Update도 등록한다. Legacy `mediaUploadWorkflow` type은
+  기존 Update와 history command trace를 유지하고 metadata-required Update를 등록하지 않는다. 이미 실행 중인 Legacy
+  type은 새 publication caller에 실패를 돌려준다. `publishUploadV2`가 `completed`를 반환하고 metadata receipt가 일치하면
+  DB finalizer가 이를 적용해 Media를 READY로 전환한 뒤 publication Update가 응답한다. Workflow 자체는 Update 응답 뒤에도
+  Nexus `startUpload` operation을 정산한 다음 반환한다. `processing`은 provider acceptance만 뜻하며, 이후
+  `startUpload.result()`의 최종 receipt가 일치해 적용된 뒤에만 finalizer가 READY로 전환한다. 누락·불일치 receipt는 READY와 Post 생성 없이
+  non-retryable failure가 된다. 모든 새 Post-target Media의 AI 학습 거부는 file metadata이며, user-controlled optional
+  `applyAiProhibitFilter`/Glaze pixel processing과 별개이고 filter를 자동으로 켜지 않는다. 이 filter는 기본 off다.
+  Provider의 filter/Hope 선택과 실행은 Media가 소유한다. UPLOADING preflight 이후 Workflow가
+  먼저 닫혀 UWS `REJECT_DUPLICATE`로 거절될 때는 exact Workflow ID/type의 `WorkflowExecutionAlreadyStartedError`만 recovery
+  후보로 분류한다. Primary DB에서 같은 Account 소유의 Local Media를 다시 읽어 READY+URL과 retained filter 호환성이 모두
+  확인되면 completed로 이어가고, 그렇지 않으면 원래 오류 또는 filter `ValidationError`를 보존한다. 기존 history/input은
+  `applyNightshade`와 기존 `applyHope` 및 `publishUpload({id})` acknowledgement sequence를 그대로 재생한다. Legacy workflow에
+  기존 Update가 합류하면 Media를 다시 호출하지 않고 원래 flag와 요청 선택을 비교한다. 불일치는 거부하고 기존 result
+  semantics를 유지한다.
+  신규 history는 `patched('post-request-media-nexus-v1')` 뒤에서 namespace-local `kosmoMediaUpload.processUpload` workflow-backed Nexus operation을
+  `ABANDON` cancellation과 76시간 schedule-to-close 한도로 실행한다. Worker handler는 기존 `media-upload:${mediaId}` Workflow ID로
+  `USE_EXISTING` conflict와 `REJECT_DUPLICATE` reuse 정책을 사용해 실제 upload Workflow를 시작하므로, 동시 PostRequest가 같은
+  active upload에 붙고 닫힌 실행을 새 run으로 덮어쓰지 않는다. Operation 결과를 기다리는 동안 Activity slot은 점유하지 않는다. 기존 history의 child start/execute
+  command 순서는 그대로 유지하며, `post-request-media-retry-poll-v1` marker가 있는 history는 기존
+  `checkPostRequestMediaUploadActivity` 5초 간격 retry, marker가 없는 history는 기존
+  `waitForPostRequestMediaUploadActivity` 76시간 heartbeat 경로를 사용한다. 두 legacy Activity와 각 branch는 해당 history가
+  drain될 때까지 등록한다. Nexus operation 또는 legacy child start/join 실패 뒤 새 history는
+  `patched('post-request-media-ready-recovery-v1')`에서 취소가 아닐 때 동일 Account의 Local Media가 primary DB에서
+  READY인지 재확인한다. READY면 그 Media identity를 재사용하고, 그렇지 않거나 재확인에 실패하면 원래 upload 오류를
+  보존한다. 취소는 recovery 확인을 건너뛰며 Nexus operation과 legacy child 모두 `ABANDON`으로 취소 전파를 막는다. 취소는 publication 시작 전에만 확정한다. publication
+  중 timeout이나 응답 유실이 있으면 exact `postId`를 조회해 정산하되, 아직 row가 없다는 결과만으로 FAILED를 확정하지
+  않는다. 이전 post Activity가 나중에 commit할 수 있기 때문이다. Publication은 stable `postId`와 현재 authorization
+  재검증을 지정한 `postCreateWorkflowV2` child가 맡고, 공통 create Activity가 commit과 retry/idempotency를 소유한다.
+  처리 실패나 publication 전 취소는 각각 `FAILED`·`CANCELLED`를 반환하고 Workflow를 닫는다. 상태와 상세는
+  Temporal namespace retention 동안의 history/detail에만 남으며, 별도 Product DB submission row나 Media cleanup을
+  만들지 않는다. GraphQL projection은 [Post domain contract](../../docs/domain/objects/post.md)을 따르며,
+  immutable input 전체나 public error detail을 복원하지 않는다. No-media 또는 모든 Media publication 완료 결과는 준비된
+  Local input과 서버 내부 `requestId`를 전달해 `revalidateAuthorization: true`인 canonical `postCreateWorkflow`를
+  `execute` mode로 실행하고 실제 Post와 `request=null`을 반환한다. 하나라도 processing이면 서버가 새로운 `requestId`로
+  `postRequestWorkflow`를 `start`하고 `post=null`과 request state를 즉시 반환한다. 같은 내용의 별도 호출도 별도 Workflow
+  identity를 받는다. 클라이언트는 identity를 제출하지 않으므로 응답 손실 뒤 재제출은 새 실행일 수 있고 HTTP 요청이 정확히
+  한 번 접수된다고 보장하지 않는다. 이 분기와 응답 shape는 GraphQL field selection에 무관하며, API는 Workflow start 오류
+  뒤에 state 조회로 admission을 복구하지 않는다. 비동기 PostRequest 응답은 이후 Workflow를 기다리거나 Post를 조회하지
+  않는다. Publication, authorization, Workflow 오류는 GraphQL error로 전달된다. API의 bounded wait는 caller 대기만 제한하며
+  이미 시작된 Media나 Post Workflow를 취소하지 않는다.
+- 선택적인 내부 `PostAnalyticsPlatform`은 호출자가 제공했을 때 동기 canonical `postCreateWorkflow` 인자 또는 비동기 PostRequest
+  snapshot에서 V2 create child와 stable effects child까지 전달한다. 값이 없으면 worker analytics를 기본 활성화하지 않는다.
+  각 child argument 추가와 effects Activity 추가는 별도 `patched` marker로 old history의 command
+  순서를 보존한다. Effects child는 기존처럼 `ABANDON`으로 시작하고, capture는 Post DB commit이 확인된 뒤에만
+  실행하므로 capture retry/failure가 publication 결과를 바꾸지 않는다.
+- inbound ActivityPub Post 생성은 일반 Workflow `postCreateWorkflow`와 `post-create:${requestId}` ID를 사용한다.
+  Caller는 DB transaction보다 먼저 `execute` mode의 `runWorkflow`에 `USE_EXISTING`, `REJECT_DUPLICATE`,
+  `returnExistingResult: true`를 전달해 Workflow를 admission한다. Transaction Activity가 공통 결과를 commit한 뒤
+  Workflow는 post-create effects를 `ABANDON`으로 start하고 결과를 반환한다. ID가 일치하는
+  `WorkflowExecutionAlreadyStartedError`만 opt-in client가 같은 caller deadline 안에서
   `getHandle(workflowId).result()`로 복구하므로 완료된 중복 요청은 저장된 결과를 받고 새 run을 만들지 않는다.
   그 외 오류는 그대로 전파한다. 기존 local·remote create Workflow export는 history replay를 위해 Worker registry에 남긴다.
+- 공통 `postCreateWorkflow`와 V2 registry alias는 create Activity가 `created`를 반환한 뒤
+  `patched('post-create-link-preview-collection-v1')`로 `linkPreviewCollectionWorkflow`를 `ABANDON` start한다.
+  이 post-ID keyed collection child는 `publish`와 `import` 모두에서 child Workflow start acknowledgement만 기다리고,
+  start 오류를 기록해도 committed create 결과와 기존 effects child를 바꾸지 않는다. `created` 이외 결과에는
+  시작하지 않는다. Collection Activity는 primary DB의 Post current content에서 canonical document를 읽어 Media가
+  없을 때 첫 HTTP(S) 링크의 metadata를 authenticated Embed service에서 가져와 기존 URL-keyed cache를 갱신한다. KOSMO
+  Worker는 service 응답 metadata만 사용하며 원문 HTML을 직접 가져오는 local parser fallback을 두지 않는다. Service key는
+  `EMBED_API_KEY` 환경 변수로 전달하고 Bearer token으로 보낸다. Vault VSO는 `secret` mount의
+  `kubernetes/kosmo/{dev,prod}` 경로에서 `env` Secret을 동기화하고, Worker는 기존 `envFrom`으로 이 key를 받는다. 이 Secret은
+  다른 workload에도 공유된다. key가 없으면 Worker startup은 계속되고 collection은 service 요청 없이
+  `null`과 failure backoff로 처리되어 기존 성공 metadata를 보존한다. HTTP 또는 JSON decoding 실패도 같은 실패 경계에 두며,
+  기존 성공 metadata를 덮어쓰지 않는다. Embed service가 public URL, DNS·redirect, CPU와 response body 경계를 보장해야
+  하며, 운영 요청은 이 경계를 검증한 뒤에만 연결한다.
+- Shared `PostCreateWorkflowArgs`의 optional mode는 `publish` 또는 `import`를 허용하며, 생략은 `publish`와 같다.
+  V1/V2 공통 Workflow가 mode를 검증하지만 두 mode 모두 같은 Post persistence Activity와 인자를 사용한다. `created`
+  결과이며 mode가 `publish`이거나 생략된 경우에만 post-create effects child를 시작한다. `import`는 결과 상태와 관계없이
+  effects child를 시작하지 않으므로 새 Reply·Quote·Mention Notification과 해당 push, Local Create delivery,
+  `post_created` analytics를 생략한다. 이전 history는 mode가 생략되어 replay 시 `publish` 분기로 진행한다. 이 경우
+  기존 effects child의 argument와 command trace를 그대로 유지하고, 명시적 `import`는 새 input branch라 새
+  `patched` marker가 필요하지 않다. Effects child의 입력 shape와 기존 effects execution은 유지한다.
+
+- 신규 `postRequestWorkflow` history는 bulk READY lookup 뒤 `patched('post-request-media-parallel-v1')`로 non-READY Media 작업을 processing ID 순서로 시작하고 기존 `settleEffects`로 모두 정산한다. 한 batch `CancellationScope`는 PostRequest의 대기를 취소하면서 `ABANDON` shared upload는 유지한다. Marker 이전 history는 per-ID scope와 직렬 command 순서를 보존하며 per-ID Nexus·retry·READY recovery 동작은 그대로 둔다.
 
 ## Workflow Source Structure
 
@@ -52,6 +131,19 @@
   transition effects는 domain contract가 정한 FIFO queue에 넣고, queue 순서를 보존해 drain한다.
 - `settleEffects` 같은 deterministic Workflow 전용 공통 로직은 `workflows` 아래 공용 모듈 한 곳에 둔다. 특정 domain Workflow 파일에 복사하거나 그 파일의 private helper로 두지 않는다.
 - Workflow effect는 개수와 관계없이 `settleEffects`로 정산해 종료와 실패 보고 경계를 일관되게 유지한다.
+- Home timeline fanout의 신규 history는 `patched('home-timeline-batch-fanout-v1')` 뒤에서 수신자 페이지를 최대
+  1,000개까지 읽고, 프로필 ID를 최대 100개씩 묶은 `homeTimelineInsertBatchWorkflow` child를 순차 실행한다.
+  각 batch child는 입력을 최대 100개로 검증한 뒤 기존 `insertHomeTimelinePostActivity`를 프로필별로 실행하고
+  `settleEffects`로 모두 정산한다. 각 프로필은 별도 Activity history와 기존 최대 10회 시도 정책을 가지므로 완료된
+  sibling은 Activity retry나 Workflow replay에서 다시 실행되지 않는다. 한 Activity의 지연은 해당 batch와 이후
+  batch를 지연시킨다. 실제 동시 Activity 실행은 기존 Worker slot이 제한하며, 새 전역 quota나 누적 호출 예산을
+  의미하지 않고 load-tested capacity 보장도 아니다. 현재 페이지의 모든 batch가 끝난 뒤에만 cursor로
+  `continueAsNew` 한다. Batch child ID에는 fanout chain의 `firstExecutionRunId`와 첫·마지막 profile ID를
+  포함해 identity를 구분한다. `firstExecutionRunId`는 Reset과 Continue-As-New 뒤에도 chain 시작 run을 가리켜,
+  현재 run ID와 달리 Reset 재실행에서도 child identity를 유지한다. 종료된 batch child 실패는 context와 함께
+  기록하고 나머지 batch/page를 진행하지만, cancellation과 child start 오류는 전파한다. Marker 이전 history는 기존
+  page Activity input과 프로필별 `homeTimelineInsertWorkflow` start/acknowledgement, Continue-As-New 순서를 그대로
+  재생한다. 두 Workflow와 legacy replay fixture는 해당 history가 drain될 때까지 유지한다.
 - origin이나 transition variant와 무관하게 실행하는 Activity는 match 바깥에서 선언한다. `ts-pattern`의 exhaustive match는 variant별 추가 Activity만 선택하고, 공통 Activity를 각 branch에 반복해서 나열하지 않는다.
 - notification과 effect 목록처럼 한 번만 소비하는 중간 변수는 만들지 않는다. 공통 Activity와 variant별 추가 Activity를 `settleEffects([...])` 호출에 함께 인라인해 실제 실행 조합을 한 위치에서 읽을 수 있게 한다.
 - Workflow code에서는 wall clock, network, database와 process-local state에 직접 접근하지 않고 Temporal이 허용하는 deterministic API와 proxied Activity만 사용한다.

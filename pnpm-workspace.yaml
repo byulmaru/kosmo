@@ -35,15 +35,6 @@ minimumReleaseAgeExclude:
   - '@vitest/snapshot@4.1.12'
   - '@vitest/spy@4.1.12'
   - '@vitest/utils@4.1.12'
-  # Temporal 1.22.0 clears GHSA-4w2j-m93h-cj5j from the bundled Rust lockfile.
-  - '@temporalio/activity@1.22.0'
-  - '@temporalio/client@1.22.0'
-  - '@temporalio/common@1.22.0'
-  - '@temporalio/core-bridge@1.22.0'
-  - '@temporalio/nexus@1.22.0'
-  - '@temporalio/proto@1.22.0'
-  - '@temporalio/worker@1.22.0'
-  - '@temporalio/workflow@1.22.0'
   # Allow only the requested Fedify security releases past the release-age gate.
   - '@fedify/fedify@2.4.5'
   - '@fedify/postgres@2.4.0'

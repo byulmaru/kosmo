@@ -8,6 +8,10 @@ export function trackAnalytics<Name extends AnalyticsEventName>(
   void properties;
 }
 
+export function trackAnalyticsScreen(screenName: string): void {
+  void screenName;
+}
+
 export function identifyAnalytics(accountId: string, availableProfileCount?: number): void {
   void accountId;
   void availableProfileCount;

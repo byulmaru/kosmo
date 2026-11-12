@@ -26,12 +26,21 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/server';
-import { eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
-import { load as loadProfile } from '../../routes/profiles/[id]/+page.server';
+import {
+  actions as profileActions,
+  load as loadProfile,
+} from '../../routes/profiles/[id]/+page.server';
 import { load as loadProfilePosts } from '../../routes/profiles/[id]/posts/+page.server';
 import { load as loadProfiles } from '../../routes/profiles/+page.server';
-import { getProfile, getProfileSummary, listProfilePosts, listProfiles } from './profiles';
+import {
+  getProfile,
+  getProfileSummary,
+  listProfilePosts,
+  listProfiles,
+  updateDefaultPostVisibility,
+} from './profiles';
 
 const profileIds = Array.from(
   { length: 55 },
@@ -390,8 +399,8 @@ describe('Admin Profile read projections', () => {
     const secondPage = await listProfiles({ ...filters, cursor: firstPage.nextCursor! });
     expect(secondPage.profiles.map(({ id }) => id)).toEqual([paginationProfileIds[0]]);
     expect(secondPage.profiles[0]).toMatchObject({
-      postCount: 51,
-      lastPostedAt: postedAt(150).toString(),
+      postCount: 53,
+      lastPostedAt: postedAt(201).toString(),
     });
     expect(secondPage.previousCursor).toBe(paginationProfileIds[0]);
     expect(secondPage.nextCursor).toBeNull();
@@ -502,6 +511,7 @@ describe('Admin Profile read projections', () => {
       origin: 'LOCAL',
       state: 'ACTIVE',
       bio: `Profile ${token} bio`,
+      defaultPostVisibility: null,
       followersCount: 12,
       followingCount: 34,
       avatarUrl: `https://media.example/${token}-avatar.jpg`,
@@ -510,7 +520,7 @@ describe('Admin Profile read projections', () => {
       tags: [`${token}-alpha`, `${token}-zebra`],
       instanceDomain: `local-${token}.example`,
       createdAt: expect.any(String),
-      postCount: 5,
+      postCount: 7,
     });
 
     const remote = await getProfile(suspendedProfileId);
@@ -530,7 +540,7 @@ describe('Admin Profile read projections', () => {
     if (!loaded) {
       throw new Error('Expected Profile detail loader data');
     }
-    expect(loaded.profile).toMatchObject({ id: targetProfileId, postCount: 5 });
+    expect(loaded.profile).toMatchObject({ id: targetProfileId, postCount: 7 });
     await expect(
       loadProfile({
         params: { id: '00000000-0000-7000-8000-000000000000' },
@@ -538,7 +548,7 @@ describe('Admin Profile read projections', () => {
     ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
   });
 
-  test('returns only eligible Posts with their own content and all Post kinds', async () => {
+  test('counts all active Posts while listing only eligible Posts with their own content', async () => {
     const page = await listProfilePosts(targetProfileId);
 
     expect(page.posts).toHaveLength(5);
@@ -570,8 +580,8 @@ describe('Admin Profile read projections', () => {
     expect(page.nextCursor).toBeNull();
 
     const profile = await getProfile(targetProfileId);
-    expect(profile?.postCount).toBe(page.posts.length);
-    expect(profile?.lastPostedAt).toBe(postedAt(14).toString());
+    expect(profile?.postCount).toBe(7);
+    expect(profile?.lastPostedAt).toBe(postedAt(16).toString());
 
     const disabledAuthorPosts = await listProfilePosts(disabledProfileId);
     expect(disabledAuthorPosts.posts).toMatchObject([
@@ -601,7 +611,7 @@ describe('Admin Profile read projections', () => {
     ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
   });
 
-  test('paginates Posts after state and visibility filters and counts the same set', async () => {
+  test('paginates visible Posts while Profile count includes all active visibilities', async () => {
     const profileId = paginationProfileIds[0]!;
     const firstPage = await listProfilePosts(profileId);
 
@@ -656,7 +666,101 @@ describe('Admin Profile read projections', () => {
     expect(loadedPreviousPage.nextCursor).toBe(paginationPostIds[1]);
 
     const profile = await getProfile(profileId);
-    expect(profile?.postCount).toBe(51);
-    expect(profile?.lastPostedAt).toBe(postedAt(150).toString());
+    expect(profile?.postCount).toBe(53);
+    expect(profile?.lastPostedAt).toBe(postedAt(201).toString());
+  });
+
+  test('persists local Profile default visibility without changing Posts', async () => {
+    const postsBefore = await db
+      .select({ id: Posts.id, state: Posts.state, visibility: Posts.visibility })
+      .from(Posts)
+      .where(inArray(Posts.id, targetPostIds))
+      .orderBy(asc(Posts.id));
+
+    for (const visibility of [
+      PostVisibility.PUBLIC,
+      PostVisibility.UNLISTED,
+      PostVisibility.FOLLOWERS,
+    ]) {
+      expect(await updateDefaultPostVisibility(targetProfileId, visibility)).toBe(true);
+      expect((await getProfile(targetProfileId))?.defaultPostVisibility).toBe(visibility);
+    }
+
+    const remoteBefore = await db
+      .select({ defaultPostVisibility: Profiles.defaultPostVisibility })
+      .from(Profiles)
+      .where(eq(Profiles.id, suspendedProfileId));
+    expect(await updateDefaultPostVisibility(suspendedProfileId, PostVisibility.PUBLIC)).toBe(
+      false,
+    );
+    expect(
+      await updateDefaultPostVisibility(
+        '00000000-0000-7000-8000-000000000000',
+        PostVisibility.PUBLIC,
+      ),
+    ).toBe(false);
+    expect(
+      await db
+        .select({ defaultPostVisibility: Profiles.defaultPostVisibility })
+        .from(Profiles)
+        .where(eq(Profiles.id, suspendedProfileId)),
+    ).toEqual(remoteBefore);
+    expect(
+      await db
+        .select({ id: Profiles.id })
+        .from(Profiles)
+        .where(eq(Profiles.id, '00000000-0000-7000-8000-000000000000')),
+    ).toEqual([]);
+
+    const postsAfter = await db
+      .select({ id: Posts.id, state: Posts.state, visibility: Posts.visibility })
+      .from(Posts)
+      .where(inArray(Posts.id, targetPostIds))
+      .orderBy(asc(Posts.id));
+    expect(postsAfter).toEqual(postsBefore);
+  });
+
+  test('validates the Profile visibility action and returns only durable successes', async () => {
+    const action = profileActions.updateDefaultPostVisibility;
+    const makeRequest = (value?: string) => {
+      const formData = new FormData();
+      if (value !== undefined) {
+        formData.set('defaultPostVisibility', value);
+      }
+      return new Request(`http://admin.test/profiles/${targetProfileId}`, {
+        method: 'POST',
+        body: formData,
+      });
+    };
+    const callAction = (id: string, value?: string) =>
+      action({ params: { id }, request: makeRequest(value) } as Parameters<typeof action>[0]);
+
+    const beforeInvalidRequests = (await getProfile(targetProfileId))?.defaultPostVisibility;
+    for (const value of [undefined, 'null', PostVisibility.DIRECT, 'UNKNOWN']) {
+      expect(await callAction(targetProfileId, value)).toMatchObject({
+        status: 400,
+        data: { error: 'Invalid default post visibility' },
+      });
+      expect((await getProfile(targetProfileId))?.defaultPostVisibility).toBe(
+        beforeInvalidRequests,
+      );
+    }
+
+    await expect(callAction('not-a-uuid', PostVisibility.PUBLIC)).rejects.toMatchObject({
+      status: 404,
+      body: { message: 'Not Found' },
+    });
+    await expect(
+      callAction('00000000-0000-7000-8000-000000000000', PostVisibility.PUBLIC),
+    ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
+    await expect(callAction(suspendedProfileId, PostVisibility.PUBLIC)).rejects.toMatchObject({
+      status: 404,
+      body: { message: 'Not Found' },
+    });
+
+    expect(await callAction(targetProfileId, PostVisibility.UNLISTED)).toEqual({ success: true });
+    expect((await getProfile(targetProfileId))?.defaultPostVisibility).toBe(
+      PostVisibility.UNLISTED,
+    );
   });
 });

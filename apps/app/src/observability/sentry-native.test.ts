@@ -224,6 +224,21 @@ describe('Native app Sentry configuration', () => {
     assert.deepEqual(captureCalls[0]?.extras, context);
   });
 
+  it('captures non-Error values as a generic error without exposing their data', async () => {
+    process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
+    const { captureHandledError } = await import(`${sentryModule}?handled-non-error`);
+    const untrustedValue = { cause: new Error('private cause'), payload: 'private payload' };
+
+    assert.doesNotThrow(() => captureHandledError(untrustedValue));
+
+    assert.equal(captureCalls.length, 1);
+    const capturedError = captureCalls[0]?.cause;
+    assert.ok(capturedError instanceof Error);
+    assert.equal(capturedError.message, 'Unexpected error');
+    assert.equal('cause' in capturedError, false);
+    assert.equal('payload' in capturedError, false);
+  });
+
   it('captures handled warning messages with primitive context', async () => {
     process.env.EXPO_PUBLIC_SENTRY_RELEASE = 'kosmo@abc123';
     const { captureHandledMessage } = await import(`${sentryModule}?handled-message`);

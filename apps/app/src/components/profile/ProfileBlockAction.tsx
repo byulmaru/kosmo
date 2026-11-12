@@ -18,6 +18,9 @@ const profileFragment = graphql`
     id
     displayName
     relativeHandle
+    viewerState {
+      isSelf
+    }
   }
 `;
 
@@ -48,10 +51,10 @@ const blockProfileMutation = graphql`
 `;
 
 const unblockProfileMutation = graphql`
-  mutation ProfileBlockActionUnblockMutation($id: ID!) {
+  mutation ProfileBlockActionUnblockMutation($connections: [ID!]!, $id: ID!) {
     unblockProfile(input: { id: $id }) {
       success
-      profileBlockId
+      profileBlockId @deleteEdge(connections: $connections)
       targetProfile {
         ...FollowButton_profile
       }
@@ -73,20 +76,21 @@ export type ProfileBlockActionTarget =
       profileBlock: ProfileBlockAction_profileBlock$key;
     };
 
-type Props = ProfileBlockActionTarget &
-  (
+type Props = ProfileBlockActionTarget & { connections?: readonly string[] } & (
     | {
         icon: ActionMenuItem['icon'];
         renderMenuItem: (props: ProfileBlockMenuItemRenderProps) => ReactNode;
         surface: 'menu';
         buttonLabel?: never;
         onBlocked?: never;
+        onUnblockSuccess?: never;
         presentation?: never;
       }
     | {
         buttonLabel?: string;
         icon?: never;
         onBlocked?: () => void;
+        onUnblockSuccess?: () => void;
         presentation?: 'reportCompletion';
         renderMenuItem?: never;
         surface: 'button';
@@ -94,6 +98,7 @@ type Props = ProfileBlockActionTarget &
   );
 
 export function ProfileBlockAction({
+  connections = [],
   icon,
   nextBlocked,
   profile,
@@ -102,6 +107,7 @@ export function ProfileBlockAction({
   surface,
   buttonLabel,
   onBlocked,
+  onUnblockSuccess,
   presentation,
 }: Props) {
   const profileData = useFragment(profileFragment, profile ?? null);
@@ -119,10 +125,18 @@ export function ProfileBlockAction({
   const focusTrigger = useRef<() => void>(() => {});
   const pending = blocking || unblocking;
 
-  if (!selectedProfileId || !targetProfile) {
+  if (
+    !selectedProfileId ||
+    !targetProfile ||
+    (nextBlocked && profileData?.viewerState?.isSelf !== false)
+  ) {
     return null;
   }
   const targetProfileId = targetProfile.id;
+  const targetProfileLabel =
+    targetProfile.displayName == null
+      ? targetProfile.relativeHandle
+      : `${targetProfile.displayName} ${targetProfile.relativeHandle}`;
 
   const label = buttonLabel ?? (nextBlocked ? '차단' : '차단 해제');
   const close = () => {
@@ -151,6 +165,9 @@ export function ProfileBlockAction({
       setOpen(false);
       if (nextBlocked && status === 'success') {
         onBlocked?.();
+      }
+      if (!nextBlocked && status === 'success') {
+        onUnblockSuccess?.();
       }
     };
     try {
@@ -181,7 +198,7 @@ export function ProfileBlockAction({
               : 'error',
           ),
         onError: () => finish('error'),
-        variables: { id: requestedProfileBlockId },
+        variables: { connections: [...connections], id: requestedProfileBlockId },
       });
     } catch {
       finish('error');
@@ -199,9 +216,7 @@ export function ProfileBlockAction({
         })
       ) : (
         <Button
-          accessibilityLabel={`${targetProfile.displayName} ${
-            'relativeHandle' in targetProfile ? targetProfile.relativeHandle : ''
-          } ${label}`.replace(/\s+/g, ' ')}
+          accessibilityLabel={`${targetProfileLabel} ${label}`}
           accessibilityState={{ busy: pending, disabled: pending }}
           controlRef={actionRef}
           disabled={pending}

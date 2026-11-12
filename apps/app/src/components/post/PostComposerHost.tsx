@@ -1,20 +1,15 @@
 import { XIcon } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconButton } from '@/components/ui/IconButton';
+import { ModalOverlay } from '@/components/ui/ModalOverlay';
+import { ModalSheetHost } from '@/components/ui/ModalSheetHost';
 import { OverlayBackdrop, useOverlayLifecycle } from '@/components/ui/Overlay';
-import { OverlayPortalProvider } from '@/components/ui/OverlayPortal';
-import { ToastProvider } from '@/components/ui/ToastProvider';
+import { OverlayPortal, OverlayPortalProvider } from '@/components/ui/OverlayPortal';
+import { ToastProvider, useToast } from '@/components/ui/ToastProvider';
 import { useSafeAreaPadding } from '@/components/ui/useSafeAreaPadding';
+import { requestStoreReview } from '@/lib/storeReview';
 import { useElevation, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostComposerController } from './PostComposerController';
@@ -51,6 +46,8 @@ export function PostComposerHost({
   const elevation = useElevation();
   const insets = useSafeAreaInsets();
   const [submitting, setSubmitting] = useState(false);
+  const [awaitingNativeDismiss, setAwaitingNativeDismiss] = useState(false);
+  const { showToast } = useToast();
   const web = Platform.OS === 'web';
   const nativeMobile = !web && mode === 'mobile';
   const composerSurface =
@@ -60,6 +57,8 @@ export function PostComposerHost({
         ? theme.backgroundCanvas
         : theme.backgroundElevated;
   const overlayVisible = mode !== 'rail' && open;
+  const nativeModalVisible = overlayVisible && !awaitingNativeDismiss;
+  const active = mode === 'rail' || overlayVisible;
   const safeAreaStyle = useSafeAreaPadding(mode === 'mobile' ? 0 : spacing.lg);
   const expandControlRef = useRef<View>(null);
   const nativeBackHandlerRef = useRef<(() => void) | null>(null);
@@ -85,6 +84,18 @@ export function PostComposerHost({
   const registerNativeBackHandler = useCallback((handler: (() => void) | null) => {
     nativeBackHandlerRef.current = handler;
   }, []);
+  const handleNativePostCreated = useCallback(() => {
+    setAwaitingNativeDismiss(true);
+  }, []);
+  const handleNativeDismiss = useCallback(() => {
+    if (!awaitingNativeDismiss) {
+      return;
+    }
+    setAwaitingNativeDismiss(false);
+    requestClose('created');
+    showToast('게시했어요', { tone: 'success' });
+    void requestStoreReview();
+  }, [awaitingNativeDismiss, requestClose, showToast]);
   const { dialogRef } = useOverlayLifecycle({
     fallbackFocusRef,
     onRequestClose: requestClose,
@@ -112,64 +123,121 @@ export function PostComposerHost({
     ) : null;
 
   const composer = (
-    <ToastProvider>
+    <ToastProvider
+      renderToast={
+        web && mode !== 'rail'
+          ? (toast) => (
+              <OverlayPortalProvider hostRef={dialogRef}>
+                <OverlayPortal>{toast}</OverlayPortal>
+              </OverlayPortalProvider>
+            )
+          : undefined
+      }
+    >
       <PostComposerController
         expandControlRef={expandControlRef}
         expanded={overlayVisible}
         focusOnMount={overlayVisible}
-        onPostCreated={() => requestClose('created')}
+        onPostCreated={web ? undefined : handleNativePostCreated}
+        onPostRequestAccepted={() => requestClose('created')}
         onSubmittingChange={setSubmitting}
         profile={profile}
         profiles={profiles}
         registerNativeBackHandler={registerNativeBackHandler}
-        renderSurface={({ form, mediaEditorOpen }) => (
-          <View
-            accessibilityLabel={overlayVisible ? '글쓰기' : undefined}
-            accessibilityViewIsModal={overlayVisible}
-            aria-modal={overlayVisible || undefined}
-            onAccessibilityEscape={requestNativeBack}
-            ref={dialogRef}
-            role={overlayVisible ? 'dialog' : undefined}
-            style={[
-              styles.dialog,
-              mode !== 'rail' && !nativeMobile && elevation.overlay,
-              mode === 'rail'
-                ? styles.railDialog
-                : mode === 'mobile'
-                  ? styles.mobileDialog
-                  : styles.overlayDialog,
-              mediaEditorOpen && web && mode === 'overlay' ? styles.mediaEditorDialog : null,
-              { backgroundColor: composerSurface, borderColor: theme.borderDefault },
-            ]}
-            testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
-          >
+        renderSurface={({ form, mediaEditorOpen }) => {
+          const surface = (
             <View
+              accessibilityLabel={!web && overlayVisible ? '글쓰기' : undefined}
+              accessibilityViewIsModal={!web && overlayVisible}
+              aria-modal={(!web && overlayVisible) || undefined}
+              onAccessibilityEscape={requestNativeBack}
+              ref={dialogRef}
+              role={!web && overlayVisible ? 'dialog' : undefined}
               style={[
-                styles.clippedSurface,
-                mode === 'overlay' ? { borderRadius: radii.lg } : null,
-                mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
-                  ? styles.composerFrameFill
-                  : null,
+                styles.dialog,
+                mode !== 'rail' && !nativeMobile && elevation.overlay,
+                mode === 'rail'
+                  ? styles.railDialog
+                  : mode === 'mobile'
+                    ? styles.mobileDialog
+                    : styles.overlayDialog,
+                web && mode === 'overlay' ? styles.webOverlayDialog : null,
+                mediaEditorOpen && web && mode === 'overlay' ? styles.mediaEditorDialog : null,
+                { backgroundColor: composerSurface, borderColor: theme.borderDefault },
+              ]}
+              testID={mode === 'rail' ? 'post-composer-rail' : 'post-composer-dialog'}
+            >
+              <View
+                style={[
+                  styles.clippedSurface,
+                  mode === 'overlay' ? { borderRadius: radii.lg } : null,
+                  mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
+                    ? styles.composerFrameFill
+                    : null,
+                ]}
+              >
+                <OverlayPortalProvider hostRef={dialogRef}>
+                  {header}
+                  <KeyboardAvoidingView
+                    behavior="height"
+                    keyboardVerticalOffset={insets.top}
+                    style={[
+                      styles.composerFrame,
+                      mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
+                        ? styles.composerFrameFill
+                        : null,
+                    ]}
+                  >
+                    {form}
+                  </KeyboardAvoidingView>
+                </OverlayPortalProvider>
+              </View>
+            </View>
+          );
+
+          if (!web) {
+            return surface;
+          }
+
+          const host = (
+            <View
+              accessibilityElementsHidden={!active}
+              aria-hidden={!active || undefined}
+              pointerEvents={active ? 'auto' : 'none'}
+              style={[
+                mode === 'rail' ? styles.railHost : styles.webOverlayHost,
+                mode === 'mobile' ? styles.webMobileHost : null,
+                mode !== 'rail' ? safeAreaStyle : null,
+                !active ? styles.hiddenHost : null,
+                mode !== 'rail' ? { backgroundColor: theme.overlayScrim } : null,
               ]}
             >
-              <OverlayPortalProvider hostRef={dialogRef}>
-                {header}
-                <KeyboardAvoidingView
-                  behavior="height"
-                  keyboardVerticalOffset={insets.top}
-                  style={[
-                    styles.composerFrame,
-                    mode === 'mobile' || (mediaEditorOpen && web && mode === 'overlay')
-                      ? styles.composerFrameFill
-                      : null,
-                  ]}
-                >
-                  {form}
-                </KeyboardAvoidingView>
-              </OverlayPortalProvider>
+              {mode !== 'rail' ? (
+                <OverlayBackdrop
+                  onRequestClose={requestClose}
+                  style={StyleSheet.absoluteFill}
+                  testID="post-composer-backdrop"
+                />
+              ) : null}
+              {surface}
             </View>
-          </View>
-        )}
+          );
+
+          return mode === 'rail' ? (
+            host
+          ) : (
+            <ModalSheetHost
+              accessibilityLabel="글쓰기"
+              animationType="none"
+              interactionDisabled={!overlayVisible}
+              role="dialog"
+              transparent
+              visible={overlayVisible}
+            >
+              {host}
+            </ModalSheetHost>
+          );
+        }}
         {...(mode === 'rail'
           ? { onExpand, onRequestClose: requestClose, presentation: mode }
           : { onRequestClose: requestClose, presentation: mode })}
@@ -179,17 +247,15 @@ export function PostComposerHost({
 
   if (!web) {
     return (
-      <Modal
+      <ModalOverlay
         accessibilityLabel="글쓰기"
-        accessibilityViewIsModal
-        animationType="fade"
+        dismissDisabled={submitting}
+        onDismiss={handleNativeDismiss}
         onRequestClose={requestNativeBack}
-        navigationBarTranslucent
-        presentationStyle={mode === 'mobile' ? 'fullScreen' : undefined}
+        presentation="fullscreen"
+        iosPresentationStyle={nativeMobile ? 'fullScreen' : 'overFullScreen'}
         role="dialog"
-        statusBarTranslucent
-        transparent={mode !== 'mobile'}
-        visible={overlayVisible}
+        visible={nativeModalVisible}
       >
         {mode === 'mobile' ? (
           <View
@@ -212,53 +278,31 @@ export function PostComposerHost({
             </Pressable>
           </OverlayBackdrop>
         )}
-      </Modal>
+      </ModalOverlay>
     );
   }
 
-  const active = mode === 'rail' || overlayVisible;
-  return (
-    <View
-      accessibilityElementsHidden={!active}
-      aria-hidden={!active || undefined}
-      pointerEvents={active ? 'auto' : 'none'}
-      style={[
-        mode === 'rail' ? styles.railHost : styles.webOverlayHost,
-        mode === 'mobile' ? styles.webMobileHost : null,
-        mode !== 'rail' ? safeAreaStyle : null,
-        !active ? styles.hiddenHost : null,
-        mode !== 'rail' ? { backgroundColor: theme.overlayScrim } : null,
-      ]}
-    >
-      {mode !== 'rail' ? (
-        <OverlayBackdrop onRequestClose={requestClose} style={styles.webBackdrop} />
-      ) : null}
-      {composer}
-    </View>
-  );
+  return composer;
 }
 
 const styles = StyleSheet.create({
   railHost: { minWidth: 0, width: '100%' },
   webOverlayHost: {
+    alignSelf: 'stretch',
     alignItems: 'center',
-    bottom: 0,
+    flex: 1,
     justifyContent: 'flex-start',
-    left: 0,
+    minHeight: 0,
     padding: spacing.lg,
-    position: 'fixed' as never,
-    right: 0,
-    top: 0,
     zIndex: 100,
   },
-  webMobileHost: { height: '100dvh' as never, padding: 0 },
-  webBackdrop: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
+  webMobileHost: { alignItems: 'stretch', padding: 0 },
   hiddenHost: { display: 'none' },
   nativeBackdrop: { flex: 1, justifyContent: 'center' },
   nativeDialogWrap: { flex: 1, justifyContent: 'center' },
   nativeMobileSurface: { flex: 1 },
   // Only the visual surface clips; dropdown portals stay in the existing dialog focus scope.
-  dialog: { minHeight: 0, overflow: 'visible' },
+  dialog: { minHeight: 0, overflow: 'visible', position: 'relative' },
   clippedSurface: { minHeight: 0, flexShrink: 1, overflow: 'hidden' },
   railDialog: { borderWidth: 0, width: '100%' },
   overlayDialog: {
@@ -269,6 +313,7 @@ const styles = StyleSheet.create({
     maxHeight: 'calc(100dvh - 96px)' as never,
     width: '100%',
   },
+  webOverlayDialog: { maxHeight: 'calc(100% - 64px)' as never },
   mediaEditorDialog: {
     height: 678,
     maxWidth: 'min(920px, calc(100vw - 48px))' as never,

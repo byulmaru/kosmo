@@ -13,17 +13,16 @@ import {
   WithStartWorkflowOperation,
   WorkflowFailedError,
 } from '@temporalio/client';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type {
   LocalPostCreateInput,
   LocalPostCreateResult,
 } from '@kosmo/core/temporal/local-post-create';
 import type { PostCreateActivityResult } from '@kosmo/core/temporal/post-create';
+import type { TestWorkflowEnvironment } from '@temporalio/testing';
 import type * as activities from './activities';
 
-const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 const postId = '00000000-0000-4000-8000-000000000003';
 const input: LocalPostCreateInput = {
   accountId: '00000000-0000-4000-8000-000000000001',
@@ -77,6 +76,9 @@ const workerActivities = (
   createNotificationActivity: async () => {},
   createQuoteNotificationActivity: async () => {},
   createReplyNotificationActivity: async () => {},
+  fanoutHomeTimelinePostActivity: async () => {},
+  loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+  insertHomeTimelinePostActivity: async () => undefined,
   generatePostIdActivity: async () => postId,
   sendLocalPostCreateActivity,
 });
@@ -92,16 +94,14 @@ const createWorker = (
     connection: environment.nativeConnection,
     namespace: environment.namespace,
     taskQueue: KOSMO_TASK_QUEUE,
-    workflowsPath,
+    ...testWorkflowSource,
   });
 
 test(
   'Local Post Update returns the committed result while its production effects child is blocked',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const effectStarted = Promise.withResolvers<void>();
@@ -177,9 +177,7 @@ test(
   'A malformed first Local Post Update fails and closes its Workflow',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     let createCalls = 0;
@@ -221,9 +219,7 @@ test(
   'Local Post Activity domain failures keep their API error code and field',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     let createCalls = 0;
@@ -268,9 +264,7 @@ test(
   'Local Post effects retry after a Worker restart without repeating the committed transition',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const firstEffectAttempt = Promise.withResolvers<void>();

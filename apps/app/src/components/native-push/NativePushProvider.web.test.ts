@@ -31,13 +31,18 @@ let permission: Permission = 'default';
 let supportState: WebPushSupport = 'checking';
 let webPushConfigAvailable = true;
 let supportAvailable = true;
+let supportFailure: unknown = null;
 let updateFails = false;
+let firebaseRegistrationFailure: unknown = null;
+let firebaseUnregistrationFailure: unknown = null;
+let notificationPermissionSyncFailure: unknown = null;
+let notificationPermissionRejection: unknown = null;
 let installationId: string | null = null;
 let nextInstallationId = 'installation-1';
 let registeredListener: ((fid: string) => void) | null = null;
 let messageListener: ((payload: { data?: Record<string, string> }) => void) | null = null;
 let renderer: ReactTestRenderer | null = null;
-let permissionAction: ((permission: Permission) => Promise<void>) | null = null;
+let permissionAction: (() => Promise<void>) | null = null;
 let notificationPermissionRequestCalls = 0;
 let navigatorStandalone: boolean | undefined;
 const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Notification');
@@ -46,6 +51,7 @@ const originalLocationDescriptor = Object.getOwnPropertyDescriptor(globalThis, '
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
 const eventOrder: string[] = [];
+const captureCalls: unknown[] = [];
 const focusListeners = new Set<() => void>();
 const visibilityListeners = new Set<() => void>();
 let documentVisibilityState: DocumentVisibilityState = 'visible';
@@ -68,6 +74,14 @@ const webPushConfig = {
   projectId: 'project-id',
   vapidKey: 'vapid-key',
 };
+
+mock.module('@/observability/sentry', {
+  exports: {
+    captureHandledError: (error: unknown) => {
+      captureCalls.push(error);
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 const commitRegister = (config: MutationConfig) => {
   registerCalls.push(config.variables);
@@ -131,7 +145,12 @@ mock.module('firebase/app', {
 mock.module('firebase/messaging', {
   exports: {
     getMessaging: () => messaging,
-    isSupported: async () => supportAvailable,
+    isSupported: async () => {
+      if (supportFailure !== null) {
+        throw supportFailure;
+      }
+      return supportAvailable;
+    },
     onMessage: (_messaging: unknown, listener: typeof messageListener) => {
       eventOrder.push('onMessage');
       messageListener = listener;
@@ -152,10 +171,16 @@ mock.module('firebase/messaging', {
     },
     register: async (_messaging: unknown, options: Record<string, unknown>) => {
       eventOrder.push('register');
+      if (firebaseRegistrationFailure !== null) {
+        throw firebaseRegistrationFailure;
+      }
       registerOptions = options;
     },
     unregister: async () => {
       eventOrder.push('unregister');
+      if (firebaseUnregistrationFailure !== null) {
+        throw firebaseUnregistrationFailure;
+      }
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -178,7 +203,12 @@ afterEach(async () => {
   supportState = 'checking';
   webPushConfigAvailable = true;
   supportAvailable = true;
+  supportFailure = null;
   updateFails = false;
+  firebaseRegistrationFailure = null;
+  firebaseUnregistrationFailure = null;
+  notificationPermissionSyncFailure = null;
+  notificationPermissionRejection = null;
   installationId = null;
   nextInstallationId = 'installation-1';
   registeredListener = null;
@@ -187,6 +217,7 @@ afterEach(async () => {
   notificationPermissionRequestCalls = 0;
   navigatorStandalone = undefined;
   eventOrder.length = 0;
+  captureCalls.length = 0;
   serviceWorkerCalls.length = 0;
   registerCalls.length = 0;
   updateCalls.length = 0;
@@ -209,6 +240,7 @@ describe('Web Push provider', () => {
     assert.equal(serviceWorkerCalls.length, 0);
     assert.equal(registerCalls.length, 0);
     assert.equal(notificationPermissionRequestCalls, 0);
+    assert.equal(captureCalls.length, 0);
 
     session = { accountId: 'account-1', status: 'valid' };
     await updateProvider();
@@ -217,6 +249,19 @@ describe('Web Push provider', () => {
     assert.equal(eventOrder.includes('onRegistered'), true);
     assert.equal(serviceWorkerCalls.length, 1);
     assert.equal(registerCalls.length, 0);
+    assert.equal(captureCalls.length, 0);
+  });
+
+  it('captures setup errors and marks Web Push unavailable', async () => {
+    const originalError = new Error('Firebase support check failed');
+    supportFailure = originalError;
+    session = { accountId: 'account-1', status: 'valid' };
+    exposeBrowserGlobals();
+    await mountProvider(createElement(PermissionActionCapture));
+
+    assert.equal(supportState, 'unavailable');
+    assert.equal(captureCalls.length, 1);
+    assert.equal(captureCalls[0], originalError);
   });
 
   it('starts registration only after the settings permission result is granted', async () => {
@@ -227,11 +272,14 @@ describe('Web Push provider', () => {
 
     await act(async () => {
       permission = 'granted';
-      await permissionAction?.('granted');
+      const request = permissionAction?.();
+      assert.equal(notificationPermissionRequestCalls, 1);
+      await request;
       await flushMicrotasks();
     });
 
     assert.equal(eventOrder.includes('register'), true);
+    assert.equal(captureCalls.length, 0);
   });
 
   it('retries Firebase registration when permission stays granted', async () => {
@@ -243,7 +291,7 @@ describe('Web Push provider', () => {
     const initialRegisterCount = eventOrder.filter((event) => event === 'register').length;
     await act(async () => {
       if (permissionAction) {
-        await permissionAction('granted');
+        await permissionAction();
       }
       await flushMicrotasks();
     });
@@ -252,6 +300,93 @@ describe('Web Push provider', () => {
       eventOrder.filter((event) => event === 'register').length,
       initialRegisterCount + 1,
     );
+  });
+
+  it('preserves a registration rejection and allows retry', async () => {
+    session = { accountId: 'account-1', status: 'valid' };
+    exposeBrowserGlobals();
+    await mountProvider(createElement(PermissionActionCapture));
+    const originalError = new Error('Firebase registration failed');
+    firebaseRegistrationFailure = originalError;
+    permission = 'granted';
+
+    const requestPermission = permissionAction;
+    assert.ok(requestPermission);
+    await act(async () => {
+      await assert.rejects(requestPermission(), (error: unknown) => error === originalError);
+    });
+    assert.equal(eventOrder.filter((event) => event === 'register').length, 1);
+    assert.equal(captureCalls.length, 1);
+    assert.equal(captureCalls[0], originalError);
+
+    firebaseRegistrationFailure = null;
+    await act(async () => requestPermission());
+    assert.equal(eventOrder.filter((event) => event === 'register').length, 2);
+    assert.equal(captureCalls.length, 1);
+  });
+
+  it('reports Firebase registration failure during startup without changing support state', async () => {
+    const originalError = new Error('Firebase registration failed');
+    permission = 'granted';
+    session = { accountId: 'account-1', status: 'valid' };
+    firebaseRegistrationFailure = originalError;
+    exposeBrowserGlobals();
+    await mountProvider(createElement(PermissionActionCapture));
+
+    assert.equal(supportState, 'supported');
+    assert.equal(eventOrder.filter((event) => event === 'register').length, 1);
+    assert.equal(captureCalls.length, 1);
+    assert.equal(captureCalls[0], originalError);
+  });
+
+  it('reports permission API throws and preserves the synchronous throw', async () => {
+    const originalError = new Error('permission request failed');
+    session = { accountId: 'account-1', status: 'valid' };
+    exposeBrowserGlobals();
+    await mountProvider(createElement(PermissionActionCapture));
+    notificationPermissionSyncFailure = originalError;
+
+    const requestPermission = permissionAction;
+    assert.ok(requestPermission);
+    assert.throws(
+      () => requestPermission(),
+      (error: unknown) => error === originalError,
+    );
+    assert.equal(notificationPermissionRequestCalls, 1);
+    assert.equal(captureCalls.length, 1);
+    assert.equal(captureCalls[0], originalError);
+  });
+
+  it('reports permission API promise rejection and preserves its rejection', async () => {
+    const originalError = new Error('permission request failed');
+    session = { accountId: 'account-1', status: 'valid' };
+    exposeBrowserGlobals();
+    await mountProvider(createElement(PermissionActionCapture));
+    notificationPermissionRejection = originalError;
+
+    const requestPermission = permissionAction;
+    assert.ok(requestPermission);
+    await assert.rejects(requestPermission(), (error: unknown) => error === originalError);
+    assert.equal(notificationPermissionRequestCalls, 1);
+    assert.equal(captureCalls.length, 1);
+    assert.equal(captureCalls[0], originalError);
+  });
+
+  it('reports Firebase unregistration failure once and preserves the rejection', async () => {
+    const originalError = new Error('Firebase unregistration failed');
+    session = { accountId: 'account-1', status: 'valid' };
+    exposeBrowserGlobals();
+    await mountProvider(createElement(PermissionActionCapture));
+    firebaseUnregistrationFailure = originalError;
+    permission = 'denied';
+
+    const requestPermission = permissionAction;
+    assert.ok(requestPermission);
+    await act(async () => {
+      await assert.rejects(requestPermission(), (error: unknown) => error === originalError);
+    });
+    assert.equal(captureCalls.length, 1);
+    assert.equal(captureCalls[0], originalError);
   });
 
   it('registers after attaching the FID observer and stores the server-issued row ID', async () => {
@@ -368,6 +503,7 @@ describe('Web Push provider', () => {
     assert.deepEqual(unregisterCalls, [{ id: 'installation-denied' }]);
     assert.equal(eventOrder.includes('unregister'), true);
     assert.equal(installationId, null);
+    assert.equal(captureCalls.length, 0);
   });
 
   it('resynchronizes a granted permission when the browser returns to the app', async () => {
@@ -435,6 +571,7 @@ describe('Web Push provider', () => {
     assert.equal(supportState, 'unsupported');
     assert.equal(serviceWorkerCalls.length, 0);
     assert.equal(eventOrder.includes('register'), false);
+    assert.equal(captureCalls.length, 0);
   });
 
   it('requires a Home Screen app only when Firebase is unsupported and standalone is false', async () => {
@@ -492,6 +629,7 @@ describe('Web Push provider', () => {
 
     assert.equal(eventOrder.length, 0);
     assert.equal(serviceWorkerCalls.length, 0);
+    assert.equal(captureCalls.length, 0);
   });
 });
 
@@ -502,9 +640,15 @@ function exposeBrowserGlobals() {
       get permission() {
         return permission;
       },
-      requestPermission: async () => {
+      requestPermission: () => {
         notificationPermissionRequestCalls += 1;
-        return permission;
+        if (notificationPermissionSyncFailure !== null) {
+          throw notificationPermissionSyncFailure;
+        }
+        if (notificationPermissionRejection !== null) {
+          return Promise.reject(notificationPermissionRejection);
+        }
+        return Promise.resolve(permission);
       },
     } as unknown as typeof Notification,
   });
@@ -583,7 +727,7 @@ async function flushMicrotasks() {
 
 function PermissionActionCapture() {
   const value = useWebPushPermission();
-  permissionAction = value.syncPermission;
+  permissionAction = value.requestPermission;
   supportState = value.support;
   return null;
 }

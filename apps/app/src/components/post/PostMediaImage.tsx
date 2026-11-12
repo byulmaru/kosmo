@@ -3,12 +3,15 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Skeleton } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { MediaProtectionBadge } from './MediaProtectionBadge';
 import type { RefObject } from 'react';
 import type { GestureResponderEvent, ImageLoadEvent, View as NativeView } from 'react-native';
 
 export type PostMediaItem = {
+  readonly aiProhibitFilterApplied?: boolean | null;
   readonly altText: string | null;
   readonly id: string;
+  readonly licenseUrl?: string | null;
   readonly url: string | null;
 };
 
@@ -51,6 +54,10 @@ function PostMediaImageSource({
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const accessibilityLabel = item.altText?.trim() || `${index + 1}번째 첨부 이미지`;
+  const imageAccessibilityLabel =
+    item.aiProhibitFilterApplied === true
+      ? `${accessibilityLabel}, 학습방지 필터 적용됨`
+      : accessibilityLabel;
   const canRetry = Boolean(item.url) && interactive;
   const updateAspectRatio = useCallback((width: number, height: number) => {
     if (height > 0 && width > 0) {
@@ -124,7 +131,7 @@ function PostMediaImageSource({
     >
       <Image
         accessible={!onOpen || !interactive}
-        accessibilityLabel={accessibilityLabel}
+        accessibilityLabel={imageAccessibilityLabel}
         accessibilityState={{ busy: status === 'loading' }}
         fadeDuration={0}
         onError={() => setStatus('error')}
@@ -142,6 +149,11 @@ function PostMediaImageSource({
           width="100%"
         />
       ) : null}
+      {item.aiProhibitFilterApplied === true ? (
+        <View pointerEvents="box-none" style={styles.protectionBadgePosition}>
+          <MediaProtectionBadge />
+        </View>
+      ) : null}
     </View>
   );
 
@@ -156,7 +168,7 @@ function PostMediaImageSource({
 
   return (
     <Pressable
-      accessibilityLabel={`${accessibilityLabel} 크게 보기`}
+      accessibilityLabel={`${imageAccessibilityLabel} 크게 보기`}
       accessibilityRole="button"
       onPress={handleOpen}
       ref={triggerRef}
@@ -185,6 +197,7 @@ const styles = StyleSheet.create({
   fillFallback: { height: '100%', minHeight: 0, padding: spacing.xs, width: '100%' },
   fallbackText: { fontFamily: fontFamilies.ui, textAlign: 'center', ...typography.sm },
   fillFrame: { height: '100%', minHeight: 0, width: '100%' },
+  protectionBadgePosition: { position: 'absolute', right: spacing.sm, top: spacing.sm, zIndex: 1 },
   fillRetryButton: { minWidth: 0, paddingHorizontal: spacing.xs, width: '100%' },
   retryButton: {
     alignItems: 'center',

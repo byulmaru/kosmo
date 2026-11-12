@@ -1,8 +1,10 @@
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { spacing } from '@/theme/tokens';
 import baseMeta, {
   UniversalCompactComposerLifecycle as universalCompactComposerLifecycle,
   UniversalCompactComposerMediaEditorGeometry as universalCompactComposerMediaEditorGeometry,
+  UniversalCompactComposerMediaEditorViewportFocusRace as universalCompactComposerMediaEditorViewportFocusRace,
   UniversalComposerMediaEditorResponsiveAt768 as universalComposerMediaEditorResponsiveAt768,
   UniversalComposerMediaEditorResponsiveAt800 as universalComposerMediaEditorResponsiveAt800,
   UniversalComposerMediaEditorResponsiveAt968 as universalComposerMediaEditorResponsiveAt968,
@@ -65,6 +67,8 @@ export const UniversalCompactComposerLifecycle: Story = {
 };
 export const UniversalCompactComposerMediaEditorGeometry: Story =
   universalCompactComposerMediaEditorGeometry;
+export const UniversalCompactComposerMediaEditorViewportFocusRace: Story =
+  universalCompactComposerMediaEditorViewportFocusRace;
 export const UniversalComposerMediaEditorResponsiveAt768: Story =
   universalComposerMediaEditorResponsiveAt768;
 export const UniversalComposerMediaEditorResponsiveAt800: Story =
@@ -78,24 +82,25 @@ export const UniversalCompactOverlayGeometry: Story = {
     const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
     const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+    const surface = within(dialog).getByTestId('post-composer-dialog');
     const maxHeight = canvasElement.ownerDocument.defaultView!.innerHeight - 96;
-    const initialHeight = dialog.getBoundingClientRect().height;
+    const initialHeight = surface.getBoundingClientRect().height;
     expect(initialHeight).toBeLessThan(maxHeight);
 
     const body = within(dialog).getByRole('textbox', { name: '게시글 본문' });
     await userEvent.type(body, '\n추가 본문'.repeat(10));
     await waitFor(() =>
-      expect(dialog.getBoundingClientRect().height).toBeGreaterThan(initialHeight),
+      expect(surface.getBoundingClientRect().height).toBeGreaterThan(initialHeight),
     );
     await userEvent.type(body, '\n긴 본문'.repeat(40));
     const scroll = within(dialog).getByTestId('post-composer-scroll');
-    await waitFor(() => expect(dialog.getBoundingClientRect().height).toBeCloseTo(maxHeight, 0));
+    await waitFor(() => expect(surface.getBoundingClientRect().height).toBeCloseTo(maxHeight, 0));
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
     expect(getComputedStyle(scroll).scrollbarWidth).toBe('thin');
     scroll.scrollTop = 24;
     await waitFor(() => expect(scroll.scrollTop).toBe(24));
     await userEvent.clear(body);
-    await waitFor(() => expect(dialog.getBoundingClientRect().height).toBeLessThan(maxHeight));
+    await waitFor(() => expect(surface.getBoundingClientRect().height).toBeLessThan(maxHeight));
   },
 };
 export const UniversalFullComposerLifecycle: Story = {
@@ -112,21 +117,22 @@ export const UniversalFullComposerLifecycle: Story = {
     );
     await userEvent.click(page.getByRole('button', { name: 'Composer 확장' }));
     const dialog = page.getByRole('dialog', { name: '글쓰기' });
-    expect(dialog.getBoundingClientRect().height).toBeLessThan(
+    const surface = within(dialog).getByTestId('post-composer-dialog');
+    expect(surface.getBoundingClientRect().height).toBeLessThan(
       context.canvasElement.ownerDocument.defaultView!.innerHeight - 96,
     );
-    expect(dialog.getBoundingClientRect().top).toBe(48);
-    expect(dialog.getBoundingClientRect().width).toBe(640);
+    expect(surface.getBoundingClientRect().top).toBe(48);
+    expect(surface.getBoundingClientRect().width).toBe(640);
     const overlayBody = within(dialog).getByRole('textbox', { name: '게시글 본문' });
-    const initialDialogHeight = dialog.getBoundingClientRect().height;
+    const initialDialogHeight = surface.getBoundingClientRect().height;
     await userEvent.type(overlayBody, '\n추가 본문'.repeat(10));
     await waitFor(() =>
-      expect(dialog.getBoundingClientRect().height).toBeGreaterThan(initialDialogHeight),
+      expect(surface.getBoundingClientRect().height).toBeGreaterThan(initialDialogHeight),
     );
     await userEvent.type(overlayBody, '\n긴 본문'.repeat(40));
     const scroll = within(dialog).getByTestId('post-composer-scroll');
     await waitFor(() =>
-      expect(dialog.getBoundingClientRect().height).toBeCloseTo(
+      expect(surface.getBoundingClientRect().height).toBeCloseTo(
         context.canvasElement.ownerDocument.defaultView!.innerHeight - 96,
         0,
       ),
@@ -363,7 +369,7 @@ export const UniversalMobileProfilePickerKeyboard: Story = {
     expect(profileTrigger).toHaveFocus();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(page.queryByRole('navigation', { name: '주요 메뉴' })).toBeNull());
-    expect(menuButton).toHaveFocus();
+    await waitFor(() => expect(canvas.getByRole('button', { name: '메뉴 열기' })).toHaveFocus());
   },
 };
 
@@ -463,4 +469,36 @@ export const ProfileSwitcherDrawerGuardedErrors: Story = {
       );
     }
   },
+};
+
+export const MobileRouteHeaderSafeArea: Story = {
+  ...universalMobile,
+  decorators: [
+    (Story) => (
+      <SafeAreaProvider
+        initialMetrics={{
+          frame: { x: 0, y: 0, width: 390, height: 844 },
+          insets: { top: 24, left: 0, right: 0, bottom: 16 },
+        }}
+      >
+        <Story />
+      </SafeAreaProvider>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const view = canvasElement.ownerDocument.defaultView!;
+    const header = canvas.getByRole('heading', { name: '홈' }).parentElement!.parentElement!;
+    expect(header.getBoundingClientRect().top).toBe(24);
+    expect(header.getBoundingClientRect().height).toBe(64);
+    view.scrollTo(0, 40);
+    await waitFor(() => expect(view.scrollY).toBeGreaterThan(0));
+    expect(header.getBoundingClientRect().top).toBe(24);
+    expect(canvas.getAllByRole('button', { name: '메뉴 열기' })).toHaveLength(1);
+    view.scrollTo(0, 0);
+  },
+};
+export const MobileRouteHeaderSafeAreaDark: Story = {
+  ...MobileRouteHeaderSafeArea,
+  globals: { ...universalMobile.globals, theme: 'dark' },
 };

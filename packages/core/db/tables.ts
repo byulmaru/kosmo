@@ -12,11 +12,13 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
 import * as Enum from './enums';
 import { datetime } from './types';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import type { fraciBinary, FractionalIndexOf } from 'fraci';
+import type { MediaPublicationMetadata } from '../media-metadata';
 import type { PostContentDocumentV1 } from '../post-content';
 
 type JsonWebKeyRecord = Record<string, unknown>;
@@ -231,6 +233,25 @@ export const Instances = pgTable(
   (table) => [index().on(table.kind, table.state)],
 );
 
+export const LinkPreviews = pgTable(
+  'link_preview',
+  {
+    id: id(),
+    urlHash: varchar('url_hash', { length: 64 }).notNull(),
+    url: text('url').notNull(),
+    title: text('title'),
+    description: text('description'),
+    imageUrl: text('image_url'),
+    imageWidth: integer('image_width'),
+    imageHeight: integer('image_height'),
+    lastSuccessfulFetchAt: datetime('last_successful_fetch_at'),
+    lastFailureAt: datetime('last_failure_at'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [uniqueIndex('link_preview_url_hash_unique').on(table.urlHash)],
+);
+
 export const Media = pgTable(
   'media',
   {
@@ -244,6 +265,9 @@ export const Media = pgTable(
     mediaType: text('media_type'),
     url: text('url'),
     altText: text('alt_text'),
+    publicationMetadata: jsonb('publication_metadata').$type<MediaPublicationMetadata>(),
+    aiProhibitFilterApplied: boolean('ai_prohibit_filter_applied'),
+    thumbhash: text('thumbhash'),
     storageReference: text('storage_reference').unique(),
     uploadExpiresAt: datetime('upload_expires_at'),
     readyAt: datetime('ready_at'),
@@ -287,6 +311,20 @@ export const Media = pgTable(
     index().on(table.accountId),
     index().on(table.profileId),
   ],
+);
+
+export const NaturalLanguageMuteRules = pgTable(
+  'natural_language_mute_rule',
+  {
+    id: id(),
+    ownerProfileId: uuid('owner_profile_id')
+      .notNull()
+      .references(() => Profiles.id, { onDelete: 'cascade' }),
+    condition: text('condition').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [index().on(table.ownerProfileId)],
 );
 
 export const Notifications = pgTable(

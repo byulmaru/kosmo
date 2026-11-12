@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 import {
   buildApplicationEnvironment,
   buildBootstrapLoaderEnvironment,
@@ -22,6 +27,8 @@ const runtimeEnvironment = {
   PGUSER: 'kosmo_runtime',
   PUBLIC_ORIGIN: 'http://localhost:5173',
 };
+const localDevelopmentScript = fileURLToPath(new URL('./local-development.mjs', import.meta.url));
+const rootDirectory = fileURLToPath(new URL('..', import.meta.url));
 
 test('accepts only the approved local runtime database boundaries', () => {
   assert.doesNotThrow(() => validateRuntimeEnvironment(runtimeEnvironment));
@@ -74,6 +81,39 @@ test('application children receive runtime credentials but no privileged fallbac
   assert.equal(environment.DATABASE_URL, undefined);
   assert.equal(environment.LOCAL_POSTGRES_ADMIN_PASSWORD, undefined);
   assert.equal(environment.LOCAL_POSTGRES_OWNER_PASSWORD, undefined);
+});
+
+test('Redis startup failure does not block local application startup', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'kosmo-local-development-'));
+  const binaryDirectory = join(directory, 'bin');
+  const dockerPath = join(binaryDirectory, 'docker');
+
+  try {
+    await mkdir(binaryDirectory);
+    await writeFile(
+      dockerPath,
+      ['#!/bin/sh', 'case "$*" in', '  *"up -d redis") exit 1 ;;', 'esac'].join('\n'),
+    );
+    await chmod(dockerPath, 0o755);
+
+    const result = spawnSync(process.execPath, [localDevelopmentScript, 'services-up'], {
+      cwd: rootDirectory,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        LOCAL_POSTGRES_ADMIN_PASSWORD: 'test-admin-secret',
+        PATH: `${binaryDirectory}:${process.env.PATH ?? ''}`,
+      },
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(
+      result.stderr,
+      /Local Redis could not be started; application startup will continue/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('migration children use the owner PG principal and receive no runtime or admin credential', () => {

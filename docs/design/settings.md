@@ -6,18 +6,19 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 미리 노출하거나 구현하지 않는다.
 
 현재 Target 설정 IA에는 Byulmaru ID가 소유한 Account 설정의 **외부 진입점**, Kosmo가 소유한 Local
-Profile의 `프로필 설정`, `다른 서비스에서 이전`, `팔로잉 가져오기`, `뮤트 및 차단`, 클라이언트 로컬의
-`테마` **내부 진입점**을 직접 배치한다. 이전과 가져오기 진입점은 공개 `profile-migration` feature flag가
-활성화된 경우에만 표시한다.
+Profile의 `프로필 설정`, `다른 서비스에서 이전`, `뮤트 및 차단`, 클라이언트 로컬 설정인 `테마`, 그리고
+`실험실` **내부 진입점**을 직접 배치한다. `다른 서비스에서 이전`은 하나의 destination이며, 본문에서 `계정 이전`과
+`팔로잉 가져오기` section을 이 순서로 제공한다. entry는 항상 표시하고, control은 기존 Owner 권한과 Profile
+멤버십 조건에 따라 제공한다.
 실제 행의 label·이동 동작과 접근성 이름에서 서비스와 소유 단위를 명확히 구분한다.
 DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 기기 로컬 persistence를 소유한다.
 
 2026-09-10 PROD-889 결정으로 `정보`를 Settings root의 추가 direct destination으로 두고
 `/settings/info` detail에서 공개 정책 문서 진입점을 제공한다. `정보`는 기존 Settings 목록·detail·back·header
 조합을 사용하며, `개인정보 처리방침`·`계정 삭제 안내`·`아동 안전 정책`의 public route로 이동하는 링크를
-포함한다. 이 정책 링크 범위와 별개로, 인증된 모든 플랫폼에서는 이 detail에 `개발 정보`의 nested destination을
-하나 더 제공하며 채널과 OTA 진단은 `/settings/developer`에서만 표시한다. 이 추가 진입점은 Byulmaru ID가
-소유하는 기존 `계정 설정` 외부 진입점과 결합하지 않는다.
+포함한다. 이후 이 detail에는 `오픈소스 라이선스`와 `개발 정보`의 nested destination도 제공하며, 채널과 OTA
+진단은 `/settings/developer`에서만 표시한다. 이들 진입점은 Byulmaru ID가 소유하는 기존 `계정 설정` 외부
+진입점과 결합하지 않는다.
 비로그인 landing의 기존 개인정보 처리방침 링크와 full Web 우측 레일의 기존 개인정보 처리방침 링크는
 유지하고, Sidebar·mobile drawer에 정책 링크를 추가하지 않는다.
 
@@ -31,16 +32,20 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   Byulmaru ID Account 설정을 위한 Kosmo 내부 route나 form은 만들지 않는다.
 - Target의 Profile detail canonical route는 `/settings/profile`이다. 기존
   `/settings/default-post-visibility`는 이 Target으로 이동하는 호환 경로이며 별도 편집 화면을 제공하지 않는다.
-- 다른 서비스에서 이전 detail의 canonical route는 `/settings/profile-migration`이며 명시적 parent는 `/settings`다.
-  Target root에서는 `프로필 설정` 다음의 독립 destination으로 두며, `profile-migration` feature flag가 꺼져
-  있거나 평가되지 않았으면 진입점과 destination control을 숨긴다. `팔로잉 가져오기`도 같은 flag가 켜진 경우에만
-  진입점과 destination control을 표시한다.
-- 팔로잉 가져오기 detail의 canonical route는 `/settings/following-import`이며 명시적 parent는 `/settings`다.
-  Root에서는 다른 서비스에서 이전 진입점 바로 뒤에 둔다.
+- `다른 서비스에서 이전`의 canonical route는 `/settings/profile-migration`이며 명시적 parent는 `/settings`다.
+  Target root에서는 `프로필 설정` 다음의 단일 direct destination으로 두고, 본문은 `계정 이전` 다음
+  `팔로잉 가져오기` section 순서로 제공한다. entry는 항상 표시하며, 계정 이전 control과 팔로잉 가져오기 control은
+  각각 기존 Owner 권한과 Profile 멤버십 조건에 따라 제공한다. 기존 `/settings/following-import`는 이 canonical route로
+  이동하는 호환 경로이며, parent와 back destination은 계속 `/settings`다.
 - 공개 정책 문서 진입점의 canonical Settings detail route는 `/settings/info`다. 이 route는 준비된 public
   `/privacy`, `/account-deletion`, `/child-safety`로 이동하는 링크를 제공하며 정책 문서 내용을 복제하지 않는다.
+- 오픈소스 라이선스 detail의 canonical route는 `/settings/licenses`이며 parent는 `/settings/info`다.
+  정보 화면에는 세 public policy link 다음, `개발 정보` 앞에 `오픈소스 라이선스` 진입점을 둔다.
 - Kosmo Account 탈퇴 action의 canonical 내부 route는 `/settings/account-deletion`이다. `/settings/info`의
   `계정 삭제 안내` public link는 안내 문서로 이동하는 기존 진입점이며 이 action route를 대체하지 않는다.
+- `실험실`의 canonical Settings route는 `/settings/labs`이며 parent는 `/settings`다. `실험실`에는 항상
+  `스마트 필터` entry를 제공하며, 기존 canonical route `/settings/natural-language-mute`를 연다. 이 editor
+  route는 유지하며 parent는 `/settings/labs`다.
 - Mobile Target evidence는 [`Default`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9409)와
   [`Profile required`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6704-9415) `390×844`
   consumer다. 이 조립 화면은 Product migration이나 실제 선택·저장 동작의 완료 증거가 아니다.
@@ -59,28 +64,57 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 
 - Settings는 모든 control을 한 화면에 쌓는 긴 form이 아니라, 진입점 목록에서 category·하위 목록·detail로
   점진적으로 이동하는 탐색 구조를 사용한다.
-- Target root 목록은 `계정 설정 → 프로필 설정 → 다른 서비스에서 이전 → 팔로잉 가져오기 → 뮤트 및 차단 → 테마 → 정보 → 코스모 탈퇴`
-  순서다. `계정 설정`은 Byulmaru ID 외부 진입점이고 나머지는 내부 진입점이다. `다른 서비스에서 이전`과
-  `팔로잉 가져오기`는 공개 feature flag가 활성화된 경우에만 표시한다. `테마`는 현재 선택값을 함께 표시한다.
+- Target root 목록은 `계정 설정 → 프로필 설정 → 다른 서비스에서 이전 → 뮤트 및 차단 → 테마 → 실험실 → 정보 → 코스모 탈퇴`
+  순서다. `계정 설정`은 Byulmaru ID 외부 진입점이고 나머지는 내부 진입점이다. `실험실`은 항상 표시한다. `다른 서비스에서 이전`은
+  항상 표시하며, 각 section의 control은 기존 권한 조건을 그대로 적용한다.
+  `팔로잉 가져오기`는 이 destination의 본문에 둔다. `테마`는 현재
+  선택값을 함께 표시한다. `실험실` destination에는 항상 `스마트 필터` entry를 둔다.
   `게시물 기본 공개 범위`는 `/settings/profile` 안의 Profile 설정 field이며 root의 독립 destination으로 중복
   배치하지 않는다. `코스모 탈퇴`는 연결된 Profile 상태와 무관하게 항상 표시한다. 항목 하나만 가진 `계정`·
   `화면 설정` 대분류를 만들지 않는다.
 - `정보`는 별도 category나 generic policy registry가 아닌 Settings root의 direct destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
-  link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link와 `개발 정보` link row를 제공하며 channel
-  selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일 처리와
-  public route 간 cross-link는 각 정책 문서가 소유한다.
+  link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link, `오픈소스 라이선스`, `개발 정보` link row를 이
+  순서로 제공하며 channel selector나 OTA 진단을 inline으로 표시하지 않는다. 정책 문서의 본문·시행일·이메일
+  처리와 public route 간 cross-link는 각 정책 문서가 소유한다. `/settings/licenses`는 앱에 포함된 offline
+  notice data 중 원문이 제공된 package를 보여 준다. 표시된 entry에서 원문을 펼쳐 선택할 수 있고, 제공된
+  출처 link를 함께 표시한다. 한 번에 펼쳐 두는 entry는 하나다.
 - `/settings/developer`는 `/settings/info`를 명시적 parent로 갖는 nested detail destination이다. Web에서는
   `getPublicConfig('channel')`로 확인한 channel을 읽기 전용 행으로 표시한다. Android/iOS Native에서는 기존
   `NativeChannelSettings`를 사용해 `dev`·`prod` channel selector를 제공하고, 현재 실행에 대한 `현재 updateId`,
   `runtimeVersion`, `실행 유형`, `생성 시각`, `업데이트 상태`를 읽기 전용 진단 행으로 표시한다.
   `checkError`와 `downloadError`는 실제 값이 있을 때만 각각 optional 진단 행으로 표시하며 Web에서 Expo OTA
   값을 임의로 채우지 않는다.
-- 인증된 Android/iOS Native Settings root는 `뮤트 및 차단` 다음, `정보` 직전에 `알림 설정` action을 제공한다.
+- 인증된 Android/iOS Native Settings root는 `뮤트 및 차단` 다음, `테마` 앞에 `알림 설정` action을 제공한다.
   이 action은 OS 알림 설정으로 이동하며 Web에서는 노출하지 않는다.
-- `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 하위 목록을 연다.
-  두 상태를 하나의 혼합 목록으로 표시하지 않는다. 세부 action과 Profile 상태는
-  [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다.
+- `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 각각 별도 destination으로 제공한다.
+  Profile 관계 두 상태를 하나의 혼합 목록으로 표시하지 않는다. Profile 간 세부 action과 상태는
+  [Profile Mute·Block 디자인 계약](./profile-mute-block.md)을 따른다. `/settings/natural-language-mute`는
+  `/settings/labs`의 `스마트 필터` entry가 여는 route이며 header도 `스마트 필터`로 표시한다. 한 개의 선택
+  Profile 편집기를 사용한다. 편집기에는 `타임라인에서 보고 싶지 않은 내용을 입력하세요.` 보조 문구와
+  `제외 조건` TextArea를 표시하고 placeholder는 `예시) 코스모를 싫어하는 내용`으로 한다. 편집기는
+  `저장` action과 Rule이 있을 때만 표시하는 `삭제` action으로 구성하며, 추가 설정 control을 두지 않는다. 선택된 Local
+  Profile의 Member와 Owner가 이 Profile의 Rule을 관리할 수 있다. 저장은 trim한 비어 있지 않은 값으로만 가능하고,
+  Rule이 없으면 생성하며 있으면 갱신한다. 조건은 trim한 문자열의 Unicode code point 수로 판단하며 최대 250자다.
+  편집기는 남은 글자 수를 기존 composer 스타일의 오른쪽 정렬 counter로 표시하고, 음수는 기존 danger token으로
+  표시한다. 남은 글자 수가 0이어도 trim한 조건이 비어 있지 않으면 저장할 수 있으며, 음수에서는 저장할 수 없다.
+  기존 값이 250자를 넘으면 그대로 표시하고 편집할 수 있으며, 입력을 자르거나 자동으로
+  줄이지 않는다. 삭제는 현재 Rule만 제거한다.
+- 같은 `스마트 필터` 화면에서 제외 조건 편집기 아래에 판정 결과 보기 진입점을 둔다. 최초에는
+  `보고 싶지 않은 내용이 포함될 수 있어요.`와 `판정 결과 보기`만 표시하며 결과 조회와 게시글 목록은 시작하지
+  않는다. 이 action은 현재 화면 안에서 결과 영역을 열고 다른 route를 만들지 않는다.
+- 결과를 열면 저장된 판정 결과 중 실제 판정 확률이 있는 Post만 기존 게시글 카드로 표시한다. 표시 순서는 보장하지
+  않는다. 일반 Post 조회 권한·상태·차단 규칙을 적용하고, Home 목록 후보 여부나 Profile Mute 관계로 판정 결과를
+  다시 걸러내지 않는다. 각 Post 바로 위에 raw 확률 `0.8` 이상이면 `제외`, 그보다 낮으면 `통과`를 표시하고
+  `조건 일치 확률`과 확률 퍼센트를 함께 제공한다. 판정은 표시 퍼센트가 아닌 raw 확률을 기준으로 한다. 기존
+  Content Warning·민감한 이미지 가림과 Post action 동작을 유지한다.
+- 결과 조회는 일반 Home 목록을 바꾸지 않으며, 다음 조회에 표시할 Post가 없어도 추가 결과가 남아 있으면 `더 보기`를
+  제공한다. 자동으로 다음 결과를 불러오거나 전체를 소진하지 않는다. 사용자가 결과를 열 때마다 저장된 결과를 다시
+  조회하며, 자동 새로고침·polling은 하지 않는다.
+- 결과 영역의 최초 로딩·조회 오류·빈 결과와 추가 페이지 로딩·추가 오류를 구분한다. 판정 결과를 불러올 수 없으면
+  조회 오류와 재시도를 표시하고, 조회에 성공했지만 결과가 비어 있는 경우와 구분한다. 추가 페이지 조회에 실패해도
+  이미 표시된 Post를 유지하고 같은 위치에서 다시 시도할 수 있다. 페이지를 떠나 다시 들어가거나 선택 Profile을
+  바꾸면 결과 공개 상태를 초기화하며 별도 앱 전역 저장을 하지 않는다. 조건 편집의 250자 제한과 권한은 기존 계약을 유지한다.
 - Figma Target evidence에서 Full loaded 화면
   [`뮤트한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25436)과
   [`차단한 프로필`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-25582)은 Settings
@@ -108,23 +142,38 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - Profile detail은 shell의 selected Local Profile을 기본 대상으로 사용하고 표시 이름과 `relativeHandle`,
   대상 전환 affordance, `게시물 기본 공개 범위`를 포함한 Profile 설정 content를 함께 제공한다. Profile 데이터
   조회·입력·저장은 Kosmo 내부 기능으로만 제공한다.
-- `/settings/profile-migration`은 shell의 selected Local Profile을 대상으로 하며 기존
-  `ProfileMigrationSourceControl`을 그대로 재사용한다. 입력 label과 accessible name은 `기존 계정 주소`, 등록
-  action은 `기존 계정 등록`이다. 선택된 Kosmo Profile의 이름과 qualified handle을 보여 주며, 주소를 확인할 수
-  없으면 주소 부재를 표시하고 global origin으로 대체하지 않는다. 먼저 기존 계정 주소를 등록한 뒤 기존 서비스의
-  계정에서 현재 Kosmo Profile로 Move를 시작해야 하며, 팔로워는 옮길 수 있지만 게시물은 복사되지 않는다고 알린다.
-  Owner에게는 `migrationSource`가 표시되는지와 무관하게 `기존 계정 등록 해제` action을 제공하고, source가
-  표시되지 않으면 기존 빈 등록 form과 함께 보인다. 이 action은 선택한 Profile에 대한 기존 idempotent mutation을
-  사용한다. action에는 해제 후 남은 팔로워 이전이 중단될 수 있지만 이미 이전된 팔로워는 유지된다는 안내를
-  함께 제공한다. 성공 후 source가 null이면 기존 빈 등록 form을 표시한다.
-  control은 기존 Settings card·field·button과 accessible error·busy·success 표현을 재사용한다.
-- `/settings/following-import`은 shell의 selected Local Profile을 대상으로 한다. 선택한 Profile의 표시 이름과
-  `relativeHandle`을 확인하고 현재 Profile 멤버십이 있을 때만 CSV 선택·가져오기 control을 제공한다. 화면은
-  Mastodon 팔로잉 CSV의 `Account address`만 가져오며 기존 팔로잉을 유지하고 CSV preference는 적용하지 않는다는 점,
-  앱을 닫은 뒤에도 이어지는 백그라운드 처리를 설명하고, 선택한 Profile을 명시하는 시작 action을 제공한다.
-  512 KiB보다 큰 파일은 읽거나 제출하지 않고
-  한국어 오류를 표시한다. 제출 중에는 busy 상태를, 실패에는 안전한 오류를, accepted 응답에는 시작 확인만 알린다.
+- `/settings/profile-migration`의 본문은 `계정 이전`과 `팔로잉 가져오기` section을 이 순서로 제공한다.
+  두 section은 `계정 이전` section 하단의 1px divider로 구분한다. section 내부에는 divider를 추가하지 않고
+  기존 24px 간격과 root inset을 유지한다.
+  `계정 이전`은 shell의 selected Local Profile을 대상으로 하며 기존 source control의 동작을 유지한다. 이 control은
+  기존 `Account.Active`와 `Profile.Owner` 권한이 허용하는 Owner control을 제공한다. Profile
+  Member에게는 migration 편집 control을 제공하지 않는다. 입력 label과 accessible name은 `기존 계정 주소`, 등록
+  action은 `기존 계정 등록`이다. 준비 관계가 있고 source가 기존 조회 정책에 따라 표시 가능한 경우에는 등록된
+  원본 계정과 다음 안내, 현재 선택된 프로필의 전체 주소를 표시한다. 주소를 확인할 수 없으면 주소 부재를 안전하게 표시하고 global origin으로 대체하지 않는다. migration은 팔로워 이전을 지원하며
+  게시물은 복사하지 않는 기존 동작을 유지하되, 이를 화면의 설명 문구로 표시하지 않는다.
+  Owner에게는 준비 관계가 없음을 확인한 경우에만 기존 빈 등록 form과 `기존 계정 등록` action, 다음 안내를 제공한다. 안내 문구는
+  `먼저 기존 연합우주 계정을 등록한 뒤, 기존 계정에서 이전을 시작하세요.`다. 이 상태에서는 선택된 프로필의 신원을
+  별도 영역이나 보조 문구로 표시하지 않으며 등록 해제 action과 결과 안내도 표시하지 않는다. 준비 관계가 있으면 Owner의 등록 form과 등록 action을 숨기고, source가 표시되지 않아도 Owner에게만
+  `기존 계정 등록 해제` action과 결과 안내를 제공한다. 결과 안내는 남은 팔로워 이전이 중단될 수 있지만 이미 이전된
+  팔로워는 유지된다는 내용을 보존한다. 이 action은 선택한 Profile에 대한 기존 idempotent mutation을 사용한다.
+  등록에 성공해 관계가 생기면 등록된 상태를 표시하고, 해제에 성공해 관계가 없어지면 기존 빈 등록 form으로 돌아간다.
+  control은 flat field·button layout과 기존 accessible
+  error·busy·success 표현을 사용한다. Web에서 `breakpoints.compact`(`768px`) 이상은 주소 입력과 등록 action을
+  한 줄에 배치하고, 그보다 좁은 Web과 Native는 세로·가용 폭으로 배치한다.
+- `팔로잉 가져오기` section은 shell의 selected Local Profile을 대상으로 하며 현재 Profile 멤버십이 있을 때만
+  CSV 선택·가져오기 control을 제공한다. CSV 처리는 Mastodon following CSV의 `Account address` 값만 사용하고,
+  기존 팔로잉을 유지하며 CSV preferences는 적용하지 않는다. 512 KiB보다 큰 파일은 읽거나 제출하지 않고 한국어
+  오류를 표시한다. 화면에는 flat CSV control을 두며 초기 선택 action은 `팔로잉 CSV 파일 선택`, 파일 선택 후에는
+  `파일 바꾸기`로 표시하고 선택한 파일명을 유지한다. `Mastodon`, CSV 열 이름, 최대 크기 설명이나 선택된 프로필의
+  신원을 사전 안내로 표시하지 않는다. 파일 선택 control·선택한 파일명과 시작 action은 한 배치 단위로 제공하고,
+  두 안내 문구 `기존 팔로잉은 삭제되지 않아요.`와 `가져오기를 시작하면 앱을 닫아도 계속 진행돼요.`는 그 아래
+  같은 group 안에서 8px 간격으로 묶으며, 두 배치 단위 사이에는 기존 spacing token의 24px 간격을 둔다.
+  시작 action label은 `팔로잉 가져오기`이며,
+  접수 후에도 이 label을 유지한다. 제출 중에는 busy 상태를, 실패에는 안전한 오류를 제공한다. accepted 응답은
+  작업이 시작됐다는 뜻으로만 처리하고 `팔로잉 가져오기를 시작했어요.`를 polite live region에서 한 번 알린다.
   작업 진행·결과 조회나 polling은 표시하지 않는다.
+  Web에서 `breakpoints.compact`(`768px`) 이상은 파일 영역과 시작 action을 한 줄에 배치하고, 그보다 좁은 Web과
+  Native는 두 action을 세로·가용 폭으로 배치한다.
 - `코스모 탈퇴`는 Byulmaru ID의 Account Settings를 수정하지 않고 Kosmo Account만 대상으로 하는 별도 내부
   action이다. 이 행은 `/settings/account-deletion`으로 이동하며, 외부 `계정 설정` 행을 바꾸거나 대체하지 않는다.
 - Profile target selector의 Figma lifecycle source는
@@ -257,7 +306,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   약 `320px` master pane과 남은 폭을 채우는 detail pane으로 나누고 theme border로 경계를 표시한다.
 - master pane은 모든 내부 설정 경로에서 `설정` heading과 root 진입점 목록을 유지하고 현재 category를 선택한다.
   detail pane은 선택된 category의 하위 목록 또는 설정 화면과 그 heading을 소유한다. root 기본 detail을 제외한
-  내부 경로의 detail heading은 명시적인 부모로 돌아가는 action을 제공한다.
+  내부 경로의 detail heading은 명시적인 부모로 돌아가는 action을 제공한다. `/settings/labs`와
+  `/settings/natural-language-mute`에서는 master pane이 `실험실`을 선택한다.
 - 두 pane은 Web document scroll을 계속 사용한다. 중앙 content만의 별도 app-style internal scroller를
   만들거나 settings 때문에 전역 sidebar 폭과 `full=1280` breakpoint를 바꾸지 않는다.
 
@@ -271,8 +321,8 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   parent는 `/settings/info`다. direct·deep link로 연 경우에도 같은 parent를 사용한다. Web에서는
   앱 내부 이동으로 돌아가며 문서와 세션을 다시 로드하지 않는다. 설정 내부에서 진입한 뒤 돌아간 경우
   브라우저의 앞으로 가기는 방금 본 detail을 다시 연다.
-- `< compact` mobile Web의 root에서는 `UniversalShell`이 메뉴 action과 `설정` heading을 가진 공용
-  [PageHeader](./page-header.md)를 렌더링한다. 내부 category·detail destination에서는 shell이 back action과
+- `< compact` mobile Web의 root에서는 route가 메뉴 action과 `설정` heading을 가진 공용
+  [PageHeader](./page-header.md)를 렌더링한다. 내부 category·detail destination에서는 각 route가 back action과
   현재 destination heading을 렌더링하고 route 본문은 같은 heading을 복제하지 않는다.
 - Android·iOS와 compact Web에서는 root 또는 category·detail destination route가 자기 text `PageHeader`를
   scroll content의 첫 heading으로 렌더링한다. category·detail header는 back action을 제공하고 Native safe
@@ -292,11 +342,14 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - `/settings/account-deletion`은 확인된 Profile 상태를 기준으로 eligibility를 표시한다. 조회 중에는 미확인
   상태를 탈퇴 가능으로 표시하지 않으며, 오류는 안전한 한국어 설명과 `다시 시도`를 제공한다. 성공·Deleted
   상태를 추측하거나 optimistic하게 표시하지 않는다.
-- Profile detail, `/settings/profile-migration`, `/settings/following-import`은 각각 자기 Profile
-  identity·loading·error·empty·content와 재시도 상태를 소유한다. migration feature flag가 꺼져 있거나 미평가
-  상태에서 migration 또는 following import direct link를 열면 generic unavailable Settings state를 표시하고
-  Profile query/control을 실행하지 않는다. Profile query 오류에는
-  backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공한다.
+- Profile detail과 `/settings/profile-migration`의 각 section은 기존 Profile identity·loading·error·empty·content와
+  재시도 상태를 유지한다. Migration entry는 항상 표시하며, 기존 권한 조건에 따라 제공되는 control에 generic
+  unavailable 상태를 표시하지 않는다. 기존 `/settings/following-import` direct link는
+  `/settings/profile-migration`으로 이동하고 Settings parent/back destination은 `/settings`를 유지한다. Profile query
+  오류에는 backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공한다.
+- `/settings/natural-language-mute`는 기존 Settings의 selected Local Profile 선택 state와 query loading/error 경계를
+  사용한다. 선택된 Local Profile이 없으면 기존 Profile 선택 action을, Membership이 없으면 Rule 관리 권한 state를
+  표시한다. 조회·저장·삭제 실패는 안전한 한국어 오류와 현재 입력값을 유지한다.
 - Profile 조회 중에는 확인되지 않은 값을 확정된 것처럼 표시하지 않고, 오류에는 backend 원문이 아닌 안전한
   한국어 설명과 재시도 action을 제공한다.
 - Profile 전환 중에는 새 대상의 identity와 데이터가 일치할 때까지 이전 Profile 설정 control을 새 대상의
@@ -311,13 +364,21 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
   destination heading을 programmatic하게 노출한다. 시각적으로 없는 category heading을 screen reader 전용으로
   반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `계정 설정` 외부 진입점 →
-  `프로필 설정` → feature flag가 켜진 경우 `다른 서비스에서 이전`과 `팔로잉 가져오기` → `뮤트 및 차단` →
-  `테마`와 현재 선택값 → `정보` → `코스모 탈퇴`다. full Web에서는 이어서 detail heading과
+  `프로필 설정` → `다른 서비스에서 이전` → `뮤트 및 차단` →
+  `테마`와 현재 선택값 → `실험실` → `정보` → `코스모 탈퇴`다. full Web에서는 이어서 detail heading과
   현재 선택된 content를 읽는다. 모든 플랫폼의 `/settings/info`에서는 `정보` heading 다음에 세 public policy
-  link를 문서 순서대로 읽고, 이어서 `개발 정보` link를 읽는다.
+  link를 문서 순서대로 읽고, 이어서 `오픈소스 라이선스`, `개발 정보` link를 읽는다. `/settings/licenses`에서는
+  `오픈소스 라이선스` heading 다음에 각 package의 이름, version(있는 경우), license와 expand state를 읽고,
+  expanded entry의 full text와 제공된 출처 link를 읽는다.
+  `/settings/mute-and-block`에서는 category heading 다음 `뮤트한 프로필`, `차단한 프로필` link를 이 순서로
+  읽는다. `/settings/labs`에서는 `실험실` heading 다음 `스마트 필터` link를 읽고,
+  `/settings/natural-language-mute`에서는 `스마트 필터` heading 다음 `타임라인에서 보고 싶지 않은 내용을 입력하세요.`
+  보조 문구, `제외 조건` text area와
+  `저장`·`삭제` action을 읽는다. 남은 글자 수는 `남은 글자 수 N자` 형식으로 polite live text에 노출하며,
+  저장할 수 없는 입력에서는 `저장`이 disabled 상태임을 전달한다. 실패 상태는 alert로 전달한다.
   `/settings/developer`에서는 `개발 정보` heading 다음에 Web은 `채널`의 현재 `dev`·`prod` 값을, Native는
   `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을 만들지 않는다.
-  Native Settings root에서는 `뮤트 및 차단` 다음에 `알림 설정` action을, 이어서 `정보`를 읽는다.
+  Native Settings root에서는 `알림 설정` action을 `정보` 전에 읽는다.
 - Account 진입점은 시각 label `계정 설정`과 link accessible name·canonical destination에서 Byulmaru ID 외부
   Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
@@ -329,13 +390,14 @@ DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 �
 - navigation과 page action은 실제 동작에 맞는 role, accessible name, current·disabled·busy 상태를 제공한다.
   외부 이동 결과 announcement는 Kosmo가 소유하지 않으며 Profile 조회·저장 결과 announcement는 PROD-667이
   중복 없이 소유한다.
-- Following import detail은 선택한 Profile identity group 다음에 CSV 선택·현재 Profile로 시작 action을 읽는다.
-  파일 선택과 시작 action은 각각 accessible name과 disabled·busy 상태를 제공하고, file·mutation 오류는 alert,
-  accepted 시작 확인은 polite live region으로 한 번 알린다.
+- `다른 서비스에서 이전` destination에서는 `계정 이전` 다음 `팔로잉 가져오기` heading을 읽는다. Following import
+  section은 파일 선택 control과 선택한 파일명, 시작 action, 같은 group의 안내 문구 순으로 읽는다.
+  선택된 프로필 신원 영역을 읽기 순서에 포함할 필요는 없다. 파일 선택과 시작 action은 각각 accessible name과 disabled·busy
+  상태를 제공하고, file·mutation 오류는 alert, accepted 시작 확인은 polite live region으로 한 번 알린다.
 - Native channel selector는 선택된 `dev`·`prod`와 busy/error 상태를 보조기술에
   전달한다. 확인·download 중에는 selector를 중복 실행할 수 없고, 취소·현재 channel 재선택은 별도
-  announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 기존 세 policy link 순서와 `개발 정보`
-  entrypoint를 유지한다. Native `/settings/developer`의 optional 오류 행은 오류가 있을 때만 읽힌다.
+  announcement나 상태 변경을 만들지 않는다. Web `/settings/info`는 세 policy link 다음에 `오픈소스 라이선스`,
+  `개발 정보` entrypoint 순서를 유지한다. Native `/settings/developer`의 optional 오류 행은 오류가 있을 때만 읽힌다.
 - Web target은 [accessibility.md](./accessibility.md)의 24×24 CSS px minimum과 공식 예외를 따르고, iOS는
   기본 44×44pt, Android는 48×48dp touch target을 사용한다.
 - Web 자동화 결과를 Android·iOS screen reader, font scaling과 touch target 검증의 대체 증거로 사용하지

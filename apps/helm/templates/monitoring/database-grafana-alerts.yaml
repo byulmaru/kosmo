@@ -1,0 +1,81 @@
+{{- if eq .Values.env "prod" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kosmo-database-alerts
+  labels:
+    grafana_alert: "1"
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  kosmo-database-alerts.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: kosmo.database
+        folder: KOSMO
+        interval: 30s
+        rules:
+          - uid: kosmo-db-primary
+            title: KosmoDatabasePrimaryUnavailable
+            condition: B
+            data:
+              - refId: A
+                datasourceUid: prometheus
+                relativeTimeRange:
+                  from: 60
+                  to: 0
+                model:
+                  expr: >-
+                    (absent((cnpg_pg_replication_in_recovery{namespace="kosmo-prod",cnpg_cluster="kosmo-postgres",cnpg_role="primary"} == 0) and on(namespace,pod) (cnpg_collector_up{namespace="kosmo-prod",cnpg_cluster="kosmo-postgres"} == 1) and on(namespace,pod) (up{namespace="kosmo-prod",cnpg_cluster="kosmo-postgres"} == 1) and on(namespace,pod) (timestamp(cnpg_pg_replication_in_recovery{namespace="kosmo-prod",cnpg_cluster="kosmo-postgres",cnpg_role="primary"}) > time() - 60))) or vector(0)
+                  instant: true
+                  range: false
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                model:
+                  expression: A
+                  type: threshold
+                  conditions:
+                    - evaluator:
+                        type: gt
+                        params:
+                          - 0
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - B
+                      reducer:
+                        type: last
+                        params: []
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+            noDataState: Alerting
+            execErrState: Alerting
+            for: 2m
+            annotations:
+              summary: Kosmo PostgreSQL primary is unavailable
+              description: Prometheus has not reported a freshly scraped healthy primary in kosmo-prod/kosmo-postgres, or Grafana could not evaluate the query, for 2 minutes. Investigate metric collection, query errors, and the database; this is not an end-to-end connectivity check.
+              owner: Platform/SRE
+              runbook_url: https://github.com/byulmaru/kosmo/blob/main/docs/operations/postgres-primary-unavailable.md#kosmo-postgresql-primary-unavailable
+            labels:
+              severity: critical
+              namespace: kosmo-prod
+              cnpg_cluster: kosmo-postgres
+            isPaused: false
+            notification_settings:
+              receiver: platform-slack-monitoring
+{{- end }}

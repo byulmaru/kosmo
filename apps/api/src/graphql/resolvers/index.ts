@@ -6,6 +6,7 @@ import './hashtag';
 import './media';
 import './notification';
 import './post';
+import './post-request';
 import './profile';
 import './reaction';
 import './session';

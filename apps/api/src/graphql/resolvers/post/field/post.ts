@@ -1,11 +1,16 @@
 import { PostQuoteConsentStatus } from '@kosmo/core/enums';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
+import {
+  cachedHomePostContentLoader,
+  cachedHomeRepostSourceLoader,
+} from '../loader/cached-home-post';
 import { postProfilePinLoader } from '../loader/profile-pin';
 import { reactionCountLoader } from '../loader/reaction-count';
 import { replyCountLoader } from '../loader/reply-count';
 import { repostCountLoader, viewerRepostLoader } from '../loader/repost';
-import { Post, PostContent } from '../ref';
+import { smartFilterProbabilityLoader } from '../loader/smart-filter-probability';
+import { isCachedHomeTimelinePost, Post, PostContent } from '../ref';
 
 export const ReactionCount = builder.simpleObject('ReactionCount', {
   fields: (t) => ({
@@ -22,7 +27,16 @@ builder.objectFields(Post, (t) => ({
   content: t.field({
     type: PostContent,
     nullable: true,
-    resolve: (post) => post.currentContentId,
+    resolve: (post, _, ctx) => {
+      if (!isCachedHomeTimelinePost(post)) {
+        return post.currentContentId;
+      }
+      if (post.currentContentId == null) {
+        return null;
+      }
+
+      return cachedHomePostContentLoader(ctx).load(post.currentContentId);
+    },
   }),
   replyParent: t.field({
     type: Post,
@@ -32,12 +46,24 @@ builder.objectFields(Post, (t) => ({
   repostSource: t.field({
     type: Post,
     nullable: true,
-    resolve: (post) =>
-      post.currentContentId != null &&
-      post.quoteConsentStatus != null &&
-      post.quoteConsentStatus !== PostQuoteConsentStatus.APPROVED
-        ? null
-        : post.repostSourceId,
+    resolve: (post, _, ctx) => {
+      if (
+        post.currentContentId != null &&
+        post.quoteConsentStatus != null &&
+        post.quoteConsentStatus !== PostQuoteConsentStatus.APPROVED
+      ) {
+        return null;
+      }
+      if (
+        !isCachedHomeTimelinePost(post) ||
+        post.currentContentId != null ||
+        post.repostSourceId == null
+      ) {
+        return post.repostSourceId;
+      }
+
+      return cachedHomeRepostSourceLoader(ctx).load(post.repostSourceId);
+    },
   }),
   repostCount: t.int({
     resolve: async (post, _, ctx) => (await repostCountLoader(ctx).load(post.id))?.count ?? 0,
@@ -58,5 +84,14 @@ builder.objectFields(Post, (t) => ({
     type: Post,
     nullable: true,
     resolve: (post, _, ctx) => viewerRepostLoader(ctx).load(post.id),
+  }),
+  smartFilterProbability: t.float({
+    nullable: true,
+    resolve: async (post, _, ctx) => {
+      const subjectPostId = post.currentContentId !== null ? post.id : post.repostSourceId;
+      return subjectPostId
+        ? ((await smartFilterProbabilityLoader(ctx).load(subjectPostId))?.probability ?? null)
+        : null;
+    },
   }),
 }));

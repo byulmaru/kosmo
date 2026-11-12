@@ -13,6 +13,7 @@ import {
 import { InstanceKind, InstanceState, NotificationKind, PostState, ProfileState } from '../enums';
 import { materializeNotification } from './notification-policy';
 import type { Database } from '../db';
+import type { NotificationEventCollector } from '../notification/events';
 
 const NotificationRepostAuthors = alias(Profiles, 'notification_repost_author');
 const NotificationRepostAuthorInstances = alias(Instances, 'notification_repost_author_instance');
@@ -23,7 +24,10 @@ const NotificationRepostRecipientInstances = alias(
   'notification_repost_recipient_instance',
 );
 
-export const createFollowNotification = async (sourceId: string): Promise<string[]> =>
+export const createFollowNotification = async (
+  sourceId: string,
+  eventCollector?: NotificationEventCollector,
+): Promise<string[]> =>
   getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
       .select({
@@ -45,16 +49,23 @@ export const createFollowNotification = async (sourceId: string): Promise<string
       return [];
     }
 
-    return materializeNotification(tx, {
-      actorAccountId: source.actorAccountId,
-      kind: NotificationKind.FOLLOW,
-      recipientProfileId: source.recipientProfileId,
-      relatedProfileId: source.relatedProfileId,
-      sourceId: source.id,
-    });
+    return materializeNotification(
+      tx,
+      {
+        actorAccountId: source.actorAccountId,
+        kind: NotificationKind.FOLLOW,
+        recipientProfileId: source.recipientProfileId,
+        relatedProfileId: source.relatedProfileId,
+        sourceId: source.id,
+      },
+      eventCollector,
+    );
   });
 
-export const createFollowRequestNotification = async (sourceId: string): Promise<string[]> =>
+export const createFollowRequestNotification = async (
+  sourceId: string,
+  eventCollector?: NotificationEventCollector,
+): Promise<string[]> =>
   getDatabaseConnection().transaction(async (tx) => {
     const source = await tx
       .select({
@@ -83,18 +94,23 @@ export const createFollowRequestNotification = async (sourceId: string): Promise
       return [];
     }
 
-    return materializeNotification(tx, {
-      actorAccountId: source.actorAccountId,
-      kind: NotificationKind.FOLLOW_REQUEST,
-      recipientProfileId: source.recipientProfileId,
-      relatedProfileId: source.relatedProfileId,
-      sourceId: source.id,
-    });
+    return materializeNotification(
+      tx,
+      {
+        actorAccountId: source.actorAccountId,
+        kind: NotificationKind.FOLLOW_REQUEST,
+        recipientProfileId: source.recipientProfileId,
+        relatedProfileId: source.relatedProfileId,
+        sourceId: source.id,
+      },
+      eventCollector,
+    );
   });
 
 export const createReactionNotification = async (
   sourceId: string,
   handle?: Database,
+  eventCollector?: NotificationEventCollector,
 ): Promise<string[]> =>
   getDatabaseConnection(handle).transaction(async (tx) => {
     const source = await tx
@@ -126,18 +142,23 @@ export const createReactionNotification = async (
       return [];
     }
 
-    return materializeNotification(tx, {
-      actorAccountId: source.actorAccountId,
-      kind: NotificationKind.REACTION,
-      recipientProfileId: source.recipientProfileId,
-      relatedProfileId: source.actorProfileId,
-      sourceId: source.id,
-    });
+    return materializeNotification(
+      tx,
+      {
+        actorAccountId: source.actorAccountId,
+        kind: NotificationKind.REACTION,
+        recipientProfileId: source.recipientProfileId,
+        relatedProfileId: source.actorProfileId,
+        sourceId: source.id,
+      },
+      eventCollector,
+    );
   });
 
 export const createRepostNotification = async (
   sourceId: string,
   handle?: Database,
+  eventCollector?: NotificationEventCollector,
 ): Promise<string[]> => {
   const connection = getDatabaseConnection(handle);
   const source = await connection
@@ -197,13 +218,17 @@ export const createRepostNotification = async (
     return [];
   }
 
-  return materializeNotification(connection, {
-    actorAccountId: source.actorAccountId,
-    kind: NotificationKind.REPOST,
-    recipientProfileId: source.recipientProfileId,
-    relatedProfileId: source.actorProfileId,
-    sourceId: source.id,
-  });
+  return materializeNotification(
+    connection,
+    {
+      actorAccountId: source.actorAccountId,
+      kind: NotificationKind.REPOST,
+      recipientProfileId: source.recipientProfileId,
+      relatedProfileId: source.actorProfileId,
+      sourceId: source.id,
+    },
+    eventCollector,
+  );
 };
 
 export const deleteNotificationBySource = async (

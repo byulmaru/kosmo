@@ -1,23 +1,12 @@
-import { usePathname, useSegments } from 'expo-router';
 import { useCallback, useEffect, useRef, useTransition } from 'react';
-import {
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useMutation, usePaginationFragment } from 'react-relay';
-import { PageHeader } from '@/components/PageHeader';
 import { PaginationSurface } from '@/components/pagination/PaginationSurface';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import { getWebMobileShellHeader } from '@/components/shell/shellLayout';
 import { Skeleton, StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -32,12 +21,13 @@ import {
   ReplyNotificationListItem,
   RepostNotificationListItem,
 } from './NotificationListItem';
-import { NotificationReadAllAction, useNotificationReadAll } from './NotificationReadAllContext';
+import { useNotificationReadAll } from './NotificationReadAllContext';
 import type { NotificationList_profile$key } from './__generated__/NotificationList_profile.graphql';
 import type { NotificationListMarkReadMutation } from './__generated__/NotificationListMarkReadMutation.graphql';
 import type { NotificationListNextPageQuery } from './__generated__/NotificationListNextPageQuery.graphql';
 
 type NotificationListProps = {
+  active?: boolean;
   profile: NotificationList_profile$key;
 };
 
@@ -99,7 +89,7 @@ const notificationListMarkReadMutation = graphql`
   }
 `;
 
-export function NotificationList({ profile }: NotificationListProps) {
+export function NotificationList({ active = true, profile }: NotificationListProps) {
   const theme = useTheme();
   const scrollRef = useRef<ScrollView>(null);
   const shellChrome = useShellChrome();
@@ -123,23 +113,29 @@ export function NotificationList({ profile }: NotificationListProps) {
     notificationListMarkReadMutation,
   );
   const [refreshing, startTransition] = useTransition();
-  const { edges } = pagination.data.notifications;
+  const notificationConnection = pagination.data.notifications;
+  const edges = notificationConnection?.edges;
+  const visibleEdges = edges ?? [];
   const { endRef, loadError, loadNextPage, nativeScrollProps, resetError } = useAutomaticPagination(
     {
-      hasNext: pagination.hasNext,
-      isLoadingNext: pagination.isLoadingNext,
-      itemCount: edges.length,
+      hasNext: notificationConnection != null && pagination.hasNext,
+      isLoadingNext: notificationConnection != null && pagination.isLoadingNext,
+      itemCount: visibleEdges.length,
       loadNext: pagination.loadNext,
       pageSize: 20,
       webScrollTarget: 'container',
     },
   );
 
-  useEffect(
-    () => publishUnreadIds(edges.flatMap(({ node }) => (node.readAt === null ? [node.id] : []))),
-    [edges, publishUnreadIds],
-  );
-  const notifications = edges.flatMap(({ node }) => {
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    return publishUnreadIds(
+      edges?.flatMap(({ node }) => (node.readAt === null ? [node.id] : [])) ?? [],
+    );
+  }, [active, edges, publishUnreadIds]);
+  const notifications = visibleEdges.flatMap(({ node }) => {
     if (node.__typename === 'FollowNotification' && node.follow) {
       return <NotificationListItem key={node.id} notification={node.follow} />;
     }
@@ -239,7 +235,6 @@ export function NotificationList({ profile }: NotificationListProps) {
               )
             }
           >
-            <NotificationPageHeader />
             {notifications.length ? (
               notifications
             ) : (
@@ -253,8 +248,8 @@ export function NotificationList({ profile }: NotificationListProps) {
               endRef={endRef}
               error={loadError}
               errorMessage="알림을 더 불러오지 못했어요"
-              hasNext={pagination.hasNext}
-              isLoading={pagination.isLoadingNext}
+              hasNext={notificationConnection != null && pagination.hasNext}
+              isLoading={notificationConnection != null && pagination.isLoadingNext}
               loadingLabel="알림을 더 불러오는 중"
               onRetry={loadNextPage}
               style={[styles.pagination, { borderColor: theme.border }]}
@@ -277,7 +272,6 @@ export function NotificationListState({
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      <NotificationPageHeader />
       {state === 'loading' ? (
         <>
           <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -317,19 +311,6 @@ export function NotificationListState({
         />
       )}
     </ScrollView>
-  );
-}
-
-function NotificationPageHeader() {
-  const pathname = usePathname();
-  const routeSegments = useSegments();
-  const { width } = useWindowDimensions();
-  const shellOwnsHeader =
-    getWebMobileShellHeader(Platform.OS === 'web', width, pathname, routeSegments)?.title ===
-    '알림';
-
-  return shellOwnsHeader ? null : (
-    <PageHeader title="알림" trailing={<NotificationReadAllAction />} />
   );
 }
 

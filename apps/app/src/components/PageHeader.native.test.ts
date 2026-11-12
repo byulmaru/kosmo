@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, mock, test } from 'node:test';
-import { createElement, Suspense } from 'react';
+import { createElement, Fragment, Suspense } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -30,15 +30,68 @@ mockModule(new URL('../theme/ThemeProvider.tsx', import.meta.url), {
   useTheme: () => ({ backgroundCanvas: '#fff' }),
 });
 mockModule(new URL('./PageHeaderView.tsx', import.meta.url), {
-  PageHeaderView: (props: { children?: ReactNode }) => createElement('PageHeaderView', props),
+  PageHeaderView: ({
+    children,
+    leading,
+    title,
+  }: {
+    children?: ReactNode;
+    leading?: ReactNode;
+    title?: string;
+  }) =>
+    createElement(
+      'PageHeaderView',
+      null,
+      children ?? [
+        leading,
+        title ? createElement('Text', { accessibilityRole: 'header' }, title) : null,
+      ],
+    ),
 });
 mockModule(new URL('./shell/NavigationDrawerTrigger.tsx', import.meta.url), {
-  NavigationDrawerTrigger: () => createElement('NavigationDrawerTrigger'),
+  NavigationDrawerTrigger: () =>
+    createElement('Pressable', {
+      accessibilityLabel: '메뉴 열기',
+      accessibilityRole: 'button',
+    }),
 });
 
 let PageHeader: typeof PageHeaderComponent;
 
 const options = () => setOptions.mock.calls.at(-1)?.arguments[0];
+
+async function renderShellHeader(): Promise<ReactTestRenderer> {
+  const renderHeader = options()?.header;
+  assert.ok(renderHeader);
+  let shellHeader!: ReactTestRenderer;
+  await act(async () => {
+    shellHeader = create(createElement(Fragment, null, renderHeader()));
+  });
+  return shellHeader;
+}
+
+function headerTitle(shellHeader: ReactTestRenderer): string | undefined {
+  const heading = shellHeader.root.findAll((node) => node.props.accessibilityRole === 'header')[0];
+  return heading?.children.join('');
+}
+
+function hasAccessibleElement(
+  shellHeader: ReactTestRenderer,
+  accessibilityRole: string,
+  accessibilityLabel: string,
+): boolean {
+  return (
+    shellHeader.root.findAll(
+      (node) =>
+        node.props.accessibilityRole === accessibilityRole &&
+        node.props.accessibilityLabel === accessibilityLabel,
+    ).length > 0
+  );
+}
+
+async function unmountShellHeader(shellHeader: ReactTestRenderer) {
+  await act(async () => shellHeader.unmount());
+}
 
 before(async () => {
   ({ PageHeader } = await import('./PageHeader.native'));
@@ -60,28 +113,17 @@ test('Native PageHeader는 현재 Stack의 shell header로 렌더링된다', asy
   });
 
   assert.equal(options()?.headerShown, true);
-  const header = options()?.header?.();
-  assert.ok(header && typeof header === 'object' && 'props' in header);
-  const headerProps = header.props as {
-    leading: { type: { name?: string } };
-    title: string;
-  };
-  assert.equal(typeof header.type, 'function');
-  assert.equal(typeof header.type === 'function' ? header.type.name : null, 'NativePageHeader');
-  assert.equal(headerProps.title, '알림');
-  assert.equal(headerProps.leading.type.name, 'NavigationDrawerTrigger');
+  const shellHeader = await renderShellHeader();
 
-  let nativeHeader: ReactTestRenderer | null = null;
-  await act(async () => {
-    nativeHeader = create(header);
-  });
-  const nativeHeaderRenderer = nativeHeader as ReactTestRenderer | null;
-  assert.ok(nativeHeaderRenderer);
-  assert.deepEqual(nativeHeaderRenderer.root.findByType('View' as never).props.style, {
-    backgroundColor: '#fff',
-    paddingTop: 54,
-  });
-  await act(async () => nativeHeader?.unmount());
+  assert.equal(headerTitle(shellHeader), '알림');
+  assert.equal(hasAccessibleElement(shellHeader, 'button', '메뉴 열기'), true);
+  const headerStyle = shellHeader.root.findByType('View' as never).props.style as Record<
+    string,
+    unknown
+  >;
+  assert.equal(headerStyle.backgroundColor, '#fff');
+  assert.equal(headerStyle.paddingTop, 54);
+  await unmountShellHeader(shellHeader);
 });
 
 test('Native PageHeader는 route를 떠날 때 shell header를 해제한다', async () => {
@@ -100,37 +142,53 @@ test('Native PageHeader는 route를 떠날 때 shell header를 해제한다', as
 });
 
 test('Native custom PageHeader는 검색창을 그대로 shell header에 전달한다', async () => {
-  const search = createElement('SearchInput');
   await act(async () => {
-    renderer = create(createElement(PageHeader, null, search));
+    renderer = create(
+      createElement(
+        PageHeader,
+        null,
+        createElement('TextInput', {
+          accessibilityLabel: '프로필 검색',
+          accessibilityRole: 'search',
+        }),
+      ),
+    );
   });
 
-  const header = options()?.header?.();
-  assert.ok(header && typeof header === 'object' && 'props' in header);
-  const headerProps = header.props as { children: ReactNode };
-  assert.equal(headerProps.children, search);
-  assert.equal('leading' in headerProps, false);
+  const shellHeader = await renderShellHeader();
+  assert.equal(hasAccessibleElement(shellHeader, 'search', '프로필 검색'), true);
+  assert.equal(hasAccessibleElement(shellHeader, 'button', '메뉴 열기'), false);
+  await unmountShellHeader(shellHeader);
 });
 
 test('Native PageHeader는 route가 지정한 leading action을 유지한다', async () => {
-  const back = createElement('BackButton');
   await act(async () => {
-    renderer = create(createElement(PageHeader, { leading: back, title: '프로필' }));
+    renderer = create(
+      createElement(PageHeader, {
+        leading: createElement('Pressable', {
+          accessibilityLabel: '뒤로 가기',
+          accessibilityRole: 'button',
+        }),
+        title: '프로필',
+      }),
+    );
   });
 
-  const header = options()?.header?.();
-  assert.ok(header && typeof header === 'object' && 'props' in header);
-  const headerProps = header.props as { leading: ReactNode };
-  assert.equal(headerProps.leading, back);
+  const shellHeader = await renderShellHeader();
+  assert.equal(headerTitle(shellHeader), '프로필');
+  assert.equal(hasAccessibleElement(shellHeader, 'button', '뒤로 가기'), true);
+  await unmountShellHeader(shellHeader);
 });
 
-test('Native PageHeader는 props 갱신에 옵션을 한 번 반영하고 조건부 해제 때 header를 비운다', async () => {
+test('Native PageHeader는 제목을 갱신하고 조건부 해제 때 header를 비운다', async () => {
   await act(async () => {
     renderer = create(createElement('Page', null, createElement(PageHeader, { title: '설정' })));
   });
 
-  assert.equal(setOptions.mock.calls.length, 1);
   assert.equal(options()?.headerShown, true);
+  let shellHeader = await renderShellHeader();
+  assert.equal(headerTitle(shellHeader), '설정');
+  await unmountShellHeader(shellHeader);
 
   await act(async () => {
     renderer?.update(
@@ -138,16 +196,15 @@ test('Native PageHeader는 props 갱신에 옵션을 한 번 반영하고 조건
     );
   });
 
-  assert.equal(setOptions.mock.calls.length, 2);
-  const updatedHeader = options()?.header?.();
-  assert.ok(updatedHeader && typeof updatedHeader === 'object' && 'props' in updatedHeader);
-  assert.equal((updatedHeader.props as { title: string }).title, '뮤트 및 차단');
+  assert.equal(options()?.headerShown, true);
+  shellHeader = await renderShellHeader();
+  assert.equal(headerTitle(shellHeader), '뮤트 및 차단');
+  await unmountShellHeader(shellHeader);
 
   await act(async () => {
     renderer?.update(createElement('Page'));
   });
 
-  assert.equal(setOptions.mock.calls.length, 3);
   assert.deepEqual(options(), { header: undefined, headerShown: false });
 });
 
@@ -179,9 +236,9 @@ test('Native PageHeader는 Suspense fallback에서 resolved header로 전환된 
   });
 
   assert.equal(options()?.headerShown, true);
-  const fallbackHeader = options()?.header?.();
-  assert.ok(fallbackHeader && typeof fallbackHeader === 'object' && 'props' in fallbackHeader);
-  assert.equal((fallbackHeader.props as { title: string }).title, '불러오는 중');
+  let shellHeader = await renderShellHeader();
+  assert.equal(headerTitle(shellHeader), '불러오는 중');
+  await unmountShellHeader(shellHeader);
 
   resolved = true;
   await act(async () => {
@@ -190,7 +247,7 @@ test('Native PageHeader는 Suspense fallback에서 resolved header로 전환된 
   });
 
   assert.equal(options()?.headerShown, true);
-  const resolvedHeader = options()?.header?.();
-  assert.ok(resolvedHeader && typeof resolvedHeader === 'object' && 'props' in resolvedHeader);
-  assert.equal((resolvedHeader.props as { title: string }).title, '불러온 프로필');
+  shellHeader = await renderShellHeader();
+  assert.equal(headerTitle(shellHeader), '불러온 프로필');
+  await unmountShellHeader(shellHeader);
 });

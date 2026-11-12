@@ -33,7 +33,7 @@ mockModule('@/theme/tokens', {
 });
 
 type Profile = {
-  readonly displayName: string;
+  readonly displayName: string | null;
   readonly id: string;
   readonly relativeHandle: string;
 };
@@ -102,6 +102,22 @@ test('renders an unavailable Mention as non-link fallback text', async () => {
   assert.equal(text.children.join(''), mentionFallback);
   assert.equal(text.props.accessibilityRole, undefined);
   assert.equal(text.props.onPress, undefined);
+});
+
+test('uses the relative handle in the accessible name when the display name is unavailable', async () => {
+  await render({
+    interactive: true,
+    linkColor: '#00f',
+    profile: {
+      displayName: null,
+      id: 'profile-limited',
+      relativeHandle: '@limited',
+    },
+  });
+
+  const link = firstRenderedByProps({ accessibilityRole: 'link' });
+  assert.equal(link.children.join(''), '@limited');
+  assert.equal(link.props.accessibilityLabel, '@limited, 프로필 보기');
 });
 
 async function render({

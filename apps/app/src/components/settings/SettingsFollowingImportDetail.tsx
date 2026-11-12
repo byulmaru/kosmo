@@ -1,14 +1,12 @@
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
-import { useFeatureFlag } from '@/components/FeatureFlagsContext';
-import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useTheme } from '@/theme/ThemeProvider';
-import { radii, spacing, textStyles } from '@/theme/tokens';
+import { borderWidths, breakpoints, radius, spacing, textStyles } from '@/theme/tokens';
 import type { PayloadError } from 'relay-runtime';
 import type { SettingsFollowingImportDetailMutation } from './__generated__/SettingsFollowingImportDetailMutation.graphql';
 import type { SettingsFollowingImportDetailQuery } from './__generated__/SettingsFollowingImportDetailQuery.graphql';
@@ -19,8 +17,6 @@ const SettingsFollowingImportQuery = graphql`
   query SettingsFollowingImportDetailQuery {
     currentSession {
       selectedProfile {
-        displayName
-        relativeHandle
         instance {
           kind
         }
@@ -29,7 +25,6 @@ const SettingsFollowingImportQuery = graphql`
             role
           }
         }
-        ...ProfileNameBlock_profile
       }
     }
   }
@@ -64,11 +59,6 @@ function csvValidationMessage(errors: ReadonlyArray<PayloadError> | null | undef
 }
 
 export function SettingsFollowingImportDetail() {
-  const migrationEnabled = useFeatureFlag('profile-migration');
-  if (!migrationEnabled) {
-    return <StateView title="현재 이용할 수 없는 설정이에요" />;
-  }
-
   return (
     <RouteBoundary
       loading={<StateView loading title="팔로잉 가져오기 설정을 불러오는 중입니다." />}
@@ -83,6 +73,8 @@ function SettingsFollowingImportDetailContents() {
   const { fetchKey } = useRouteBoundary();
   const shellChrome = useShellChrome();
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const wideWeb = Platform.OS === 'web' && width >= breakpoints.compact;
   const data = useLazyLoadQuery<SettingsFollowingImportDetailQuery>(
     SettingsFollowingImportQuery,
     {},
@@ -96,7 +88,7 @@ function SettingsFollowingImportDetailContents() {
   const [feedback, setFeedback] = useState<Feedback>(null);
   const profile = data.currentSession?.selectedProfile ?? null;
 
-  if (!profile || profile.instance.kind !== 'LOCAL') {
+  if (!profile || profile.instance?.kind !== 'LOCAL') {
     return (
       <StateView
         actionLabel={shellChrome ? 'Profile 선택하기' : undefined}
@@ -195,83 +187,102 @@ function SettingsFollowingImportDetailContents() {
 
   return (
     <View style={styles.root}>
-      <View
-        accessibilityLabel="Mastodon 팔로잉 CSV 가져오기"
-        style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
-        testID="following-import-control"
-      >
-        <Text style={[styles.description, { color: theme.textSecondary }]}>
-          Mastodon에서 내보낸 팔로잉 CSV의 Account address만 가져와요. 현재 팔로잉은 유지되고, CSV의
-          게시물 표시와 새 글 알림 설정은 적용되지 않아요. 시작 후에는 앱을 닫아도 가져오기가
-          백그라운드에서 계속돼요.
-        </Text>
-        <View
-          accessibilityLabel={`팔로잉을 가져올 Profile ${profile.displayName} ${profile.relativeHandle}`}
-          role="group"
-          style={styles.destination}
-        >
-          <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>가져올 Profile</Text>
-          <ProfileNameBlock profile={profile} />
-        </View>
+      <View style={wideWeb ? [styles.actionRow, styles.wideActionRow] : styles.actionRow}>
         {fileName ? (
-          <Text
-            accessibilityLabel={`선택한 CSV 파일 ${fileName}`}
-            style={[styles.fileName, { color: theme.text }]}
-          >
-            {fileName}
-          </Text>
-        ) : null}
-        <Button
-          accessibilityLabel="CSV 파일 선택"
-          accessibilityState={{ disabled: submitting }}
-          disabled={submitting}
-          onPress={chooseCsv}
-          tone="secondary"
-        >
-          CSV 파일 선택
-        </Button>
-        <Button
-          accessibilityLabel="이 Profile로 팔로잉 가져오기"
-          accessibilityState={{
-            busy: submitting,
-            disabled: !csv || submitting || feedback === 'accepted',
-          }}
-          disabled={!csv || submitting || feedback === 'accepted'}
-          loading={submitting}
-          loadingText="시작하는 중"
-          onPress={startImport}
-        >
-          이 Profile로 팔로잉 가져오기
-        </Button>
-        {feedback === 'accepted' ? (
-          <View accessibilityLiveRegion="polite">
-            <Text style={[styles.success, { color: theme.textSecondary }]}>
-              팔로잉 가져오기를 시작했어요. 앱을 닫아도 백그라운드에서 계속 진행돼요.
-            </Text>
+          <View style={wideWeb ? styles.flexibleControl : undefined}>
+            <View style={[styles.selectedFile, { borderColor: theme.border }]}>
+              <Text style={[styles.fileName, { color: theme.text }]}>{fileName}</Text>
+              <Button
+                accessibilityLabel="파일 바꾸기"
+                accessibilityState={{ disabled: submitting }}
+                disabled={submitting}
+                onPress={chooseCsv}
+                size="compact"
+                tone="secondary"
+              >
+                파일 바꾸기
+              </Button>
+            </View>
           </View>
-        ) : feedback ? (
-          <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
-            {feedback === 'file-too-large'
-              ? 'CSV 파일은 512 KiB 이하여야 해요.'
-              : feedback === 'submit-error'
-                ? '가져오기를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'
-                : typeof feedback === 'object'
-                  ? feedback.message
-                  : 'CSV 파일을 선택하거나 읽지 못했어요. 다시 시도해 주세요.'}
-          </Text>
-        ) : null}
+        ) : (
+          <View style={wideWeb ? styles.flexibleControl : undefined}>
+            <Button
+              accessibilityLabel="팔로잉 CSV 파일 선택"
+              accessibilityState={{ disabled: submitting }}
+              disabled={submitting}
+              onPress={chooseCsv}
+              style={styles.fullWidthButton}
+              tone="secondary"
+            >
+              팔로잉 CSV 파일 선택
+            </Button>
+          </View>
+        )}
+        <View>
+          <Button
+            accessibilityLabel="팔로잉 가져오기"
+            accessibilityState={{
+              busy: submitting,
+              disabled: !csv || submitting || feedback === 'accepted',
+            }}
+            disabled={!csv || submitting || feedback === 'accepted'}
+            loading={submitting}
+            loadingText="시작하는 중"
+            onPress={startImport}
+            style={wideWeb ? undefined : styles.fullWidthButton}
+          >
+            팔로잉 가져오기
+          </Button>
+        </View>
       </View>
+      <View style={styles.notices}>
+        <Text style={[styles.notice, { color: theme.textSecondary }]}>
+          기존 팔로잉은 삭제되지 않아요.
+        </Text>
+        <Text style={[styles.notice, { color: theme.textSecondary }]}>
+          가져오기를 시작하면 앱을 닫아도 계속 진행돼요.
+        </Text>
+      </View>
+      {feedback === 'accepted' ? (
+        <View accessibilityLiveRegion="polite">
+          <Text style={[styles.success, { color: theme.textSecondary }]}>
+            팔로잉 가져오기를 시작했어요.
+          </Text>
+        </View>
+      ) : feedback ? (
+        <Text accessibilityRole="alert" style={[styles.error, { color: theme.danger }]}>
+          {feedback === 'file-too-large'
+            ? 'CSV 파일은 512 KiB 이하여야 해요.'
+            : feedback === 'submit-error'
+              ? '가져오기를 시작하지 못했어요. 잠시 후 다시 시도해 주세요.'
+              : typeof feedback === 'object'
+                ? feedback.message
+                : 'CSV 파일을 선택하거나 읽지 못했어요. 다시 시도해 주세요.'}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { padding: spacing.lg },
-  card: { borderRadius: radii.md, borderWidth: 1, gap: spacing.md, padding: spacing.lg },
-  description: textStyles.uiCopyM,
-  destination: { gap: spacing.xs },
-  fieldLabel: textStyles.uiCopyS,
-  fileName: textStyles.uiCopyM,
+  root: { gap: spacing.xl, padding: spacing.lg },
+  actionRow: { gap: spacing.sm },
+  wideActionRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  flexibleControl: { flex: 1, minWidth: 0 },
+  selectedFile: {
+    alignItems: 'center',
+    borderRadius: radius[8],
+    borderWidth: borderWidths[1],
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minWidth: 0,
+    minHeight: spacing.xxxl,
+    padding: spacing.sm,
+  },
+  fileName: { ...textStyles.uiCopyM, flex: 1, minWidth: 0 },
+  notices: { gap: spacing.sm },
+  notice: textStyles.uiCopyM,
+  fullWidthButton: { minWidth: 0, width: '100%' },
   error: textStyles.uiCopyM,
   success: textStyles.uiCopyM,
 });

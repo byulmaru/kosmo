@@ -11,7 +11,6 @@ import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
 import { createObjectRef } from '@/graphql/utils';
 import { formatRelativeHandle } from '@/profile/identity';
-import { visibleProfileWhere } from '@/profile/visibility';
 import { Media } from '../media/ref';
 import { profileBlockByIdLoader } from './loader/block';
 import { profileFollowByIdLoader } from './loader/follow';
@@ -28,16 +27,7 @@ const ViewerOwnerProfiles = alias(Profiles, 'viewer_owner_profile');
 const ViewerOwnerInstances = alias(Instances, 'viewer_owner_instance');
 
 export const Profile = createObjectRef('Profile', (ids) =>
-  db
-    .select(getColumns(Profiles))
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        inArray(Profiles.id, ids),
-        visibleProfileWhere({ profile: Profiles, instance: Instances }),
-      ),
-    ),
+  db.select(getColumns(Profiles)).from(Profiles).where(inArray(Profiles.id, ids)),
 );
 
 Profile.implement({

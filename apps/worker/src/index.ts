@@ -1,16 +1,19 @@
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { pg, pgRead } from '@kosmo/core/db';
+import { disposeRedisPubSub } from '@kosmo/core/redis/pubsub';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { closeFedifyMetrics, closeFedifyQueue, startFedifyMetrics } from '@kosmo/fedify';
 import { NativeConnection, Worker } from '@temporalio/worker';
 import * as activities from './activities';
+import { mediaUploadServiceHandler } from './nexus/media-upload';
 import { runSchedules } from './schedule';
 import { healthStatus, validateWorkerEnvironment } from './worker';
 
 if (import.meta.main) {
   try {
     const { address, namespace, port, host } = validateWorkerEnvironment(process.env);
+    const testWorkflowBundlePath = process.env.KOSMO_TEST_WORKFLOW_BUNDLE_PATH?.trim();
     await startFedifyMetrics();
 
     let worker: Worker | undefined;
@@ -37,9 +40,12 @@ if (import.meta.main) {
       worker = await Worker.create({
         activities,
         connection,
+        nexusServices: [mediaUploadServiceHandler],
         namespace,
         taskQueue: KOSMO_TASK_QUEUE,
-        workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname,
+        ...(testWorkflowBundlePath
+          ? { workflowBundle: { codePath: testWorkflowBundlePath } }
+          : { workflowsPath: new URL('./workflows/index.ts', import.meta.url).pathname }),
       });
       const running = worker.run();
       process.off('SIGTERM', terminateDuringStartup);
@@ -62,12 +68,16 @@ if (import.meta.main) {
         await connection?.close();
       } finally {
         try {
-          await closeFedifyQueue();
+          disposeRedisPubSub();
         } finally {
           try {
-            await Promise.all([pg.end({ timeout: 5 }), pgRead?.end({ timeout: 5 })]);
+            await closeFedifyQueue();
           } finally {
-            await server[Symbol.asyncDispose]();
+            try {
+              await Promise.all([pg.end({ timeout: 5 }), pgRead?.end({ timeout: 5 })]);
+            } finally {
+              await server[Symbol.asyncDispose]();
+            }
           }
         }
       }

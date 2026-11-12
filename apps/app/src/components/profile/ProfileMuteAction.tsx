@@ -27,6 +27,7 @@ const profileMuteActionFragment = graphql`
   fragment ProfileMuteAction_profile on Profile {
     id
     displayName
+    relativeHandle
     viewerState {
       profileMute {
         id
@@ -38,6 +39,7 @@ const profileMuteActionFragment = graphql`
 type ProfileMuteActionProps = {
   onFeedback?: (feedback: ProfileMuteFeedback) => void;
   profile: ProfileMuteAction_profile$key;
+  profileMuteId?: string;
 } & (
   | {
       renderMenuItem: (props: ProfileMuteMenuItemRenderProps) => ReactNode;
@@ -55,16 +57,22 @@ export type ProfileMuteMenuItemRenderProps = Readonly<{
 export function ProfileMuteAction({
   onFeedback,
   profile,
+  profileMuteId: providedProfileMuteId,
   renderMenuItem,
   surface = 'menu',
 }: ProfileMuteActionProps) {
   const data = useFragment(profileMuteActionFragment, profile);
   const { selectedProfileId } = useSession();
   const { changeMuted } = useProfileMuteMutations();
-  const profileMuteId = data.viewerState?.profileMute?.id;
-  const muted = Boolean(profileMuteId);
+  const profileMuteId = providedProfileMuteId ?? data.viewerState?.profileMute?.id;
+  const muted = profileMuteId !== undefined;
+  const displayName = data.displayName ?? data.relativeHandle;
 
-  if (!selectedProfileId || (surface !== 'menu' && !muted)) {
+  if (
+    !selectedProfileId ||
+    (providedProfileMuteId === undefined && !data.viewerState) ||
+    (surface !== 'menu' && !muted)
+  ) {
     return null;
   }
 
@@ -81,7 +89,7 @@ export function ProfileMuteAction({
   if (surface !== 'menu') {
     return (
       <ProfileMuteActionControl
-        displayName={data.displayName}
+        displayName={displayName}
         muted
         onChangeMuted={onChangeMuted}
         onFeedback={onFeedback}
@@ -93,7 +101,7 @@ export function ProfileMuteAction({
 
   return (
     <ProfileMuteActionControl
-      displayName={data.displayName}
+      displayName={displayName}
       muted={muted}
       onChangeMuted={onChangeMuted}
       onFeedback={onFeedback}

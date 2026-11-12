@@ -44,8 +44,8 @@ Profile Tag 입력의 20 code point·같은 문자 문법을 Hashtag 저장 전�
 - 이 Hashtag 검색은 [ADR 0021](../decisions/0021-hashtag-related-profile-navigation.md)의 Hashtag 관련 Profile
   목록 탐색과 별도 계약이다.
 - Profile Tag 관계는 공개 조회 가능한 Profile만 반환하며 Profile과 독립적인 visibility를 가지지 않는다.
-- Hashtag Post List 후보는 Post Visibility가 Public이고 Content가 있으며 Reply Parent가 없고 Post
-  Eligibility를 통과한 Post다.
+- Hashtag Post List 후보는 Content가 있고 Reply Parent가 없으며 Target Hashtag가 포함되고 Post Eligibility를 통과한 Post다.
+- 현재 선택한 viewer Profile이 Author인 후보는 Visibility와 무관하게 포함한다. 그 외 후보는 Public 또는 Unlisted로 제한하며, 선택 Profile이 없는 게스트와 같은 Account의 다른 Profile에는 예외를 적용하지 않는다.
 - Hashtag Mute Rule과 Domain Limit 정책은 viewer별 Hashtag Post List 결과에 적용한다.
 
 ## 확정 용어

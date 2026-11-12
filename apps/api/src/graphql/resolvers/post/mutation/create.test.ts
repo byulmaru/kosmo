@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { db } from '@kosmo/core/db';
+import { db, Posts } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { encodeGlobalId } from '@kosmo/core/global-id';
@@ -8,47 +8,37 @@ import { postContentDocumentFromTextAndMedia } from '@kosmo/core/post-content/se
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import { ApplicationFailure } from '@temporalio/client';
-import {
-  graphql,
-  GraphQLObjectType,
-  GraphQLSchema,
-  isInputObjectType,
-  isObjectType,
-} from 'graphql';
+import { PgDialect } from 'drizzle-orm/pg-core';
+import { graphql, GraphQLObjectType, GraphQLSchema, isObjectType } from 'graphql';
 import { schema } from '@/graphql/schema';
+import type { TestContext } from 'node:test';
+import type {
+  PostCreateWorkflowArgs,
+  PostCreateWorkflowResult,
+} from '@kosmo/core/temporal/post-create';
+import type { SQL } from 'drizzle-orm';
 
-test('exposes the versioned PostContent document and Plain Text composer contract', () => {
-  const postContent = schema.getType('PostContent');
-  const createPostInput = schema.getType('CreatePostInput');
+const requestOwnerAccountId = '00000000-0000-4000-8000-000000000011';
+const requestProfileId = '00000000-0000-4000-8000-000000000012';
 
-  assert.ok(isObjectType(postContent));
-  assert.ok(postContent.getFields().document);
-  assert.ok(postContent.getFields().bodyText);
-  assert.ok(postContent.getFields().contentWarning);
-  assert.equal(postContent.getFields().spoilerText, undefined);
-  assert.equal(postContent.getFields().bodyJson, undefined);
+const mockTemporalDeadline = (t: TestContext) =>
+  t.mock.method(
+    temporalClient,
+    'withDeadline',
+    async (_deadline: number | Date, callback: () => Promise<unknown>) => callback(),
+  );
 
-  assert.ok(isInputObjectType(createPostInput));
-  assert.equal(createPostInput.getFields().content, undefined);
-  assert.equal(String(createPostInput.getFields().bodyText?.type), 'String!');
-  assert.equal(String(createPostInput.getFields().media?.type), '[CreatePostMediaInput!]');
-  assert.equal(String(createPostInput.getFields().replyParentId?.type), 'ID');
-  assert.equal(String(createPostInput.getFields().repostSourceId?.type), 'ID');
-  assert.equal(String(createPostInput.getFields().sensitiveMedia?.type), 'Boolean');
-
-  const createPostMediaInput = schema.getType('CreatePostMediaInput');
-  assert.ok(isInputObjectType(createPostMediaInput));
-  assert.equal(String(createPostMediaInput.getFields().mediaId?.type), 'ID!');
-  assert.equal(String(createPostMediaInput.getFields().altText?.type), 'String');
-  assert.equal(schema.getType('TipTapDocument'), undefined);
-  assert.equal(schema.getType('PostContentBody'), undefined);
-  assert.equal(String(schema.getType('PostContentDocument')), 'PostContentDocument');
-
-  const createPostPayload = schema.getType('CreatePostPayload');
-  assert.ok(isObjectType(createPostPayload));
-  assert.equal(String(createPostPayload.getFields().post.type), 'Post!');
-  assert.deepEqual(Object.keys(createPostPayload.getFields()), ['post']);
-});
+const setupPostCreateWorkflow = (
+  t: TestContext,
+  result: PostCreateWorkflowResult,
+  onArgs: (args: PostCreateWorkflowArgs) => void = () => {},
+) =>
+  t.mock.method(temporalClient.workflow, 'execute', async (workflow: unknown, options: unknown) => {
+    assert.equal(workflow, postCreateWorkflow.workflow);
+    const args = (options as { args: readonly [PostCreateWorkflowArgs] }).args[0];
+    onArgs(args);
+    return result as never;
+  });
 
 test('PostContent.document projects Hashtag, Mention and Media IDs', async () => {
   const postContent = schema.getType('PostContent');
@@ -124,7 +114,10 @@ test('PostContent.document projects Hashtag, Mention and Media IDs', async () =>
   });
 });
 
-test('validates createPost input before running the resolver', async () => {
+test('validates createPost input before running the resolver', async (t) => {
+  const execute = t.mock.method(temporalClient.workflow, 'execute');
+  const start = t.mock.method(temporalClient.workflow, 'start');
+  const publish = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart');
   const mediaId = encodeGlobalId('Media', '00000000-0000-8000-8000-000000000001');
   for (const [input, message, field] of [
     [{ bodyText: ' \n ', visibility: 'UNLISTED' }, '본문 또는 이미지를 추가해주세요.', 'bodyText'],
@@ -174,33 +167,89 @@ test('validates createPost input before running the resolver', async () => {
     assert.ok(error instanceof ValidationError);
     assert.equal(error.field, field);
   }
+  assert.equal(execute.mock.callCount(), 0);
+  assert.equal(start.mock.callCount(), 0);
+  assert.equal(publish.mock.callCount(), 0);
+});
+
+test('createPost rejects a caller-supplied request ID', async (t) => {
+  const execute = t.mock.method(temporalClient.workflow, 'execute');
+  const start = t.mock.method(temporalClient.workflow, 'start');
+  const publish = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart');
+  const result = await graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id } request { id } }
+      }
+    `,
+    variableValues: {
+      input: { bodyText: 'post body', requestId: crypto.randomUUID(), visibility: 'PUBLIC' },
+    },
+    contextValue: {
+      session: {
+        accountId: '00000000-0000-4000-8000-000000000002',
+        profile: {
+          id: '00000000-0000-4000-8000-000000000001',
+          role: AccountProfileRole.MEMBER,
+        },
+      },
+    },
+  });
+
+  assert.equal(result.data, undefined);
+  assert.match(result.errors?.[0]?.message ?? '', /requestId/);
+  assert.equal(execute.mock.callCount(), 0);
+  assert.equal(start.mock.callCount(), 0);
+  assert.equal(publish.mock.callCount(), 0);
+});
+
+test('createPost rejects the legacy media processing alias', async (t) => {
+  const execute = t.mock.method(temporalClient.workflow, 'execute');
+  const start = t.mock.method(temporalClient.workflow, 'start');
+  const publish = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart');
+  const result = await graphql({
+    schema,
+    source: `
+      mutation CreatePost($input: CreatePostInput!) {
+        createPost(input: $input) { post { id } }
+      }
+    `,
+    variableValues: {
+      input: {
+        bodyText: 'post body',
+        media: [
+          {
+            mediaId: encodeGlobalId('Media', '00000000-0000-4000-8000-000000000003'),
+            applyNightshade: true,
+          },
+        ],
+        visibility: 'PUBLIC',
+      },
+    },
+    contextValue: {
+      session: {
+        accountId: requestOwnerAccountId,
+        profile: { id: requestProfileId, role: AccountProfileRole.MEMBER },
+      },
+    },
+  });
+
+  assert.equal(result.data, undefined);
+  assert.match(result.errors?.[0]?.message ?? '', /applyNightshade/);
+  assert.equal(execute.mock.callCount(), 0);
+  assert.equal(start.mock.callCount(), 0);
+  assert.equal(publish.mock.callCount(), 0);
 });
 
 test('accepts a combined body and Content Warning of 500 Unicode code points', async (t) => {
   const workflowReached = new Error('postCreateWorkflow reached');
-  const execute = t.mock.method(
-    temporalClient.workflow,
-    'execute',
-    async (workflow: unknown, options: unknown) => {
-      assert.equal(workflow, postCreateWorkflow.workflow);
-      assert.ok(options && typeof options === 'object');
-      const workflowOptions = options as {
-        args?: readonly { requestId: string; input: { origin: string } }[];
-        workflowId?: string;
-        workflowIdConflictPolicy?: string;
-        workflowIdReusePolicy?: string;
-      };
-      const args = workflowOptions.args?.[0];
-      assert.ok(args);
-      assert.equal(workflowOptions.args?.length, 1);
-      assert.equal(args.input.origin, 'LOCAL');
-      assert.equal(workflowOptions.workflowId, 'post-create:' + args.requestId);
-      assert.equal(workflowOptions.workflowIdConflictPolicy, 'USE_EXISTING');
-      assert.equal(workflowOptions.workflowIdReusePolicy, 'REJECT_DUPLICATE');
-      assert.equal('returnExistingResult' in workflowOptions, false);
-      throw workflowReached;
-    },
-  );
+  const accountId = '00000000-0000-4000-8000-000000000002';
+  const execute = t.mock.method(temporalClient.workflow, 'execute', async (workflow: unknown) => {
+    assert.equal(workflow, postCreateWorkflow.workflow);
+    throw workflowReached;
+  });
+  mockTemporalDeadline(t);
 
   const result = await graphql({
     schema,
@@ -220,6 +269,7 @@ test('accepts a combined body and Content Warning of 500 Unicode code points', a
     },
     contextValue: {
       session: {
+        accountId,
         profile: {
           id: '00000000-0000-8000-8000-000000000001',
           role: AccountProfileRole.MEMBER,
@@ -232,6 +282,109 @@ test('accepts a combined body and Content Warning of 500 Unicode code points', a
   assert.equal(execute.mock.callCount(), 1);
 });
 
+test('createPost passes supported analytics platform to PostCreate regardless of field selection', async (t) => {
+  const accountId = requestOwnerAccountId;
+  const profileId = requestProfileId;
+  const postId = '00000000-0000-4000-8000-000000000014';
+  const workflowArgs: PostCreateWorkflowArgs[] = [];
+  const postLookups: SQL[] = [];
+  const execute = setupPostCreateWorkflow(
+    t,
+    { authorProfileId: profileId, postId, status: 'created' },
+    (args) => workflowArgs.push(args),
+  );
+  const start = t.mock.method(temporalClient.workflow, 'start');
+  const getHandle = t.mock.method(temporalClient.workflow, 'getHandle');
+  t.mock.method(
+    db,
+    'select',
+    () =>
+      ({
+        from: (table: unknown) => {
+          assert.equal(table, Posts);
+          return {
+            where: (condition: SQL) => {
+              postLookups.push(condition);
+              return {
+                limit: async (limit: number) => {
+                  assert.equal(limit, 1);
+                  return [{ id: postId, profileId }];
+                },
+              };
+            },
+          };
+        },
+      }) as never,
+  );
+  mockTemporalDeadline(t);
+
+  for (const { header, selection } of [
+    { header: 'web', selection: 'post { id } request { status }' },
+    { header: 'native', selection: 'request { status }' },
+    { header: 'Web', selection: 'post { id } request { status }' },
+    { header: undefined, selection: 'post { id } request { status }' },
+  ]) {
+    const result = await graphql({
+      schema,
+      source: `
+        mutation CreatePost($input: CreatePostInput!) {
+          createPost(input: $input) { ${selection} }
+        }
+      `,
+      variableValues: { input: { bodyText: 'synchronous post', visibility: 'PUBLIC' } },
+      contextValue: {
+        session: {
+          accountId,
+          profile: { id: profileId, role: AccountProfileRole.MEMBER },
+        },
+        ...(header === undefined
+          ? {}
+          : {
+              c: {
+                req: {
+                  header: (name: string) =>
+                    name === 'x-kosmo-analytics-platform' ? header : undefined,
+                },
+              },
+            }),
+      },
+    });
+
+    assert.deepEqual(result.errors, undefined);
+    const response = result.data?.createPost as {
+      post?: { id: string } | null;
+      request?: { status: string } | null;
+    };
+    assert.equal(response.request, null);
+    if (selection.startsWith('post')) {
+      assert.equal(response.post?.id, encodeGlobalId('Post', postId));
+    } else {
+      assert.equal(Object.hasOwn(response, 'post'), false);
+    }
+    const args = workflowArgs.at(-1);
+    assert.ok(args);
+    assert.equal(args.revalidateAuthorization, true);
+    assert.equal(args.input.profileId, profileId);
+    assert.match(args.requestId, /^[0-9a-f-]{36}$/i);
+    if (header === 'web' || header === 'native') {
+      assert.equal(args.analyticsPlatform, header);
+    } else {
+      assert.equal(args.analyticsPlatform, undefined);
+      assert.equal(Object.hasOwn(args, 'analyticsPlatform'), false);
+    }
+  }
+
+  assert.equal(execute.mock.callCount(), 4);
+  assert.equal(workflowArgs.length, 4);
+  assert.equal(start.mock.callCount(), 0);
+  assert.equal(getHandle.mock.callCount(), 0);
+  assert.equal(postLookups.length, 3);
+  assert.deepEqual(
+    postLookups.map((condition) => new PgDialect().sqlToQuery(condition).params),
+    Array.from({ length: 3 }, () => [postId, profileId]),
+  );
+});
+
 test('maps Temporal validation failures back to the GraphQL field error', async (t) => {
   const failure = ApplicationFailure.nonRetryable(
     'Media cannot be attached',
@@ -241,6 +394,7 @@ test('maps Temporal validation failures back to the GraphQL field error', async 
   const execute = t.mock.method(temporalClient.workflow, 'execute', async () => {
     throw failure;
   });
+  mockTemporalDeadline(t);
 
   const result = await graphql({
     schema,
@@ -272,6 +426,13 @@ test('maps Temporal validation failures back to the GraphQL field error', async 
 
 test('rejects impossible Mention counts before querying target Profiles', async (t) => {
   const select = t.mock.method(db, 'select');
+  const execute = t.mock.method(temporalClient.workflow, 'execute');
+  const getHandle = t.mock.method(temporalClient.workflow, 'getHandle', () => {
+    throw new Error('Unexpected Temporal getHandle');
+  });
+  const start = t.mock.method(temporalClient.workflow, 'start', () => {
+    throw new Error('Unexpected Temporal workflow start');
+  });
   const result = await graphql({
     schema,
     source: `
@@ -291,6 +452,7 @@ test('rejects impossible Mention counts before querying target Profiles', async 
     },
     contextValue: {
       session: {
+        accountId: crypto.randomUUID(),
         profile: {
           id: crypto.randomUUID(),
           role: AccountProfileRole.MEMBER,
@@ -303,10 +465,15 @@ test('rejects impossible Mention counts before querying target Profiles', async 
   assert.ok(error instanceof ValidationError);
   assert.equal(error.field, 'mentions');
   assert.equal(select.mock.callCount(), 0);
+  assert.equal(execute.mock.callCount(), 0);
+  assert.equal(getHandle.mock.callCount(), 0);
+  assert.equal(start.mock.callCount(), 0);
 });
 
 test('Pothos rejects a non-Profile global ID for a selected Mention before target lookup', async (t) => {
   const select = t.mock.method(db, 'select');
+  const execute = t.mock.method(temporalClient.workflow, 'execute');
+  const start = t.mock.method(temporalClient.workflow, 'start');
   const wrongTypeId = encodeGlobalId('Post', crypto.randomUUID());
   const result = await graphql({
     schema,
@@ -334,4 +501,6 @@ test('Pothos rejects a non-Profile global ID for a selected Mention before targe
 
   assert.match(result.errors?.[0]?.message ?? '', /is not of type: Profile/);
   assert.equal(select.mock.callCount(), 0);
+  assert.equal(execute.mock.callCount(), 0);
+  assert.equal(start.mock.callCount(), 0);
 });

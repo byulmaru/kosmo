@@ -101,7 +101,7 @@ export function FullReactionPicker({
     ]),
   ];
   let itemOffset = 0;
-  const itemLayouts = gridItems.map((item) => {
+  const itemLayouts = gridItems.map((item, index) => {
     const length =
       item.kind === 'count'
         ? (textStyles.uiCopyS.lineHeight ?? 0) + space[16]
@@ -109,7 +109,9 @@ export function FullReactionPicker({
           ? (textStyles.uiLabelM.lineHeight ?? 0) +
             space[8] +
             (item.sectionIndex > 0 ? space[16] : 0)
-          : targetSize + (item.rowIndex > 0 && !mobile ? space[8] : 0);
+          : targetSize +
+            (item.rowIndex > 0 && !mobile ? space[8] : 0) +
+            (index === gridItems.length - 1 ? space[8] : 0);
     const layout = { length, offset: itemOffset };
     itemOffset += length;
     return layout;
@@ -186,7 +188,6 @@ export function FullReactionPicker({
       ) : (
         <FlatList
           key={normalizedQuery}
-          contentContainerStyle={styles.scrollContent}
           data={gridItems}
           getItemLayout={
             Platform.OS === 'web'
@@ -200,7 +201,7 @@ export function FullReactionPicker({
               : `${item.sectionId}-${item.kind}-${item.kind === 'row' ? item.rowIndex : 'heading'}`
           }
           maxToRenderPerBatch={8}
-          renderItem={({ item }) =>
+          renderItem={({ item, index }) =>
             item.kind === 'count' ? (
               <Text
                 style={[
@@ -224,7 +225,12 @@ export function FullReactionPicker({
                 </Text>
               </View>
             ) : (
-              <View style={item.rowIndex > 0 && !mobile && styles.webRowSpacing}>
+              <View
+                style={[
+                  item.rowIndex > 0 && !mobile && styles.webRowSpacing,
+                  index === gridItems.length - 1 && styles.finalRowPadding,
+                ]}
+              >
                 <ReactionGridRow
                   columnGap={columnGap}
                   columns={columns}
@@ -472,7 +478,7 @@ const styles = StyleSheet.create({
     borderWidth: borderWidths[1],
     justifyContent: 'center',
   },
-  scrollContent: { paddingBottom: space[8] },
+  finalRowPadding: { paddingBottom: space[8] },
   resultCount: textStyles.uiCopyS,
   resultCountSpacing: { marginBottom: space[16] },
   search: {

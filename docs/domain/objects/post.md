@@ -20,7 +20,7 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 | 값                 | 의미                                                                                   |
 | ------------------ | -------------------------------------------------------------------------------------- |
 | Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다                            |
-| Unlisted           | 모든 viewer가 볼 수 있지만 검색/Hashtag Post List 후보가 되지 않는다                   |
+| Unlisted           | 모든 viewer가 볼 수 있고 Hashtag Post List 후보가 되지만 검색 후보는 아니다            |
 | Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다                         |
 | Mentioned Profiles | 작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile만 볼 수 있다 |
 
@@ -103,11 +103,28 @@ Author Profile/Repost Source 조합에는 Lifecycle State가 Active이고 Conten
 | Post 삭제 (Account 요청)            | Author Profile        | Post        | 없음                                                                                                             | `Account.Active`, `Post.Author`    | Lifecycle State가 Active다                                                                                                                                                                                                                                                                                                                     | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                                                                        |
 | Post 삭제 (검증된 ActivityPub 요청) | Author Profile        | Post        | 없음                                                                                                             | `Post.Author`                      | Lifecycle State가 Active이고 Author Profile Origin이 Remote다. 서명 검증된 요청 Actor가 Author Profile에 연결된 저장 Actor와 같고, 요청 object가 Current Content를 가진 Post의 저장된 ActivityPub identity와 정확히 일치한다                                                                                                                   | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                                                                        |
 
-Post/Reply/Quote 작성과 Post Content 수정에서 Media node는 입력 순서를 유지한다. 모든 참조 Media는
-Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 Account와 같아야 한다. Media의
-Profile은 Author Profile과 달라도 같은 Upload Account를 가지면 참조할 수 있다. State=Uploading인 Media는
-사용할 수 없다. Tombstone Post에는 다른 상태 전이를 적용하지 않는다.
+Post/Reply/Quote 작성과 Post Content 수정에서 Media node는 입력 순서를 유지한다. Post Content가 참조하는 Media는
+Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 Account와 같아야 한다. Media의 Profile은
+Author Profile과 달라도 같은 Upload Account를 가지면 참조할 수 있다. Local Post·Reply·Quote 작성은 업로드 중인 유효한
+Media도 받을 수 있지만, 모든 Media publication이 완료되기 전에는 Post나 Post Content를 만들지 않는다. Tombstone Post에는
+다른 상태 전이를 적용하지 않는다.
 
+Local Post·Reply·Quote 작성은 실제 Media publication 결과에 따라 동기 또는 비동기로 진행한다. Media가 없거나 모든
+publication이 완료되면 Post를 생성해 반환한다. 하나라도 처리 중이면 PostRequest로 접수하고 Media 처리가 끝난 뒤 Post를
+생성한다. 필터 선택만으로 비동기 접수 여부를 결정하지 않는다. Media 처리 실패로 작성에 이르지 못하면 Post나 Post Content를
+만들지 않는다. 실제 Post 생성 transaction은 당시 Account가 Active이고 행동 주체 Profile의 Member 권한과 Profile 사용
+조건이 유효한지 다시 확인한다. 확인할 수 없으면 Post를 생성하지 않는다. 사용자의 취소는 publication이 시작되기 전에만
+확정할 수 있다. publication 시작 뒤 저장 결과가 확인되지 않으면 취소를 확정하지 않고, 생성 결과를 확인한 뒤 성공 또는
+실패를 반환한다.
+
+과거 게시물 가져오기로 명시된 저장 요청은 일반 작성과 같은 Post Content 및 구조 관계를 보존한다. 이러한 요청은 새
+상호작용이 아니므로 Reply·Quote·Mention Notification과 그에 따른 push를 생성하지 않으며, Local Post의 outbound
+ActivityPub Create를 전달하거나 게시 생성 분석 기록을 남기지 않는다. 일반 Post 게시의 기존 동작은 유지한다.
+
+`PostRequest`는 `id`, `requestId`, `status`, `authorProfile`, `bodyText`, `contentWarning`, `media`,
+`sensitiveMedia`, `post`만 공개한다. 이 요약은 요청 당시 전체 입력을 복원하지 않으며, 사용할 수 없는 Media는
+nullable list item으로 반환한다. Profile의 PostRequest 목록은 현재 상태가 `PUBLISHED`인 요청을 제외한다.
+목록은 현재 선택한 Profile의 역할이 Member 이상인 세션에서 읽을 수 있으며, 조회한 Profile에 속하고 해당 세션 Account가 소유한 요청만 반환한다.
 Reply·Quote·Repost 작성은 각 입력 Parent·Source Post의 Author Profile과 행동 주체 Profile 사이에 Profile Block이
 없어야 한다. 이 상호작용 조건은 Post Visibility·Post Eligibility와 별도로 양방향 적용한다.
 

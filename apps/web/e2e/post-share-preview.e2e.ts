@@ -1,7 +1,8 @@
-import { db, Posts } from '@kosmo/core/db';
+import { ActivityPubPosts, db, Posts } from '@kosmo/core/db';
 import { InstanceState, PostState, PostVisibility } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { eq } from 'drizzle-orm';
+import { Temporal } from 'temporal-polyfill';
 import {
   createE2EPost,
   createE2EProfile,
@@ -24,6 +25,11 @@ async function readMetadata(page: Page, html: string) {
 
     return {
       descriptions: content('meta[name="description"]'),
+      activityPubUris: [
+        ...document.querySelectorAll<HTMLLinkElement>(
+          'link[rel="alternate"][type="application/activity+json"]',
+        ),
+      ].map((link) => link.href),
       ogDescriptions: content('meta[property="og:description"]'),
       ogImages: content('meta[property="og:image"]'),
       ogImageProperties: [
@@ -108,6 +114,7 @@ test('공개 Quote의 현재 작성자·본문·Mention·이미지 순서로 초
   expect(metadata.ogTitles).toEqual([metadata.title]);
   expect(metadata.twitterTitles).toEqual([metadata.title]);
   expect(metadata.ogUrls).toEqual([canonicalUrl]);
+  expect(metadata.activityPubUris).toEqual([new URL(`/ap/note/${quote.id}`, origin).toString()]);
   expect(metadata.ogImages).toEqual([
     'https://media.example/first.png',
     'https://media.example/second.png',
@@ -174,6 +181,7 @@ test('Content Warning과 Sensitive Media 원문·이미지 정보는 응답 어�
 });
 
 test('순수 Repost는 guest가 볼 수 있는 직접 Source를 canonicalize하고 비공개 Post는 cookie와 UA로 공개하지 않는다', async ({
+  page,
   request,
 }) => {
   const sourceAuthor = await createE2ESession({
@@ -212,6 +220,7 @@ test('순수 Repost는 guest가 볼 수 있는 직접 Source를 canonicalize하�
     },
   );
   const privateHtml = await privateResponse.text();
+  const privateMetadata = await readMetadata(page, privateHtml);
 
   expect(repostHtml).toContain('direct quote source body');
   expect(repostHtml).toContain('E2E Direct Source Author(@e2e-direct-source-author) on KOSMO');
@@ -219,7 +228,11 @@ test('순수 Repost는 guest가 볼 수 있는 직접 Source를 canonicalize하�
   expect(repostHtml).toContain(
     `${origin}${sharePath(sourceAuthor.profile!.handle, quoteSource.id)}`,
   );
+  expect((await readMetadata(page, repostHtml)).activityPubUris).toEqual([
+    new URL(`/ap/note/${quoteSource.id}`, origin).toString(),
+  ]);
   expect(privateResponse.status()).toBe(200);
+  expect(privateMetadata.activityPubUris).toEqual([]);
   expect(privateHtml).not.toContain('followers only secret body');
   expect(privateHtml).not.toContain('E2E Direct Source Author');
   expect(privateHtml).toContain('흩어진 타임라인을 한곳에서.');
@@ -254,6 +267,7 @@ test('순수 Repost는 guest가 볼 수 있는 직접 Source를 canonicalize하�
 });
 
 test('Reply는 Parent 대신 자체 Content를 표시하고 Remote 작성자의 표시용 Domain을 보존한다', async ({
+  page,
   request,
 }) => {
   const parentAuthor = await createE2ESession({
@@ -265,9 +279,10 @@ test('Reply는 Parent 대신 자체 Content를 표시하고 Remote 작성자의 
     profileId: parentAuthor.profile!.id,
     visibility: PostVisibility.PUBLIC,
   });
+  const remoteDomain = 'reply-preview.remote.example';
   const remoteAuthor = await createE2ERemoteProfile({
     displayName: 'E2E Remote Reply Author',
-    domain: 'reply-preview.remote.example',
+    domain: remoteDomain,
     handle: 'remote-reply',
   });
   const reply = await createE2EPost({
@@ -276,16 +291,22 @@ test('Reply는 Parent 대신 자체 Content를 표시하고 Remote 작성자의 
     replyParentId: parent.id,
     visibility: PostVisibility.PUBLIC,
   });
-  const response = await request.get(
-    sharePath(`${remoteAuthor.handle}@reply-preview.remote.example`, reply.id),
-  );
+  const replyUri = `https://${remoteDomain}/objects/${reply.id}?version=1&actor=remote`;
+  await db.insert(ActivityPubPosts).values({
+    postId: reply.id,
+    receivedAt: Temporal.Instant.from('2026-11-05T00:00:00Z'),
+    uri: replyUri,
+  });
+  const response = await request.get(sharePath(`${remoteAuthor.handle}@${remoteDomain}`, reply.id));
   const html = await response.text();
+  const metadata = await readMetadata(page, html);
 
   expect(html).toContain(
     'E2E Remote Reply Author(@remote-reply@reply-preview.remote.example) on KOSMO',
   );
   expect(html).toContain('remote reply body');
   expect(html).not.toContain('reply parent only secret');
+  expect(metadata.activityPubUris).toEqual([replyUri]);
 });
 
 test('실제 ActivityPub 경로는 HTML 미리보기와 분리해 공개·비공개 및 Accept 결과를 유지한다', async ({
@@ -345,6 +366,7 @@ test('실제 ActivityPub 경로는 HTML 미리보기와 분리해 공개·비공
 });
 
 test('HEAD는 메타데이터 응답 헤더와 빈 본문을 반환하고 변경 후 이전 validator도 재사용하지 않는다', async ({
+  page,
   request,
 }) => {
   const author = await createE2ESession({
@@ -373,6 +395,7 @@ test('HEAD는 메타데이터 응답 헤더와 빈 본문을 반환하고 변경
   expect(revalidatedHtml).not.toContain(body);
   expect(revalidatedHtml).not.toContain('E2E Revalidation Author');
   expect(revalidatedHtml).toContain(`${origin}/og-default.png`);
+  expect((await readMetadata(page, revalidatedHtml)).activityPubUris).toEqual([]);
   expect(head.status()).toBe(200);
   expect(head.headers()['content-type']).toContain('text/html');
   expect(head.headers()['cache-control']).toBe('no-store');

@@ -1,6 +1,7 @@
 import './field';
 import './mutation';
 import './feed-ref';
+import './subscription';
 
 export { NotificationFeedConnection, NotificationFeedItem } from './feed-ref';
 export { ReactionNotificationGroup } from './group-ref';

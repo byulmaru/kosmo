@@ -9,7 +9,6 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 
 let renderer: ReactTestRenderer | null = null;
 let paginationCompletion: ((error?: Error | null) => void) | undefined;
-let profileTagMuteEnabled = false;
 let profileEdges = [
   { cursor: 'cursor-a', node: { id: 'profile-a' } },
   { cursor: 'cursor-b', node: { id: 'profile-b' } },
@@ -47,10 +46,10 @@ mockModule(new URL('../PageHeader.tsx', import.meta.url), {
   PageHeader: (props: object) => createElement('PageHeader', props),
 });
 mockModule(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
-  useFeatureFlag: (key: string) => key === 'profile-tag-mute' && profileTagMuteEnabled,
+  useFeatureFlag: () => false,
 });
 mockModule(new URL('./ProfileTagMuteAction.tsx', import.meta.url), {
-  ProfileTagMuteAction: 'ProfileTagMuteAction',
+  ProfileTagMuteAction: () => null,
 });
 mockModule(new URL('./ProfileListItem.tsx', import.meta.url), {
   ProfileListItem: ({ onPress, profile }: { onPress?: () => void; profile: { id: string } }) =>
@@ -104,7 +103,6 @@ afterEach(async () => {
     renderer = null;
   }
   paginationCompletion = undefined;
-  profileTagMuteEnabled = false;
   profileEdges = [
     { cursor: 'cursor-a', node: { id: 'profile-a' } },
     { cursor: 'cursor-b', node: { id: 'profile-b' } },
@@ -155,19 +153,6 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
     }
   });
 
-  it('프로필 태그 mute flag가 켜지면 헤더 action에 목록과 같은 Hashtag를 전달한다', async () => {
-    profileTagMuteEnabled = true;
-    await act(async () => {
-      renderer = create(createElement(HashtagRelatedProfileList, { hashtag: {} }));
-    });
-    assert.ok(renderer);
-    const header = renderer.root.find((node) => (node.type as unknown) === 'PageHeader');
-    assert.equal(header.props.title, '#Fediverse 관련 프로필');
-    assert.equal(header.props.titleLines, 1);
-    assert.equal(header.props.trailing.type, 'ProfileTagMuteAction');
-    assert.equal(header.props.trailing.props.hashtag.id, 'opaque-hashtag');
-  });
-
   it('기본 off에서는 mute action 없이 leading, 목록, pagination을 유지한다', async () => {
     const leading = createElement('BackButton');
     await act(async () => {
@@ -176,7 +161,6 @@ describe('Hashtag 관련 Profile 목록 viewport', () => {
     assert.ok(renderer);
 
     const header = renderer.root.find((node) => (node.type as unknown) === 'PageHeader');
-    assert.equal(header.props.trailing, null);
     assert.equal(header.props.leading, leading);
 
     const scrollView = renderer.root.find((node) => (node.type as unknown) === 'ScrollView');

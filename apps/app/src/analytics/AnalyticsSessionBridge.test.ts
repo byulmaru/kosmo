@@ -7,12 +7,15 @@ import type { AnalyticsSessionBridge } from './AnalyticsSessionBridge';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const calls: string[] = [];
+const screenCalls: string[] = [];
 const session = {
   accountId: 'account-a' as string | null,
   selectedProfileId: 'profile-a' as string | null,
   status: 'valid',
 };
 let identityAccountId: string | null = 'account-a';
+let pathname = '/profile/alice';
+let segments = ['(tabs)', '(profile)', '[profileHandle]'];
 let renderer: ReactTestRenderer | undefined;
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
@@ -20,11 +23,16 @@ mockModule(new URL('../session/SessionProvider.tsx', import.meta.url), {
   useSession: () => session,
   useAnalyticsIdentityAccountId: () => identityAccountId,
 });
+mockModule('expo-router', {
+  usePathname: () => pathname,
+  useSegments: () => segments,
+});
 mockModule(new URL('./client.ts', import.meta.url), {
   clearAnalytics: () => calls.push('clear'),
   identifyAnalytics: (id: string) => calls.push(`identify:${id}`),
   setAnalyticsSelectedProfile: (id: string | null, profileId: string | null) =>
     calls.push(`profile:${id ?? 'none'}:${profileId ?? 'none'}`),
+  trackAnalyticsScreen: (screenName: string) => screenCalls.push(screenName),
 });
 let Bridge: typeof AnalyticsSessionBridge;
 before(async () => {
@@ -34,7 +42,10 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
   calls.length = 0;
+  screenCalls.length = 0;
   identityAccountId = 'account-a';
+  pathname = '/profile/alice';
+  segments = ['(tabs)', '(profile)', '[profileHandle]'];
   session.accountId = 'account-a';
   session.selectedProfileId = 'profile-a';
   session.status = 'valid';
@@ -85,4 +96,24 @@ test('active accounts without a selected Profile retain account analytics identi
     'profile:account-without-profile:none',
     'identify:account-without-profile',
   ]);
+});
+
+test('native screen names use route templates and path transitions include dynamic routes', async () => {
+  await act(async () => {
+    renderer = create(createElement(Bridge));
+  });
+  assert.deepEqual(screenCalls, ['/[profileHandle]']);
+
+  session.selectedProfileId = 'profile-b';
+  await act(async () => renderer!.update(createElement(Bridge)));
+  assert.deepEqual(screenCalls, ['/[profileHandle]']);
+
+  pathname = '/profile/bob';
+  await act(async () => renderer!.update(createElement(Bridge)));
+  assert.deepEqual(screenCalls, ['/[profileHandle]', '/[profileHandle]']);
+
+  pathname = '/';
+  segments = [];
+  await act(async () => renderer!.update(createElement(Bridge)));
+  assert.deepEqual(screenCalls, ['/[profileHandle]', '/[profileHandle]', '/']);
 });
