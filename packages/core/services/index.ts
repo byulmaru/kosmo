@@ -27,6 +27,7 @@ export {
   deletePost,
   isActivityPubPostUriConflict,
   repostPost,
+  resolveActivityPubPostCreatedAt,
 } from './post';
 export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post-quote-consent';
 export { applyPostQuoteConsent } from './post-quote-consent';

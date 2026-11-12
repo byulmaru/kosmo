@@ -108,6 +108,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - Account나 선택 Profile 없이 첫 페이지와 다음 페이지를 조회할 수 있다. 조회 허용은 Home 접근이나 참여 권한을 확대하지 않는다.
 - 기존 최신순 정렬과 페이지 경계를 유지하며, viewer Profile이 있으면 해당 Profile의 기존 개인 제어를 적용한다.
 - 현재 선택한 viewer Profile에 Natural Language Mute Rule이 있으면 해당 Post 자체의 저장된 유효 Exclude 판정도 적용한다. Local 조회는 새 판정을 만들지 않으며, viewer가 작성한 Post와 유효한 Exclude 판정이 없는 Post는 기존 정책에 따라 표시한다. 선택 Profile이나 현재 Rule이 없으면 이전 판정을 적용하지 않는다. Rule 삭제 뒤에도 이전 판정은 남아 있을 수 있지만 Local 노출에는 사용하지 않는다. Quote는 direct Source가 아니라 Quote 자체의 판정을 사용한다. 제외된 후보가 있어도 기존 bounded page와 cursor는 유지되며, 반환 edge 수가 적거나 비어 있을 수 있다.
+- 현재 Profile pin 관계가 있는 Post는 작성자·viewer와 무관하게 Local 후보에서 cursor와 limit 전에 제외하며, 저장된 pin 순서는 Local에 적용하지 않는다. Pin을 해제한 Post는 이후 Local 조회에서 기존 정책을 통과하면 다시 포함될 수 있다. 이 예외는 Profile chronology, Home, Hashtag, Post 직접 조회와 상호작용에는 적용되지 않는다.
 - configured Local Instance 또는 운영자가 추가 설정한 Instance에 속한 Active/Normal Profile이 작성한 Public Post 중 Content가 있고 Reply Parent가 없는 eligible Post를 포함한다.
 - 이미 기존 수신 경로를 통해 Kosmo에 수신·저장된 Post만 조회한다. Instance 설정은 새 Post를 수집하지 않으며, 선택한 Instance의 모든 Post가 노출됨을 보장하지 않는다.
 - Content와 Repost Source를 함께 가진 Quote는 포함한다.
@@ -161,7 +162,7 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - Post List 제어는 Post Visibility가 허용하지 않은 viewer에게 접근 범위를 넓히지 않는다.
 - pinned segment에도 기존 Post Visibility, Post Eligibility, Profile lifecycle, Post lifecycle, block·domain 정책을
   적용한다. 조회할 수 없거나 unavailable인 pinned Post는 목록과 pinned count에 포함하지 않는다.
-- 위 pinned ordering은 Profile 목록에만 적용한다. Home·Local·Hashtag의 후보 순서와 일반 chronology는 변경하지 않는다.
+- 위 저장 순서는 Profile 목록에만 적용한다. Home·Local·Hashtag는 pin 순서를 따르지 않으며 Local의 현재 pinned Post 제외는 [Local Post List](#local-post-list) 정책을 따른다.
 
 ## 제외/보류
 

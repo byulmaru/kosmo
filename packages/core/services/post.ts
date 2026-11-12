@@ -15,6 +15,7 @@ import {
   ProfileBlocks,
   ProfileFollows,
   Profiles,
+  uuidv7,
 } from '../db';
 import {
   InstanceKind,
@@ -80,6 +81,12 @@ export type ActivityPubPostInput = {
   replyParentId?: string;
   visibility: PostVisibility;
 };
+
+export const resolveActivityPubPostCreatedAt = ({
+  publishedAt,
+  receivedAt,
+}: Pick<ActivityPubPostInput, 'publishedAt' | 'receivedAt'>): Temporal.Instant =>
+  publishedAt && Temporal.Instant.compare(publishedAt, receivedAt) < 0 ? publishedAt : receivedAt;
 
 export type RemoteMediaCandidate = {
   altText: string | null;
@@ -800,13 +807,7 @@ export const createPostInTransaction = async (
   }
 
   const createdAt =
-    input.origin === 'ACTIVITYPUB' &&
-    input.publishedAt &&
-    Temporal.Instant.compare(input.publishedAt, input.receivedAt) < 0
-      ? input.publishedAt
-      : input.origin === 'ACTIVITYPUB'
-        ? input.receivedAt
-        : undefined;
+    input.origin === 'ACTIVITYPUB' ? resolveActivityPubPostCreatedAt(input) : undefined;
   if (input.origin === 'ACTIVITYPUB') {
     const media = await materializeRemoteMedia(tx, {
       candidates: input.media ?? [],
@@ -856,6 +857,7 @@ export const createPostInTransaction = async (
             actorAccountId: input.origin === 'LOCAL' ? (input.accountId ?? null) : null,
             createdAt,
             currentContentId: content.id,
+            id: createdAt === undefined ? undefined : uuidv7(createdAt.toString()),
             profileId: input.profileId,
             repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
             quoteConsentStatus:

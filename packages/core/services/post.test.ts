@@ -40,7 +40,7 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
-import { createPost } from './post';
+import { createPost, createPostInTransaction } from './post';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import { updateProfile } from './profile-update';
 
@@ -89,6 +89,8 @@ const addAccountProfile = async (accountId: string, profileId: string) =>
     .values({ accountId, profileId, role: AccountProfileRole.MEMBER })
     .returning()
     .then(firstOrThrow);
+
+const uuidV7Timestamp = (id: string) => Number.parseInt(id.replaceAll('-', '').slice(0, 12), 16);
 
 const createMedia = async ({
   accountId,
@@ -756,6 +758,100 @@ test('createPost는 ActivityPub first-write-wins와 timestamp 계약을 보존�
       .then((rows) => rows.length),
     1,
   );
+});
+
+test('new ActivityPub Note IDs follow the effective Post timestamp and preserve unsupported dates', async () => {
+  const remoteAuthor = await createProfile(InstanceKind.ACTIVITYPUB);
+  const localAuthor = await createProfile();
+  const publishedAt = Temporal.Instant.from('2010-07-18T00:00:00Z');
+  const receivedAt = Temporal.Instant.from('2010-07-19T00:00:00Z');
+  const olderNote = await db.transaction((tx) =>
+    createPostInTransaction(tx, {
+      document: postContentDocumentFromText('older remote note'),
+      mentionProfileIds: [],
+      objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+      origin: 'ACTIVITYPUB',
+      profileId: remoteAuthor.id,
+      publishedAt,
+      receivedAt,
+      visibility: PostVisibility.PUBLIC,
+    }),
+  );
+  const newerLocalPost = await db.transaction((tx) =>
+    createPostInTransaction(tx, {
+      bodyText: 'newer local post',
+      origin: 'LOCAL',
+      profileId: localAuthor.id,
+      visibility: PostVisibility.PUBLIC,
+    }),
+  );
+
+  assert.equal(olderNote.post.createdAt.toString(), publishedAt.toString());
+  assert.ok(
+    Math.abs(uuidV7Timestamp(olderNote.post.id) - olderNote.post.createdAt.epochMilliseconds) <=
+      1_000,
+  );
+  assert.ok(olderNote.post.id < newerLocalPost.post.id);
+
+  const missingReceivedAt = Temporal.Instant.from('2020-07-19T00:00:00Z');
+  const missingPublishedAt = await db.transaction((tx) =>
+    createPostInTransaction(tx, {
+      document: postContentDocumentFromText('missing published date'),
+      mentionProfileIds: [],
+      objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+      origin: 'ACTIVITYPUB',
+      profileId: remoteAuthor.id,
+      publishedAt: null,
+      receivedAt: missingReceivedAt,
+      visibility: PostVisibility.PUBLIC,
+    }),
+  );
+  assert.equal(missingPublishedAt.post.createdAt.toString(), missingReceivedAt.toString());
+  assert.ok(
+    Math.abs(uuidV7Timestamp(missingPublishedAt.post.id) - missingReceivedAt.epochMilliseconds) <=
+      1_000,
+  );
+
+  const futurePublishedAt = Temporal.Instant.from('2030-07-18T00:00:00Z');
+  const futureReceivedAt = Temporal.Instant.from('2021-07-19T00:00:00Z');
+  const futurePublished = await db.transaction((tx) =>
+    createPostInTransaction(tx, {
+      document: postContentDocumentFromText('future published date'),
+      mentionProfileIds: [],
+      objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+      origin: 'ACTIVITYPUB',
+      profileId: remoteAuthor.id,
+      publishedAt: futurePublishedAt,
+      receivedAt: futureReceivedAt,
+      visibility: PostVisibility.PUBLIC,
+    }),
+  );
+  assert.equal(futurePublished.post.createdAt.toString(), futureReceivedAt.toString());
+  assert.ok(
+    Math.abs(uuidV7Timestamp(futurePublished.post.id) - futureReceivedAt.epochMilliseconds) <=
+      1_000,
+  );
+
+  const preEpochPublishedAt = Temporal.Instant.from('1960-07-18T00:00:00Z');
+  const preEpochReceivedAt = Temporal.Instant.from('2022-07-19T00:00:00Z');
+  const preEpochStartedAt = Temporal.Now.instant().epochMilliseconds;
+  const preEpoch = await db.transaction((tx) =>
+    createPostInTransaction(tx, {
+      document: postContentDocumentFromText('pre-epoch published date'),
+      mentionProfileIds: [],
+      objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
+      origin: 'ACTIVITYPUB',
+      profileId: remoteAuthor.id,
+      publishedAt: preEpochPublishedAt,
+      receivedAt: preEpochReceivedAt,
+      visibility: PostVisibility.PUBLIC,
+    }),
+  );
+  const preEpochFinishedAt = Temporal.Now.instant().epochMilliseconds;
+  assert.equal(preEpoch.post.createdAt.toString(), preEpochPublishedAt.toString());
+  assert.equal(preEpoch.post.id[14], '7');
+  assert.ok(uuidV7Timestamp(preEpoch.post.id) >= preEpochStartedAt - 1_000);
+  assert.ok(uuidV7Timestamp(preEpoch.post.id) <= preEpochFinishedAt + 1_000);
 });
 
 test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번만 저장한다', async () => {

@@ -11,6 +11,7 @@ import {
   PostContents,
   Posts,
   Profiles,
+  uuidv7,
 } from '@kosmo/core/db';
 import {
   AccountProfileRole,
@@ -29,12 +30,14 @@ import {
   createPostInTransaction,
   isActivityPubPostUriConflict,
   ProfilePairBlockedError,
+  resolveActivityPubPostCreatedAt,
 } from '@kosmo/core/services';
 import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, sql } from 'drizzle-orm';
 import type { Transaction } from '@kosmo/core/db';
 import type { ActivityPubPostInput, PostCreateInput } from '@kosmo/core/services';
 import type {
+  ActivityPubPostCreateInput,
   PostCreateActivityInput,
   PostCreateActivityResult,
 } from '@kosmo/core/temporal/post-create';
@@ -246,13 +249,24 @@ const createPostAttempt = async (
   }
 };
 
-export const generatePostIdActivity = async (): Promise<string> =>
-  db
-    .select({ id: sql<string>`uuidv7()` })
+export const generatePostIdActivity = async (
+  input?: Pick<ActivityPubPostCreateInput, 'publishedAt' | 'receivedAt'>,
+): Promise<string> => {
+  const createdAt =
+    input === undefined
+      ? undefined
+      : resolveActivityPubPostCreatedAt({
+          publishedAt: input.publishedAt === null ? null : Temporal.Instant.from(input.publishedAt),
+          receivedAt: Temporal.Instant.from(input.receivedAt),
+        });
+
+  return db
+    .select({ id: uuidv7(createdAt?.toString()) })
     .from(sql`(VALUES (1)) AS id_source(value)`)
     .limit(1)
     .then(firstOrThrow)
     .then(({ id }) => id);
+};
 
 export const createPostActivity = async ({
   input,

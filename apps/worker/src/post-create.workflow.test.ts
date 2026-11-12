@@ -97,6 +97,9 @@ test(
     const taskQueue = KOSMO_TASK_QUEUE + '-post-create-workflow-' + process.pid;
     const postIds = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
     const generatedIds: string[] = [];
+    const generatedTimestampInputs: Array<
+      { publishedAt: string | null; receivedAt: string } | undefined
+    > = [];
     const createAttempts: PostCreateActivityInput[] = [];
     const effectCalls: string[] = [];
     const notificationCalls: CreateNotificationInput[] = [];
@@ -113,10 +116,14 @@ test(
 
     const worker = await Worker.create({
       activities: {
-        generatePostIdActivity: async () => {
+        generatePostIdActivity: async (input?: {
+          publishedAt: string | null;
+          receivedAt: string;
+        }) => {
           const postId = postIds[generatedIds.length];
           assert.ok(postId);
           generatedIds.push(postId);
+          generatedTimestampInputs.push(input);
           return postId;
         },
         createPostActivity: async (
@@ -369,6 +376,17 @@ test(
         }
 
         assert.deepEqual(generatedIds, postIds);
+        assert.deepEqual(
+          generatedTimestampInputs,
+          cases.map(({ expectedInput }) =>
+            expectedInput.origin === 'ACTIVITYPUB'
+              ? {
+                  publishedAt: expectedInput.publishedAt,
+                  receivedAt: expectedInput.receivedAt,
+                }
+              : undefined,
+          ),
+        );
         assert.deepEqual(collectionCalls.toSorted(), postIds.toSorted());
         assert.ok(effectCalls.length > 0);
       } finally {

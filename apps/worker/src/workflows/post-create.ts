@@ -159,7 +159,14 @@ export async function postCreateWorkflow(
     );
   }
 
-  const postId = parsed.postId ?? (await generatePostIdActivity());
+  const postId =
+    parsed.postId ??
+    (parsed.input.origin === 'ACTIVITYPUB'
+      ? await generatePostIdActivity({
+          publishedAt: parsed.input.publishedAt,
+          receivedAt: parsed.input.receivedAt,
+        })
+      : await generatePostIdActivity());
   const createPost = parsed.revalidateAuthorization ? createPostActivityV2 : createPostActivity;
   const execution = await createPost({
     input: parsed.input,

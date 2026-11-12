@@ -838,6 +838,9 @@ test(
       profileId,
     );
     const preparedInputs: Array<Parameters<typeof prepareRemotePostActivity>[0]> = [];
+    const generatedTimestampInputs: Array<
+      { publishedAt: string | null; receivedAt: string } | undefined
+    > = [];
     const createInputs: PostCreateActivityInput[] = [];
     const worker = await Worker.create({
       activities: {
@@ -847,7 +850,13 @@ test(
           preparedInputs.push(received);
           return { documentBytes: 42, input, requestId, status: 'prepared' } as const;
         },
-        generatePostIdActivity: async () => postId,
+        generatePostIdActivity: async (timestampInput?: {
+          publishedAt: string | null;
+          receivedAt: string;
+        }) => {
+          generatedTimestampInputs.push(timestampInput);
+          return postId;
+        },
         createPostActivity: async (
           received: PostCreateActivityInput,
         ): Promise<PostCreateActivityResult> => {
@@ -889,6 +898,9 @@ test(
       });
       assert.equal(preparedInputs.length, 1);
       assert.equal(preparedInputs[0]?.objectUri, input.objectUri);
+      assert.deepEqual(generatedTimestampInputs, [
+        { publishedAt: input.publishedAt, receivedAt: input.receivedAt },
+      ]);
       assert.deepEqual(createInputs, [{ input, postId }]);
 
       const history = await handle.fetchHistory();

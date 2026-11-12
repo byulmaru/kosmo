@@ -37,6 +37,11 @@ outbound Create와 Delete addressing은 아래 Local Note 표현 계약을 따�
 | 삭제 시각      | 시각, nullable              | Tombstone 전이 결과로 기록하며 변경 불가 | Lifecycle이 Tombstone     | Tombstone 조회 정책 | 없음      |
 | 인용 허용 정책 | Quote Approval Policy, 필수 | 모두, 팔로워, 본인만 중 하나             | Content가 있는 Local Post | Post 조회 정책 통과 | 없음      |
 
+ActivityPub Note 수신으로 생성한 Post는 `published`가 있고 수신 시각 이하일 때 그 값을 생성 시각으로 사용한다.
+`published`가 없거나 수신 시각보다 미래이면 수신 시각을 사용한다. 신규 Note의 ID 정렬 시점도 이 생성 시각을
+따른다. ID에 표현할 수 없는 날짜이면 ID는 기본 생성 시점을 따르고 Post 생성 시각은 유지한다. 기존 Post ID와
+Content가 없는 Announce/Repost ID는 이 규칙으로 바꾸지 않는다.
+
 인용 허용 정책은 Content가 있는 Local Post에 적용하며, `모두`, `팔로워`, `본인만` 중 하나다.
 새 Post와 정책 도입 전 작성한 Local Post의 초기값은 `모두`다. 이 값은 이후 인용 요청을 판단하는 기준이며
 이미 발급한 인용 승인을 변경하지 않는다.
