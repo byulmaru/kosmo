@@ -1,6 +1,7 @@
 import '@kosmo/core/polyfill';
 
 import assert from 'node:assert/strict';
+import dns from 'node:dns/promises';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { generateCryptoKeyPair, signRequest, verifyRequest } from '@fedify/fedify';
 import { CryptographicKey, Follow, Person } from '@fedify/vocab';
@@ -16,6 +17,7 @@ import {
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { profileFollowPairWorkflowId } from '@kosmo/core/temporal/follow-command';
 import { eq, inArray, ne } from 'drizzle-orm';
+import type { LookupAddress, LookupAllOptions } from 'node:dns';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type * as FederationModule from './federation';
@@ -202,6 +204,16 @@ describe('local Instance ActivityPub actor', () => {
   });
 
   test('uses the official local Profile only for contextless Threads.net document GETs', async (t) => {
+    t.mock.method(
+      dns,
+      'lookup',
+      async (hostname: string, options: LookupAllOptions): Promise<LookupAddress[]> => {
+        assert.ok(hostname.length > 0);
+        assert.equal(options.all, true);
+        return [{ address: '1.1.1.1', family: 4 }];
+      },
+    );
+
     const officialProfile = await createLocalProfile('kosmo', officialProfileId);
     const explicitProfile = await createLocalProfile('alice', explicitProfileId);
     const context = federation.createContext(new URL(publicOrigin), undefined);
@@ -318,6 +330,16 @@ describe('local Instance ActivityPub actor', () => {
   });
 
   test('falls back to the server actor when the official local Profile is unavailable', async (t) => {
+    t.mock.method(
+      dns,
+      'lookup',
+      async (hostname: string, options: LookupAllOptions): Promise<LookupAddress[]> => {
+        assert.ok(hostname.length > 0);
+        assert.equal(options.all, true);
+        return [{ address: '1.1.1.1', family: 4 }];
+      },
+    );
+
     const context = federation.createContext(new URL(publicOrigin), undefined);
     const actorUri = context.getActorUri(localInstanceActorIdentifier);
     const actorResponse = await federation.fetch(
