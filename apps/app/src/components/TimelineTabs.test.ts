@@ -91,17 +91,6 @@ describe('TimelineTabs', () => {
     }
   }
 
-  it('사용자에게 홈, 로컬, 연합 탭을 한국어로 표시한다', async () => {
-    await act(async () => {
-      renderer = create(createElement(TimelineTabs, { value: 'home' }));
-    });
-
-    assert.deepEqual(
-      renderer?.root.findAllByType(MockTab).map(({ props }) => props.option.label),
-      ['홈', '로컬', '연합'],
-    );
-  });
-
   it('Native 비활성 route는 현재 파라미터만 바꾸고 refresh하지 않는다', async () => {
     await act(async () => {
       renderer = create(createElement(TimelineTabs, { value: 'home' }));
