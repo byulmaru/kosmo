@@ -62,6 +62,12 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
   조회하면서 더 과거 항목을 찾으면 가장 오래된 cache 항목에 이어 추가한다. 적격 Post fanout은 cache가 없는 Profile의
   key도 생성하며 새 key에는 7일 만료를 설정한다. 새 Post fanout은 기존처럼 cache에 추가된 시각을 사용하며, 같은 시각의
   tie와 DB/cache 전환 경계의 중복·누락 가능성은 유지한다.
+- Follow·Unfollow 보정은 변경된 Profile을 작성자, Reply Parent 작성자, Reply의 현재 Content Mention 대상, 순수
+  Repost의 direct Source 작성자로 하는 Post만 관계 변경의 영향을 받는 후보로 삼는다. 기존 cache 안의 해당 후보는
+  현재 Home 정책으로 다시 판정해 통과하지 못하는 항목만 제거한다. 현재 Follow 중인 변경 대상과 관련된 새 eligible
+  후보는 현재 cache에 저장된 Post ID의 최솟값과 최댓값을 양 끝에 포함하는 ID 범위 안에서만 추가한다. cache가 없거나
+  비어 있으면 보정이 cache를 채우지 않으며, 기존 항목 수를 맞추기 위한 refill도 하지 않는다. storage 최대 1,000개
+  보관 한도는 계속 적용한다.
 - Follow·Unfollow의 Home 보정이 겹치면 이전 관계 기준의 항목이 늦게 추가되는 경합을 수용한다. 이 항목은 cache가
   다시 구성되거나 후속 보정으로 제거될 때까지 남을 수 있고, Home 조회에 따른 만료 연장도 계속 적용된다.
 - 일반 fanout으로 추가한 Home 항목은 viewer Profile의 목록에 처음 추가된 시각 순으로 정렬한다. Follow·Unfollow 보정으로

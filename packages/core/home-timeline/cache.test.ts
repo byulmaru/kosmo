@@ -10,6 +10,7 @@ import {
   NaturalLanguageMuteRules,
   pg,
   PostContents,
+  PostMentions,
   Posts,
   ProfileFollows,
   Profiles,
@@ -37,6 +38,7 @@ import {
   removeHomeTimelinePost,
   touchHomeTimeline,
 } from './cache';
+import { queryHomeTimeline } from './query';
 
 const testRedisUrl = process.env.KOSMO_TEST_REDIS_URL;
 const previousRedisUrl = process.env.REDIS_URL;
@@ -49,6 +51,13 @@ const instanceIds: string[] = [];
 const postIds: string[] = [];
 const contentIds: string[] = [];
 const naturalLanguageMuteDecisionKeys: string[] = [];
+
+const createOrderedPostIdSequence = () => {
+  const timestamp = randomUUID().replaceAll('-', '').slice(0, 12);
+  const prefix = `${timestamp.slice(0, 8)}-${timestamp.slice(8)}-7000-8000-`;
+  let sequence = 0;
+  return () => `${prefix}${(++sequence).toString(16).padStart(12, '0')}`;
+};
 
 after(async () => {
   disposeRedisPubSub();
@@ -136,20 +145,27 @@ const createProfiles = async (instanceId: string, count: number) => {
 
 const createPost = async ({
   profileId,
+  id,
   replyParentId,
   bodyText = 'home cache post',
+  mentions = [],
+  visibility = PostVisibility.PUBLIC,
 }: {
   readonly profileId: string;
+  readonly id?: string;
   readonly replyParentId?: string;
   readonly bodyText?: string;
+  readonly mentions?: readonly string[];
+  readonly visibility?: PostVisibility;
 }) => {
   const post = await db
     .insert(Posts)
     .values({
+      ...(id === undefined ? {} : { id }),
       profileId,
       replyParentId,
       state: PostState.ACTIVE,
-      visibility: PostVisibility.PUBLIC,
+      visibility,
     })
     .returning()
     .then(firstOrThrow);
@@ -161,6 +177,38 @@ const createPost = async ({
     .then(firstOrThrow);
   contentIds.push(content.id);
   await db.update(Posts).set({ currentContentId: content.id }).where(eq(Posts.id, post.id));
+  if (mentions.length > 0) {
+    await db.insert(PostMentions).values(
+      mentions.map((mentionedProfileId) => ({
+        postContentId: content.id,
+        profileId: mentionedProfileId,
+      })),
+    );
+  }
+  return post;
+};
+
+const createPureRepost = async ({
+  id,
+  profileId,
+  repostSourceId,
+}: {
+  readonly id?: string;
+  readonly profileId: string;
+  readonly repostSourceId: string;
+}) => {
+  const post = await db
+    .insert(Posts)
+    .values({
+      ...(id === undefined ? {} : { id }),
+      profileId,
+      repostSourceId,
+      state: PostState.ACTIVE,
+      visibility: PostVisibility.PUBLIC,
+    })
+    .returning()
+    .then(firstOrThrow);
+  postIds.push(post.id);
   return post;
 };
 
@@ -581,210 +629,404 @@ test(
 );
 
 test(
-  'follow reconciliation backfills and removes only posts made ineligible by current policy',
+  'follow reconciliation adds target-related posts only inside the closed cached ID window',
   { skip: !testRedisUrl },
   async () => {
     await waitForRedis();
     const viewer = await createProfile();
-    const author = await createProfile();
-    const followedPost = await createPost({ profileId: author.id });
-    const viewerPost = await createPost({ profileId: viewer.id });
-    const reply = await createPost({ profileId: author.id, replyParentId: viewerPost.id });
-    const repost = await db
-      .insert(Posts)
-      .values({
-        profileId: viewer.id,
-        repostSourceId: followedPost.id,
-        state: PostState.ACTIVE,
-        visibility: PostVisibility.PUBLIC,
-      })
-      .returning()
-      .then(firstOrThrow);
-    postIds.push(repost.id);
+    const target = await createProfile();
+    const replyAuthor = await createProfile();
+    const mentionParentAuthor = await createProfile();
+    const unrelatedAuthor = await createProfile();
+    const nextPostId = createOrderedPostIdSequence();
+    const outsideBefore = await createPost({ profileId: target.id, id: nextPostId() });
+    const lowerAnchor = await createPost({ profileId: viewer.id, id: nextPostId() });
+    const targetPost = await createPost({ profileId: target.id, id: nextPostId() });
+    const mentionParent = await createPost({
+      profileId: mentionParentAuthor.id,
+      id: nextPostId(),
+    });
+    const replyToTarget = await createPost({
+      profileId: replyAuthor.id,
+      id: nextPostId(),
+      replyParentId: targetPost.id,
+    });
+    const replyMentioningTarget = await createPost({
+      profileId: replyAuthor.id,
+      id: nextPostId(),
+      replyParentId: mentionParent.id,
+      mentions: [target.id],
+    });
+    const repostOfTarget = await createPureRepost({
+      id: nextPostId(),
+      profileId: viewer.id,
+      repostSourceId: targetPost.id,
+    });
+    const unrelatedPost = await createPost({
+      profileId: unrelatedAuthor.id,
+      id: nextPostId(),
+    });
+    const upperAnchor = await createPost({ profileId: viewer.id, id: nextPostId() });
+    const outsideAfter = await createPost({ profileId: target.id, id: nextPostId() });
+    const targetPostCreatedAt = lowerAnchor.createdAt.subtract({ hours: 1 });
+
+    await Promise.all([
+      db
+        .update(Posts)
+        .set({ createdAt: lowerAnchor.createdAt.add({ hours: 1 }) })
+        .where(eq(Posts.id, outsideBefore.id)),
+      db.update(Posts).set({ createdAt: targetPostCreatedAt }).where(eq(Posts.id, targetPost.id)),
+      db
+        .update(Posts)
+        .set({ createdAt: lowerAnchor.createdAt.add({ hours: 2 }) })
+        .where(eq(Posts.id, upperAnchor.id)),
+      db
+        .update(Posts)
+        .set({ createdAt: lowerAnchor.createdAt.add({ hours: 1 }) })
+        .where(eq(Posts.id, outsideAfter.id)),
+    ]);
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: viewer.id, followeeProfileId: target.id },
+      { followerProfileId: viewer.id, followeeProfileId: replyAuthor.id },
+      { followerProfileId: viewer.id, followeeProfileId: mentionParentAuthor.id },
+      { followerProfileId: viewer.id, followeeProfileId: unrelatedAuthor.id },
+    ]);
+
+    const key = 'kosmo:home-timeline:profile:' + viewer.id;
     await cacheHomeTimelinePage({
       profileId: viewer.id,
-      postIds: [viewerPost.id, reply.id, repost.id],
+      postIds: [lowerAnchor.id, upperAnchor.id],
     });
-    const key = `kosmo:home-timeline:profile:${viewer.id}`;
-    const replyScoreBefore = (await runRedisCommand((client) => client.zScore(key, reply.id)))
-      ?.value;
-    const repostScoreBefore = (await runRedisCommand((client) => client.zScore(key, repost.id)))
-      ?.value;
-
-    await db.insert(ProfileFollows).values({
-      followerProfileId: viewer.id,
-      followeeProfileId: author.id,
-    });
-    await runRedisCommand((client) => client.expire(key, 60));
-    await reconcileHomeTimelineFollow({ profileId: viewer.id });
-    const followedPostScore = (
-      await runRedisCommand((client) => client.zScore(key, followedPost.id))
-    )?.value;
-    assert.ok(followedPostScore !== null && followedPostScore !== undefined);
-    assert.equal(
-      (await runRedisCommand((client) => client.zScore(key, reply.id)))?.value,
-      replyScoreBefore,
-    );
-    assert.equal(
-      (await runRedisCommand((client) => client.zScore(key, repost.id)))?.value,
-      repostScoreBefore,
-    );
-    let ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
-    assert.ok(ttl !== undefined && ttl <= 60 && ttl > 50, `unexpected TTL ${ttl}`);
-
-    await db
-      .delete(ProfileFollows)
-      .where(
-        and(
-          eq(ProfileFollows.followerProfileId, viewer.id),
-          eq(ProfileFollows.followeeProfileId, author.id),
+    const initialScores = new Map(
+      await Promise.all(
+        [lowerAnchor, upperAnchor].map(
+          async ({ id }) =>
+            [id, (await runRedisCommand((client) => client.zScore(key, id)))?.value] as const,
         ),
-      );
-    await reconcileHomeTimelineFollow({ profileId: viewer.id });
-    assert.equal(
-      (await runRedisCommand((client) => client.zScore(key, followedPost.id)))?.value,
-      null,
-    );
-    assert.equal(
-      (await runRedisCommand((client) => client.zScore(key, reply.id)))?.value,
-      replyScoreBefore,
-    );
-    assert.equal(
-      (await runRedisCommand((client) => client.zScore(key, repost.id)))?.value,
-      repostScoreBefore,
-    );
-    ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
-    assert.ok(ttl !== undefined && ttl <= 60 && ttl > 45, `unexpected TTL ${ttl}`);
-
-    const inactiveViewer = await createProfile();
-    const inactiveKey = `kosmo:home-timeline:profile:${inactiveViewer.id}`;
-    await reconcileHomeTimelineFollow({ profileId: inactiveViewer.id });
-    assert.equal((await runRedisCommand((client) => client.exists(inactiveKey)))?.value, 0);
-  },
-);
-
-test(
-  'follow reconciliation orders backfilled posts by stored time across cache pages',
-  { skip: !testRedisUrl },
-  async () => {
-    await waitForRedis();
-    const viewer = await createProfile();
-    const author = await createProfile();
-    const historicalPosts = await Promise.all(
-      Array.from({ length: 25 }, () => createPost({ profileId: author.id })),
-    );
-    const recentPost = await createPost({ profileId: viewer.id });
-    const historicalCreatedAts = [...historicalPosts]
-      .sort((left, right) => left.id.localeCompare(right.id))
-      .map((post, index) => ({
-        id: post.id,
-        createdAt: recentPost.createdAt.subtract({ hours: 1, seconds: index }),
-      }));
-    await Promise.all(
-      historicalCreatedAts.map(({ id, createdAt }) =>
-        db.update(Posts).set({ createdAt }).where(eq(Posts.id, id)),
       ),
     );
-    await db.insert(ProfileFollows).values({
-      followerProfileId: viewer.id,
-      followeeProfileId: author.id,
-    });
-
-    const key = `kosmo:home-timeline:profile:${viewer.id}`;
-    await cacheHomeTimelinePage({ profileId: viewer.id, postIds: [recentPost.id] });
-    const recentScore = (await runRedisCommand((client) => client.zScore(key, recentPost.id)))
-      ?.value;
-    assert.ok(Number.isFinite(recentScore));
-
-    await reconcileHomeTimelineFollow({ profileId: viewer.id });
-    assert.equal(
-      (await runRedisCommand((client) => client.zScore(key, recentPost.id)))?.value,
-      recentScore,
-    );
-
-    const expectedPostIds = [recentPost.id, ...historicalCreatedAts.map(({ id }) => id)];
-    const firstPage = await readHomeTimelineCache({ profileId: viewer.id, limit: 20 });
-    assert.ok(firstPage);
-    assert.deepEqual(
-      firstPage.entries.map(({ postId }) => postId),
-      expectedPostIds.slice(0, 20),
-    );
-    const cursor = firstPage.entries.at(-1)?.score;
-    assert.ok(cursor !== undefined);
-    const secondPage = await readHomeTimelineCache({
+    const otherwiseEligibleUnrelatedPosts = await queryHomeTimeline({
       profileId: viewer.id,
-      after: cursor,
-      limit: 20,
+      postIds: [outsideBefore.id, outsideAfter.id, unrelatedPost.id],
+      limit: 3,
     });
-    assert.ok(secondPage);
     assert.deepEqual(
-      secondPage.entries.map(({ postId }) => postId),
-      expectedPostIds.slice(20),
+      new Set(otherwiseEligibleUnrelatedPosts.map(({ id }) => id)),
+      new Set([outsideBefore.id, outsideAfter.id, unrelatedPost.id]),
     );
 
-    for (const { id, createdAt } of historicalCreatedAts) {
-      const score = (await runRedisCommand((client) => client.zScore(key, id)))?.value;
-      assert.equal(score, createdAt.epochMilliseconds);
-    }
+    await reconcileHomeTimelineFollow({
+      profileId: viewer.id,
+      followeeProfileIds: [target.id],
+    });
 
-    await reconcileHomeTimelineFollow({ profileId: viewer.id });
-
-    for (const { id, createdAt } of historicalCreatedAts) {
+    assert.equal((await runRedisCommand((client) => client.zCard(key)))?.value, 6);
+    const addedPosts = [
+      [targetPost.id, targetPostCreatedAt.epochMilliseconds],
+      [replyToTarget.id, replyToTarget.createdAt.epochMilliseconds],
+      [replyMentioningTarget.id, replyMentioningTarget.createdAt.epochMilliseconds],
+      [repostOfTarget.id, repostOfTarget.createdAt.epochMilliseconds],
+    ] as const;
+    for (const [postId, expectedScore] of addedPosts) {
       assert.equal(
-        (await runRedisCommand((client) => client.zScore(key, id)))?.value,
-        createdAt.epochMilliseconds,
+        (await runRedisCommand((client) => client.zScore(key, postId)))?.value,
+        expectedScore,
       );
     }
-    assert.equal(
-      (await runRedisCommand((client) => client.zScore(key, recentPost.id)))?.value,
-      recentScore,
-    );
+    for (const post of [outsideBefore, outsideAfter, unrelatedPost]) {
+      assert.equal((await runRedisCommand((client) => client.zScore(key, post.id)))?.value, null);
+    }
+    for (const [postId, score] of initialScores) {
+      assert.ok(Number.isFinite(score));
+      assert.equal((await runRedisCommand((client) => client.zScore(key, postId)))?.value, score);
+    }
+
+    const emptyViewer = await createProfile();
+    const emptyKey = 'kosmo:home-timeline:profile:' + emptyViewer.id;
+    await reconcileHomeTimelineFollow({
+      profileId: emptyViewer.id,
+      followeeProfileIds: [target.id],
+    });
+    assert.equal((await runRedisCommand((client) => client.exists(emptyKey)))?.value, 0);
   },
 );
 
 test(
-  'follow reconciliation preserves the remaining TTL when replacing the last cached post',
+  'follow reconciliation removes only affected ineligible posts and retains other Home paths',
   { skip: !testRedisUrl },
   async () => {
     await waitForRedis();
     const viewer = await createProfile();
-    const previousAuthor = await createProfile();
-    const currentAuthor = await createProfile();
-    const previousPost = await createPost({ profileId: previousAuthor.id });
-    const currentPost = await createPost({ profileId: currentAuthor.id });
-    const key = `kosmo:home-timeline:profile:${viewer.id}`;
-
-    await db.insert(ProfileFollows).values({
-      followerProfileId: viewer.id,
-      followeeProfileId: previousAuthor.id,
+    const target = await createProfile();
+    const replyAuthor = await createProfile();
+    const mentionParentAuthor = await createProfile();
+    const unrelatedAuthor = await createProfile();
+    const outsider = await createProfile();
+    const targetPost = await createPost({ profileId: target.id });
+    const targetParent = await createPost({ profileId: target.id });
+    const replyToTarget = await createPost({
+      profileId: replyAuthor.id,
+      replyParentId: targetParent.id,
     });
-    await cacheHomeTimelinePage({ profileId: viewer.id, postIds: [previousPost.id] });
+    const mentionParent = await createPost({ profileId: mentionParentAuthor.id });
+    const replyMentioningTarget = await createPost({
+      profileId: replyAuthor.id,
+      replyParentId: mentionParent.id,
+      mentions: [target.id],
+    });
+    const followersOnlySource = await createPost({
+      profileId: target.id,
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const followersOnlyRepost = await createPureRepost({
+      profileId: viewer.id,
+      repostSourceId: followersOnlySource.id,
+    });
+    const publicSource = await createPost({ profileId: target.id });
+    const publicRepost = await createPureRepost({
+      profileId: viewer.id,
+      repostSourceId: publicSource.id,
+    });
+    const viewerPost = await createPost({ profileId: viewer.id });
+    const replyToViewer = await createPost({
+      profileId: outsider.id,
+      replyParentId: viewerPost.id,
+    });
+    const unrelatedPost = await createPost({ profileId: unrelatedAuthor.id });
+    const cachedPosts = [
+      targetPost,
+      targetParent,
+      replyToTarget,
+      mentionParent,
+      replyMentioningTarget,
+      followersOnlyRepost,
+      publicRepost,
+      viewerPost,
+      replyToViewer,
+      unrelatedPost,
+    ];
+    await db.insert(ProfileFollows).values([
+      { followerProfileId: viewer.id, followeeProfileId: target.id },
+      { followerProfileId: viewer.id, followeeProfileId: replyAuthor.id },
+      { followerProfileId: viewer.id, followeeProfileId: mentionParentAuthor.id },
+      { followerProfileId: viewer.id, followeeProfileId: unrelatedAuthor.id },
+    ]);
+
+    const cachedPostIds = cachedPosts.map(({ id }) => id);
+    assert.deepEqual(
+      new Set(
+        (
+          await queryHomeTimeline({
+            profileId: viewer.id,
+            postIds: cachedPostIds,
+            limit: cachedPostIds.length,
+          })
+        ).map(({ id }) => id),
+      ),
+      new Set(cachedPostIds),
+    );
+
+    const key = 'kosmo:home-timeline:profile:' + viewer.id;
+    await cacheHomeTimelinePage({ profileId: viewer.id, postIds: cachedPostIds });
     await runRedisCommand((client) => client.expire(key, 60));
+    const initialScores = new Map(
+      await Promise.all(
+        cachedPosts.map(
+          async ({ id }) =>
+            [id, (await runRedisCommand((client) => client.zScore(key, id)))?.value] as const,
+        ),
+      ),
+    );
 
     await db
       .delete(ProfileFollows)
       .where(
         and(
           eq(ProfileFollows.followerProfileId, viewer.id),
-          eq(ProfileFollows.followeeProfileId, previousAuthor.id),
+          inArray(ProfileFollows.followeeProfileId, [target.id, unrelatedAuthor.id]),
         ),
       );
-    await db.insert(ProfileFollows).values({
-      followerProfileId: viewer.id,
-      followeeProfileId: currentAuthor.id,
+    const currentlyEligible = await queryHomeTimeline({
+      profileId: viewer.id,
+      postIds: cachedPostIds,
+      limit: cachedPostIds.length,
+    });
+    assert.equal(
+      currentlyEligible.some(({ id }) => id === unrelatedPost.id),
+      false,
+    );
+    await reconcileHomeTimelineFollow({
+      profileId: viewer.id,
+      followeeProfileIds: [target.id],
     });
 
-    await reconcileHomeTimelineFollow({ profileId: viewer.id });
-
+    const removedPosts = [
+      targetPost,
+      targetParent,
+      replyToTarget,
+      replyMentioningTarget,
+      followersOnlyRepost,
+    ];
+    const retainedPosts = [mentionParent, publicRepost, viewerPost, replyToViewer, unrelatedPost];
     assert.equal(
-      (await runRedisCommand((client) => client.zScore(key, previousPost.id)))?.value,
+      (await runRedisCommand((client) => client.zCard(key)))?.value,
+      retainedPosts.length,
+    );
+    for (const { id } of removedPosts) {
+      assert.equal((await runRedisCommand((client) => client.zScore(key, id)))?.value, null);
+    }
+    for (const { id } of retainedPosts) {
+      const score = (await runRedisCommand((client) => client.zScore(key, id)))?.value;
+      assert.equal(score, initialScores.get(id));
+      assert.ok(Number.isFinite(score));
+    }
+    const ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
+    assert.ok(ttl !== undefined && ttl <= 60 && ttl > 45, 'unexpected TTL ' + ttl);
+  },
+);
+
+test(
+  'follow reconciliation filters only new target posts and preserves concurrent cache state',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const viewer = await createProfile();
+    const target = await createProfile();
+    const nextPostId = createOrderedPostIdSequence();
+    const pageFillPost = await createPost({ profileId: viewer.id, id: nextPostId() });
+    const cachedExcludedPost = await createPost({
+      profileId: target.id,
+      id: nextPostId(),
+      bodyText: 'exclude cached item',
+    });
+    const includedPost = await createPost({
+      profileId: target.id,
+      id: nextPostId(),
+      bodyText: 'include new item',
+    });
+    const excludedPost = await createPost({
+      profileId: target.id,
+      id: nextPostId(),
+      bodyText: 'exclude new item',
+    });
+    const upperAnchor = await createPost({ profileId: viewer.id, id: nextPostId() });
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.id,
+      followeeProfileId: target.id,
+    });
+    await db.insert(NaturalLanguageMuteRules).values({
+      ownerProfileId: viewer.id,
+      condition: 'exclude selected posts',
+    });
+    naturalLanguageMuteDecisionKeys.push(
+      'kosmo:home-timeline:natural-language-mute:profile:' + viewer.id,
+    );
+
+    const key = 'kosmo:home-timeline:profile:' + viewer.id;
+    await cacheHomeTimelinePage({
+      profileId: viewer.id,
+      postIds: [cachedExcludedPost.id, upperAnchor.id],
+    });
+    const initialCache = await readHomeTimelineCache({ profileId: viewer.id, limit: 10 });
+    const tailPostId = initialCache?.oldestPostId;
+    assert.ok(tailPostId);
+    const initialScores = new Map(
+      await Promise.all(
+        [cachedExcludedPost, upperAnchor].map(
+          async ({ id }) =>
+            [id, (await runRedisCommand((client) => client.zScore(key, id)))?.value] as const,
+        ),
+      ),
+    );
+
+    const previousApiKey = process.env.OPENAI_API_KEY;
+    const previousFetch = globalThis.fetch;
+    let notifyFetchStarted!: () => void;
+    const fetchStarted = new Promise<void>((resolve) => {
+      notifyFetchStarted = resolve;
+    });
+    let releaseFetch!: () => void;
+    const fetchGate = new Promise<void>((resolve) => {
+      releaseFetch = resolve;
+    });
+    const evaluatedBodies: string[] = [];
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    globalThis.fetch = async (_input, init) => {
+      notifyFetchStarted();
+      await fetchGate;
+      const payload = JSON.parse(String(init?.body)) as {
+        readonly input: readonly {
+          readonly content: readonly { readonly type: string; readonly text?: string }[];
+        }[];
+      };
+      const posts = payload.input.flatMap(({ content }) =>
+        content
+          .filter(({ type, text }) => type === 'input_text' && text !== undefined)
+          .map(({ text }) => JSON.parse(text!) as { readonly bodyText: string }),
+      );
+      evaluatedBodies.push(...posts.map(({ bodyText }) => bodyText));
+      const probability = posts.some(({ bodyText }) => bodyText.includes('exclude')) ? 0.95 : 0.2;
+      return new Response(
+        JSON.stringify({
+          answers: [{ type: 'predicate', name: 'matches_mute_condition', probability }],
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+
+    let pageFillScore: number | null | undefined;
+    try {
+      const reconciliation = reconcileHomeTimelineFollow({
+        profileId: viewer.id,
+        followeeProfileIds: [target.id],
+      });
+      await fetchStarted;
+      await cacheHomeTimelinePage({
+        profileId: viewer.id,
+        after: tailPostId,
+        postIds: [pageFillPost.id],
+      });
+      await runRedisCommand((client) => client.expire(key, 60));
+      pageFillScore = (await runRedisCommand((client) => client.zScore(key, pageFillPost.id)))
+        ?.value;
+      assert.equal((await runRedisCommand((client) => client.zCard(key)))?.value, 3);
+      releaseFetch();
+      await reconciliation;
+    } finally {
+      releaseFetch();
+      globalThis.fetch = previousFetch;
+      if (previousApiKey === undefined) {
+        delete process.env.OPENAI_API_KEY;
+      } else {
+        process.env.OPENAI_API_KEY = previousApiKey;
+      }
+    }
+
+    assert.deepEqual(evaluatedBodies.sort(), ['exclude new item', 'include new item']);
+    assert.equal((await runRedisCommand((client) => client.zCard(key)))?.value, 4);
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, includedPost.id)))?.value,
+      includedPost.createdAt.epochMilliseconds,
+    );
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, excludedPost.id)))?.value,
       null,
     );
-    const currentScore = (await runRedisCommand((client) => client.zScore(key, currentPost.id)))
-      ?.value;
-    assert.ok(Number.isFinite(currentScore));
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, cachedExcludedPost.id)))?.value,
+      initialScores.get(cachedExcludedPost.id),
+    );
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, upperAnchor.id)))?.value,
+      initialScores.get(upperAnchor.id),
+    );
+    assert.equal(
+      (await runRedisCommand((client) => client.zScore(key, pageFillPost.id)))?.value,
+      pageFillScore,
+    );
+    assert.ok(Number.isFinite(pageFillScore));
     const ttl = (await runRedisCommand((client) => client.ttl(key)))?.value;
-    assert.ok(ttl !== undefined && ttl <= 60 && ttl > 50, `unexpected TTL ${ttl}`);
+    assert.ok(ttl !== undefined && ttl <= 60 && ttl > 45, 'unexpected TTL ' + ttl);
   },
 );
 

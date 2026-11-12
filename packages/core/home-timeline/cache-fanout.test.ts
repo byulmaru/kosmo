@@ -340,6 +340,7 @@ candidateRows = [];
 const selectQueriesBeforeEmptyReconcile = selectQueries;
 await retryAfterRedisFailure(() => reconcileHomeTimelineFollow({
   profileId,
+  followeeProfileIds: [profileId],
 }));
 assert.equal(selectQueries, selectQueriesBeforeEmptyReconcile);
 
@@ -357,7 +358,7 @@ assert.deepEqual(await listHomeTimelineRecipientPage({
   postId,
 }), { profileIds: [], nextCursor: null });
 await removeHomeTimelinePost({ postId });
-await reconcileHomeTimelineFollow({ profileId });
+await reconcileHomeTimelineFollow({ profileId, followeeProfileIds: [profileId] });
 assert.equal(redisCalls, callsBeforeUnconfigured);
 `;
 
