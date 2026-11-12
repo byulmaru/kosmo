@@ -34,6 +34,7 @@ Recommended direction:
 - Prefer PostgreSQL native `uuid` over text IDs for joins, index size, cache locality, and throughput.
 - Standard UUIDv7 provides time grouping without coupling DB identity to a table registry.
 - Generate new primary keys with the PostgreSQL 18.4 built-in `uuidv7()` function as the column default. Do not duplicate UUID bit layout code in the application.
+- A newly materialized ActivityPub Note Post uses the same effective creation timestamp for its UUIDv7 time component: an earlier `publishedAt`, or `receivedAt` when `publishedAt` is missing or future. If that target is outside UUIDv7's 48-bit millisecond range, use zero-argument `uuidv7()` and preserve the stored Post timestamp. This does not change Announce/Repost IDs or existing Post IDs.
 - PostgreSQL UUIDv7 IDs are time-grouped but are not treated as monotonic within the same millisecond.
 - Keep DB UUID and GraphQL Relay global ID as separate responsibilities. GraphQL ID contains the concrete typename and DB UUID as an opaque value.
 - Do not reserve or decode table discriminator bits for GraphQL type routing.

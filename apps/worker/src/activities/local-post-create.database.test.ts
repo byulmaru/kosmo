@@ -165,6 +165,25 @@ const createReadyMedia = async (accountId: string, profileId: string) => {
   return media;
 };
 
+const uuidV7Timestamp = (id: string) => Number.parseInt(id.replaceAll('-', '').slice(0, 12), 16);
+
+test('generatePostIdActivity uses remote publication time and keeps the local default', async () => {
+  const publishedAt = '2010-07-18T00:00:00.000Z';
+  const receivedAt = '2010-07-19T00:00:00.000Z';
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
+  const remoteId = await generatePostIdActivity({ publishedAt, receivedAt });
+  const localId = await generatePostIdActivity();
+  const finishedAt = Temporal.Now.instant().epochMilliseconds;
+
+  assert.ok(
+    Math.abs(uuidV7Timestamp(remoteId) - Temporal.Instant.from(publishedAt).epochMilliseconds) <=
+      1_000,
+  );
+  assert.equal(localId[14], '7');
+  assert.ok(uuidV7Timestamp(localId) >= startedAt - 1_000);
+  assert.ok(uuidV7Timestamp(localId) <= finishedAt + 1_000);
+});
+
 const localInput = (
   author: Awaited<ReturnType<typeof createAuthor>>,
   overrides: Partial<LocalPostCreateInput> = {},
