@@ -108,7 +108,8 @@ test('selectProfile response identifies the selected profile and recreates the a
 
   await createProfileFromSwitcher(page, 'beta');
   await expect(sidebarProfileHandle(page, 'beta')).toBeVisible();
-  await page.waitForLoadState('networkidle');
+  await expect(composerProfileHandle(page, 'beta')).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
 
   graphQLRequests.clear();
 
@@ -377,7 +378,8 @@ test('home onboarding stays hidden while the home active profile query errors', 
 
   await createProfileFromSwitcher(page, 'errorhome');
   await expect(sidebarProfileHandle(page, 'errorhome')).toBeVisible();
-  await page.waitForLoadState('networkidle');
+  await expect(composerProfileHandle(page, 'errorhome')).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
   graphQLRequests.clear();
 
   await failGraphQLOperation(page, 'HomePageQuery');

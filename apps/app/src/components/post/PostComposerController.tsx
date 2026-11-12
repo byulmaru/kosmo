@@ -723,7 +723,9 @@ function PostComposerContents({
                     <PostComposerProfileSwitcher
                       disabled={submitting || items.some((item) => item.state === 'uploading')}
                       onDismissChange={onProfilePickerDismissChange}
-                      onSelectionSuccess={() => editor.current?.focus()}
+                      onSelectionSuccess={() =>
+                        requestAnimationFrame(() => editor.current?.focus())
+                      }
                       onSelectProfile={onSelectProfile}
                       profiles={pickerProfiles}
                       selectedProfileId={profile.id}
@@ -854,6 +856,16 @@ function PostComposerContents({
                 >
                   <>
                     <View
+                      onTouchStart={
+                        // Keep Native touch events attached so closing the picker doesn't reparent the input.
+                        Platform.OS !== 'web'
+                          ? () => {
+                              if (profilePickerOpen) {
+                                profilePickerDismissRef.current?.();
+                              }
+                            }
+                          : undefined
+                      }
                       accessibilityElementsHidden={mediaEditor !== null}
                       aria-hidden={mediaEditor !== null || undefined}
                       ref={dropTargetRef}
