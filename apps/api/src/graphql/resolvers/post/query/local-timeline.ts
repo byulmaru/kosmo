@@ -1,10 +1,4 @@
-import {
-  db,
-  Instances,
-  Posts,
-  ProfilePinnedPosts,
-  Profiles,
-} from '@kosmo/core/db';
+import { db, Instances, Posts, ProfilePinnedPosts, Profiles } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
