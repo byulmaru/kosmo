@@ -1,9 +1,29 @@
-import { db, first, Instances, NaturalLanguageMuteRules, Posts, Profiles } from '@kosmo/core/db';
+import {
+  db,
+  first,
+  Instances,
+  NaturalLanguageMuteRules,
+  Posts,
+  ProfilePinnedPosts,
+  Profiles,
+} from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
 import { getNaturalLanguageMuteDecision } from '@kosmo/core/home-timeline/natural-language-mute-cache';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, getColumns, gt, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getColumns,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notExists,
+} from 'drizzle-orm';
 import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
@@ -42,6 +62,17 @@ builder.queryField('localTimeline', (t) =>
                   isNotNull(Posts.currentContentId),
                   isNull(Posts.replyParentId),
                   postAccessWhere({ ctx, profileMute: 'exclude' }),
+                  notExists(
+                    db
+                      .select({ id: ProfilePinnedPosts.id })
+                      .from(ProfilePinnedPosts)
+                      .where(
+                        and(
+                          eq(ProfilePinnedPosts.profileId, Posts.profileId),
+                          eq(ProfilePinnedPosts.postId, Posts.id),
+                        ),
+                      ),
+                  ),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),

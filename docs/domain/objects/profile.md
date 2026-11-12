@@ -316,7 +316,8 @@ document apply가 성공하면 수신 시각으로 freshness를 갱신하며 Unr
   전체를 원격 순서로 표시한다. 기존 ordered 0..N 관계와 일치하는 다중 고정이 더 단순하다. 단일 고정으로 제한하면 별도의
   교체 규칙과 그에 따른 부분 실패 처리가 필요하다. 이 별도 pinned segment는 기존 Profile chronology의 후보·순서·pagination을
   바꾸지 않으며, chronology에도 포함되는 Post는 pinned segment와 원래 위치에 모두 표시될 수 있다. Home·Local·Hashtag
-  목록에는 pinned ordering을 적용하지 않는다.
+  목록에는 pin 순서를 적용하지 않는다. Local은 현재 pin 관계가 있는 Post를 후보에서 제외하며, pin 해제 뒤 후속 조회는
+  기존 Local 정책에 따라 다시 포함할 수 있다. 이는 Profile chronology, Home, Hashtag와 Post 직접 조회에는 영향을 주지 않는다.
 - Local 고정 Post 순서 변경은 기존 고정 관계와 조회 권한을 유지한다. 성공하면 요청한 Profile의 현재 고정 목록에 저장된 순서를 반영하고 이후 조회에서도 같은 순서를 사용한다. 서버가 순서 변경을 거부하면 기존 고정 관계와 순서를 유지한다.
 - 성공한 Local pin/unpin은 저장된 ordered relation을 바꾸지만, 이미 표시 중인 Profile pinned segment가 즉시 바뀔 필요는 없다.
   현재 목록은 이전 목록 구성과 순서를 유지할 수 있고, 이후 Profile 목록을 다시 조회할 때 서버에 저장된 목록과 순서를 확인한다.

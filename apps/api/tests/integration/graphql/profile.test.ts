@@ -4956,7 +4956,7 @@ describe('GraphQL remote profile boundary', () => {
     }
   });
 
-  test('filters public Local candidates before forward and backward pagination for every viewer', async () => {
+  test('excludes pinned public Local candidates before pagination for every viewer', async () => {
     const auth = await createAuthenticatedSession();
     const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
     const localAuthor = await createProfile({
@@ -4982,6 +4982,11 @@ describe('GraphQL remote profile boundary', () => {
       domain: 'local-timeline-remote.example',
       handle: 'remote-author',
     });
+    const configuredRemotePinAuthor = await createStoredActivityPubAuthor({
+      domain: 'local-timeline-pinned-remote.example',
+      handle: 'pinned-remote-author',
+      instanceId: configuredLocalTimelineInstanceId,
+    });
     const source = await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000800',
       profileId: remoteAuthor.profile.id,
@@ -4995,9 +5000,9 @@ describe('GraphQL remote profile boundary', () => {
       profileId: remoteAuthor.profile.id,
     });
 
-    await createContentfulPost({
+    const remotePinned = await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000990',
-      profileId: remoteAuthor.profile.id,
+      profileId: configuredRemotePinAuthor.profile.id,
     });
     await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000980',
@@ -5044,7 +5049,7 @@ describe('GraphQL remote profile boundary', () => {
 
     const ordinary = await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000920',
-      profileId: localAuthor.id,
+      profileId: auth.profile.id,
     });
     const quote = await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000910',
@@ -5054,6 +5059,33 @@ describe('GraphQL remote profile boundary', () => {
     const older = await createContentfulPost({
       id: '019f8ed1-0000-7000-8000-000000000900',
       profileId: auth.profile.id,
+    });
+
+    const pinned = await requestGraphQL<{ pinProfilePost: { changed: boolean } }>(
+      `mutation PinLocalTimelinePost($input: PinProfilePostInput!) {
+        pinProfilePost(input: $input) { changed }
+      }`,
+      { input: { postId: globalId('Post', ordinary.id) } },
+      auth.token,
+    );
+    assertNoGraphQLErrors(pinned);
+    assert.equal(pinned.data?.pinProfilePost.changed, true);
+
+    const remoteWasEligible = await requestGraphQL<{ localTimeline: RemotePostConnection }>(
+      `query UnpinnedRemoteFeaturedPost {
+        localTimeline(first: 1) { edges { node { id } } }
+      }`,
+      {},
+    );
+    assertNoGraphQLErrors(remoteWasEligible);
+    assert.deepEqual(connectionIds(remoteWasEligible.data?.localTimeline), [
+      globalId('Post', remotePinned.id),
+    ]);
+
+    await db.insert(ProfilePinnedPosts).values({
+      orderKey: generateProfilePinKey(null, null),
+      profileId: configuredRemotePinAuthor.profile.id,
+      postId: remotePinned.id,
     });
 
     for (const token of [undefined, withoutProfile.token, auth.token]) {
@@ -5074,16 +5106,13 @@ describe('GraphQL remote profile boundary', () => {
           token,
         );
 
-      const firstPage = await read({ first: 2 });
+      const firstPage = await read({ first: 1 });
       assertNoGraphQLErrors(firstPage);
-      assert.deepEqual(connectionIds(firstPage.data?.localTimeline), [
-        globalId('Post', ordinary.id),
-        globalId('Post', quote.id),
-      ]);
+      assert.deepEqual(connectionIds(firstPage.data?.localTimeline), [globalId('Post', quote.id)]);
       assert.equal(firstPage.data?.localTimeline.pageInfo.hasNextPage, true);
 
       const secondPage = await read({
-        first: 2,
+        first: 1,
         after: firstPage.data?.localTimeline.pageInfo.endCursor,
       });
       assertNoGraphQLErrors(secondPage);
@@ -5091,7 +5120,7 @@ describe('GraphQL remote profile boundary', () => {
       assert.equal(secondPage.data?.localTimeline.pageInfo.hasNextPage, false);
 
       const exhausted = await read({
-        first: 2,
+        first: 1,
         after: secondPage.data?.localTimeline.pageInfo.endCursor,
       });
       assertNoGraphQLErrors(exhausted);
@@ -5099,16 +5128,33 @@ describe('GraphQL remote profile boundary', () => {
       assert.equal(exhausted.data?.localTimeline.pageInfo.hasNextPage, false);
 
       const backward = await read({
-        last: 2,
+        last: 1,
         before: secondPage.data?.localTimeline.pageInfo.endCursor,
       });
       assertNoGraphQLErrors(backward);
-      assert.deepEqual(connectionIds(backward.data?.localTimeline), [
-        globalId('Post', ordinary.id),
-        globalId('Post', quote.id),
-      ]);
+      assert.deepEqual(connectionIds(backward.data?.localTimeline), [globalId('Post', quote.id)]);
       assert.equal(backward.data?.localTimeline.pageInfo.hasPreviousPage, false);
     }
+
+    const unpinned = await requestGraphQL<{ unpinProfilePost: { changed: boolean } }>(
+      `mutation UnpinLocalTimelinePost($input: UnpinProfilePostInput!) {
+        unpinProfilePost(input: $input) { changed }
+      }`,
+      { input: { postId: globalId('Post', ordinary.id) } },
+      auth.token,
+    );
+    assertNoGraphQLErrors(unpinned);
+    assert.equal(unpinned.data?.unpinProfilePost.changed, true);
+
+    const restored = await requestGraphQL<{ localTimeline: RemotePostConnection }>(
+      `query LocalTimelineAfterUnpin {
+        localTimeline(first: 1) { edges { node { id } } }
+      }`,
+      {},
+      auth.token,
+    );
+    assertNoGraphQLErrors(restored);
+    assert.deepEqual(connectionIds(restored.data?.localTimeline), [globalId('Post', ordinary.id)]);
   });
 
   test('uses configured Local sources from the initialized environment after raw environment changes', async () => {
