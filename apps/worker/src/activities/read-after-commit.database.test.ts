@@ -41,6 +41,7 @@ const {
 const { postContentDocumentFromText } = await import('@kosmo/core/post-content/server');
 const { cacheHomeTimelinePage, invalidateHomeTimelines, readHomeTimelineCache } =
   await import('@kosmo/core/home-timeline/cache');
+const { disposeRedisPubSub } = await import('@kosmo/core/redis/pubsub');
 const { insertHomeTimelinePostActivity, reconcileHomeTimelineFollowChangesActivity } =
   await import('./home-timeline.js');
 const { createPostActivity, generatePostIdActivity } = await import('./post-create.js');
@@ -242,7 +243,11 @@ after(async () => {
         }
       });
     } finally {
-      await Promise.all([pg.end({ timeout: 0 }), pgRead.end({ timeout: 0 })]);
+      try {
+        disposeRedisPubSub();
+      } finally {
+        await Promise.all([pg.end({ timeout: 0 }), pgRead.end({ timeout: 0 })]);
+      }
     }
   }
 });
