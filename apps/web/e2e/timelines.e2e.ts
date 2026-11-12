@@ -12,6 +12,8 @@ import { expect, test } from './fixtures';
 import { isGraphQLOperation, waitForGraphQLOperation } from './graphql';
 import type { Page } from '@playwright/test';
 
+test.use({ trace: 'retain-on-failure' });
+
 const minute = 60_000;
 const day = 24 * 60 * minute;
 
@@ -26,7 +28,7 @@ function formatDateLabel(iso: string) {
 }
 
 async function expectPostOrder(page: Page, bodies: string[]) {
-  const bodyShortcuts = page.getByText(/^E2E timeline/, { exact: true });
+  const bodyShortcuts = page.getByText(/^E2E timeline/, { exact: true }).filter({ visible: true });
 
   await expect(bodyShortcuts).toHaveCount(bodies.length);
   await expect(bodyShortcuts).toHaveText(bodies);
@@ -358,7 +360,12 @@ test('프로필 게시글 목록은 해당 프로필이 작성한 글만 보여�
     'E2E timeline profile latest body',
     'E2E timeline profile older body',
   ]);
-  await expect(page.getByText('E2E timeline other profile body')).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('article')
+      .filter({ visible: true })
+      .getByText('E2E timeline other profile body', { exact: true }),
+  ).toHaveCount(0);
 });
 
 test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여준다', async ({ context, page }) => {
@@ -382,10 +389,10 @@ test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여
   await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
 
   await page.goto(`/@${emptyProfile.handle}`);
-  await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
+  await expect(page.getByText('아직 게시글이 없어요').filter({ visible: true })).toBeVisible();
 });
 
-test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ context, page }) => {
+test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ context, page }, testInfo) => {
   let localRequestCount = 0;
   let failLocalRequests = true;
   const viewer = await createE2ESession({
@@ -413,6 +420,11 @@ test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ con
   });
 
   await page.goto('/local');
+  await expect.poll(() => localRequestCount).toBeGreaterThan(0);
+  await testInfo.attach('local-error-initial-request.json', {
+    body: Buffer.from(JSON.stringify({ localRequestCount, failLocalRequests })),
+    contentType: 'application/json',
+  });
 
   await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
   await expect(page.getByText('아직 게시글이 없어요')).toHaveCount(0);
@@ -535,55 +547,106 @@ test('쿠키 없는 루트는 Local 다음 페이지를 최신순으로 누적�
 
 for (const width of [390, 1440]) {
   for (const timeline of ['home', 'local'] as const) {
-    test(`${width}px ${timeline}: 상단 현재 탭의 pointer·keyboard 재선택은 조회 없이 맨 위로 이동한다`, async ({
+    test(`${width}px ${timeline}: 현재 상단 탭 pointer·Enter·Space 재선택은 갱신 중 목록을 유지하고 응답 뒤에도 동작한다`, async ({
       context,
       page,
     }) => {
       const viewer = await createE2ESession({ handle: `e2e-reselect-${timeline}-${width}` });
       for (let index = 0; index < 10; index += 1) {
         await createE2EPost({
-          body: `E2E scroll-only post ${index}\n첫째 줄\n둘째 줄\n셋째 줄\n넷째 줄`,
+          body: `E2E reselect initial post ${index}\n첫째 줄\n둘째 줄\n셋째 줄\n넷째 줄`,
           profileId: viewer.profile!.id,
         });
       }
       await setE2ESessionCookie(context, viewer.token);
       await page.setViewportSize({ width, height: 720 });
-      let timelineRequests = 0;
-      page.on('request', (request) => {
-        if (
-          [
-            'HomePageQuery',
-            'LocalPageQuery',
-            'LocalContentRefetchQuery',
-            'PostListHomeNextPageQuery',
-            'PostListLocalNextPageQuery',
-          ].some((name) => isGraphQLOperation(request.postData(), name))
-        ) {
-          timelineRequests += 1;
-        }
-      });
+      const refreshOperation = timeline === 'home' ? 'HomePageQuery' : 'LocalContentRefetchQuery';
+      const initialOperation = timeline === 'home' ? 'HomePageQuery' : 'LocalPageQuery';
+      const initialResponse = waitForGraphQLOperation(page, initialOperation);
       await page.goto(`/${timeline}`);
+      await (await initialResponse).finished();
       await expect(page.getByRole('article')).toHaveCount(10);
       const tab = page
         .getByRole('tablist', { name: '타임라인' })
         .getByRole('tab', { name: timeline === 'home' ? '홈' : '로컬', exact: true });
-      const before = timelineRequests;
-      for (const input of ['pointer', 'Enter', 'Space', 'pointer']) {
-        await tab.focus();
-        await page.evaluate(() => window.scrollTo(0, 480));
-        await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
-        if (input === 'pointer') {
-          await tab.click();
-        } else {
-          await page.keyboard.press(input);
+      const initialPost = page
+        .getByRole('article')
+        .filter({ hasText: 'E2E reselect initial post 0' });
+
+      let nextRefreshGate: Promise<void> | null = null;
+      let releasePendingRefresh: () => void = () => undefined;
+      const holdNextRefresh = () => {
+        let release!: () => void;
+        nextRefreshGate = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        releasePendingRefresh = release;
+        return release;
+      };
+
+      await page.route('**/graphql', async (route) => {
+        if (!isGraphQLOperation(route.request().postData(), refreshOperation)) {
+          await route.continue();
+          return;
         }
-        await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-        await expect(page).toHaveURL(new RegExp(`/${timeline}$`));
-        await expect(tab).toHaveAttribute('aria-selected', 'true');
-        await expect(tab).toBeFocused();
-        expect(timelineRequests).toBe(before);
+
+        const refreshGate = nextRefreshGate;
+        nextRefreshGate = null;
+        const response = await route.fetch();
+        if (refreshGate) {
+          await refreshGate;
+        }
+        await route.fulfill({ response });
+      });
+
+      const loadingMessage =
+        timeline === 'home' ? '홈을 불러오는 중입니다.' : '로컬 타임라인을 불러오는 중입니다.';
+      const inputs = ['pointer', 'Enter', 'Space'] as const;
+
+      try {
+        for (const [index, input] of inputs.entries()) {
+          const freshPostBody = `E2E reselect fresh post ${index}`;
+          await createE2EPost({ body: freshPostBody, profileId: viewer.profile!.id });
+
+          const releaseRefresh = holdNextRefresh();
+          const refreshRequest = page.waitForRequest((request) =>
+            isGraphQLOperation(request.postData(), refreshOperation),
+          );
+          const refreshResponse = waitForGraphQLOperation(page, refreshOperation);
+          await page.evaluate(() => window.scrollTo(0, 480));
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+          if (input === 'pointer') {
+            await tab.click();
+          } else {
+            await tab.focus();
+            await page.keyboard.press(input);
+          }
+
+          await refreshRequest;
+          await expect(page.getByRole('article')).toHaveCount(10 + index);
+          await expect(initialPost).toBeVisible();
+          await expect(page.getByText(freshPostBody, { exact: true })).toHaveCount(0);
+          await expect(page.getByText(loadingMessage)).toHaveCount(0);
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+          await expect(page).toHaveURL(new RegExp(`/${timeline}$`));
+          await expect(tab).toHaveAttribute('aria-selected', 'true');
+          await expect(tab).toBeFocused();
+
+          releaseRefresh();
+          await (await refreshResponse).finished();
+          await expect(page.getByRole('article')).toHaveCount(11 + index);
+          await expect(initialPost).toBeVisible();
+          await expect(page.getByText(freshPostBody, { exact: true })).toBeVisible();
+          await expect(page.getByText(loadingMessage)).toHaveCount(0);
+          await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+          await expect(page).toHaveURL(new RegExp(`/${timeline}$`));
+          await expect(tab).toHaveAttribute('aria-selected', 'true');
+          await expect(tab).toBeFocused();
+        }
+      } finally {
+        releasePendingRefresh();
+        await page.unrouteAll({ behavior: 'wait' });
       }
-      await expect(page.getByRole('article')).toHaveCount(10);
     });
   }
 }

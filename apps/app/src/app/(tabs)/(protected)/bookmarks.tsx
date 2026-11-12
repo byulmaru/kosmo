@@ -2,6 +2,7 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { BookmarkConnectionList } from '@/components/bookmark/BookmarkConnectionList';
 import { BookmarkList } from '@/components/bookmark/BookmarkList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteMenu } from '@/components/shell/MobileWebRouteMenu';
 import { useSession } from '@/session/SessionProvider';
 import type { BookmarksPageQuery } from './__generated__/BookmarksPageQuery.graphql';
 
@@ -18,6 +19,15 @@ const BookmarksQuery = graphql`
 `;
 
 export default function BookmarksScreen() {
+  return (
+    <>
+      <MobileWebRouteMenu />
+      <BookmarksRoute />
+    </>
+  );
+}
+
+function BookmarksRoute() {
   const { selectedProfileId, status } = useSession();
 
   if (status !== 'error' && !selectedProfileId) {

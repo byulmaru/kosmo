@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef } from 'react';
-import { Environment, Network, RecordSource, Store } from 'relay-runtime';
+import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
 import { RelayActorBoundary, RelayActorProvider } from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
 import type { GraphQLResponse, PayloadData, RequestParameters, Variables } from 'relay-runtime';
@@ -21,7 +21,10 @@ type RelayMockValue = {
     | StoryOperationResponse
     | StoryOperationResponse[]
     | StoryOperationResponseSequence
-    | ((selectedProfileId: string | null) => StoryOperationResponse)
+    | ((
+        selectedProfileId: string | null,
+        variables: Variables,
+      ) => StoryOperationResponse | undefined)
   >;
   queryData?: unknown;
   queryRequestObserver?: (request: RequestParameters, variables: Variables) => void;
@@ -126,16 +129,18 @@ function createStoryEnvironment(
   };
 
   return new Environment({
-    network: Network.create((request, variables) =>
-      executeStoryOperation(
-        request,
-        variables,
-        mock,
-        environmentIndex,
-        selectedProfileId,
-        () => paginationResponseIndex++,
-        nextOperationResponseIndex,
-      ),
+    network: Network.create(
+      (request, variables) =>
+        executeStoryOperation(
+          request,
+          variables,
+          mock,
+          environmentIndex,
+          selectedProfileId,
+          () => paginationResponseIndex++,
+          nextOperationResponseIndex,
+        ),
+      () => Observable.create<GraphQLResponse>(() => undefined),
     ),
     store: new Store(new RecordSource()),
   });
@@ -154,7 +159,7 @@ async function executeStoryOperation(
     const configuredResponse = mock.operationResponses?.[request.name];
     const actorResponse =
       typeof configuredResponse === 'function'
-        ? configuredResponse(selectedProfileId)
+        ? configuredResponse(selectedProfileId, variables)
         : configuredResponse;
     return Array.isArray(actorResponse)
       ? actorResponse[Math.min(environmentIndex, actorResponse.length - 1)]

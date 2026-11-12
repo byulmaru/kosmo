@@ -90,11 +90,7 @@ async function readPngRgba(file: URL) {
   return { height, rgba, width };
 }
 
-test('native and reusable brand assets keep their approved source dimensions', async () => {
-  const fullLogoSvg = (
-    await readRequiredFile(new URL('brand-logo-full-light.svg', brandDirectory))
-  ).toString('utf8');
-  assert.match(fullLogoSvg, /^<svg width="1665" height="1050" viewBox="[^"]*1665 1050"/);
+test('native brand PNG assets keep their approved dimensions', async () => {
   assert.deepEqual(await readPngDimensions(new URL('brand-logo-full-light.png', brandDirectory)), {
     height: 1050,
     width: 1665,

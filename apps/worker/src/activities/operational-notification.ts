@@ -1,5 +1,6 @@
 import { db, Notifications } from '@kosmo/core/db';
 import { AccountState, NotificationKind } from '@kosmo/core/enums';
+import { publishNotificationAdded } from '@kosmo/core/notification/events';
 import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { startPushNotificationWorkflow } from './notification';
@@ -51,17 +52,27 @@ export const captureOperationalNotificationAudienceActivity = async ({
         return {
           captured: true,
           dataMatches: existing.every(({ data: stored }) => sameOperationalData(stored, data)),
+          insertedNotifications: [],
         };
       }
 
-      const inserted = await transaction.execute(sql`
+      const inserted = await transaction.execute<{
+        notificationId: string;
+        recipientAccountId: string;
+        recipientProfileId: string | null;
+      }>(sql`
         INSERT INTO "notification" ("recipient_account_id", "kind", "source_id", "data")
         SELECT "id", ${NotificationKind.OPERATIONAL}::"notification_kind", ${sendId}::uuid, ${JSON.stringify(data)}::jsonb
         FROM "account"
         WHERE "state" = ${AccountState.ACTIVE}::"account_state"
+        RETURNING "id" AS "notificationId", "recipient_account_id" AS "recipientAccountId", "recipient_profile_id" AS "recipientProfileId"
       `);
 
-      return { captured: inserted.count > 0, dataMatches: true };
+      return {
+        captured: inserted.length > 0,
+        dataMatches: true,
+        insertedNotifications: inserted,
+      };
     });
 
     if (!captured.dataMatches) {
@@ -69,6 +80,8 @@ export const captureOperationalNotificationAudienceActivity = async ({
         'Operational notification send ID already exists with different data',
       );
     }
+
+    captured.insertedNotifications.forEach(publishNotificationAdded);
 
     return captured.captured;
   } catch (error) {

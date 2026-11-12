@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createElement, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import { isNativeDrawerSwipeEnabled } from './shellLayout';
 import type { ComponentProps, ElementType, PropsWithChildren, ReactNode } from 'react';
@@ -54,6 +54,7 @@ let shellChromeProps:
   | Pick<
       ComponentProps<typeof ShellChromeProvider>,
       | 'navigationDrawerOpen'
+      | 'openComposer'
       | 'openNavigationDrawer'
       | 'openProfileSwitcher'
       | 'registerTabReselection'
@@ -61,6 +62,8 @@ let shellChromeProps:
     >
   | undefined;
 let rightRailFooterCount = 0;
+let notificationStreamMounts = 0;
+let notificationStreamProfileIds: string[] = [];
 
 function MockBottomTabBar(props: typeof bottomTabBarProps) {
   bottomTabBarProps = props;
@@ -172,6 +175,19 @@ mockModule('@/components/ui/useSafeAreaPadding', {
 });
 mockModule('@/relay/RelayActorProvider', { RelayActorBoundary: PassThrough });
 
+mockModule('@/components/notification/NotificationStreamUpdates', {
+  NotificationStreamUpdates: ({ profileId }: { profileId: string }) => {
+    useEffect(() => {
+      notificationStreamMounts += 1;
+      notificationStreamProfileIds.push(profileId);
+      return () => {
+        notificationStreamMounts -= 1;
+      };
+    }, [profileId]);
+    return null;
+  },
+});
+
 mockModule('@/session/SessionProvider', {
   useSession: () => ({
     accountId,
@@ -225,14 +241,6 @@ mockModule('./PublicContentInvitation', {
   PublicContentInvitation: MockPublicContentInvitation,
 });
 mockModule('./shellLayout', {
-  getWebMobileShellHeader: (_web: boolean, _width: number, route: string) =>
-    route === '/settings/profile' || route === '/settings/default-post-visibility'
-      ? { leading: 'back', title: '프로필 설정' }
-      : route === '/settings/profile-migration'
-        ? { leading: 'back', title: '다른 서비스에서 이전' }
-        : route === '/settings/following-import'
-          ? { leading: 'back', title: '팔로잉 가져오기' }
-          : null,
   getShellRoutePresentation: () => ({
     layout,
     settingsWorkspace: false,
@@ -241,8 +249,6 @@ mockModule('./shellLayout', {
   isNativeDrawerSwipeEnabled,
   isSettingsRoute: (route: string) => route.startsWith('/settings/'),
   isTimelineRoute: (route: string) => route === '/home' || route === '/local',
-  isWebMobileRouteOwnedHeader: () => false,
-  webMobileShellHeaderHeight: 64,
 });
 
 let UniversalShell: typeof UniversalShellComponent;
@@ -276,6 +282,8 @@ afterEach(async () => {
   sessionStatus = null;
   shellChromeProps = undefined;
   rightRailFooterCount = 0;
+  notificationStreamMounts = 0;
+  notificationStreamProfileIds = [];
   router.back.mock.resetCalls();
   router.dismissTo.mock.resetCalls();
   router.push.mock.resetCalls();
@@ -410,12 +418,13 @@ describe('UniversalShell screen fallback focus target', () => {
     platform.OS = 'android';
     await renderShell();
     assert.ok(shellChromeProps);
-    const { openNavigationDrawer, openProfileSwitcher } = shellChromeProps;
+    const { openComposer, openNavigationDrawer, openProfileSwitcher } = shellChromeProps;
 
     pathname = '/@other/post-id';
     await act(async () => renderer!.update(createElement(UniversalShell)));
 
     assert.equal(shellChromeProps.openNavigationDrawer, openNavigationDrawer);
+    assert.equal(shellChromeProps.openComposer, openComposer);
     assert.equal(shellChromeProps.openProfileSwitcher, openProfileSwitcher);
     assert.equal(shellChromeProps.navigationDrawerOpen, false);
 
@@ -452,35 +461,26 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal('focusable' in root.props, false);
   });
 
-  it('mobile Web Settings shell back은 명시한 parent route로 dismiss한다', async () => {
+  it('mobile Web은 route가 렌더링한 메뉴를 중복하지 않는다', async () => {
     platform.OS = 'web';
     layout = 'mobile';
-    pathname = '/settings/profile';
-    await renderShell();
-
-    const back = renderer?.root.findByProps({ accessibilityLabel: '뒤로 가기' });
-    assert.ok(back);
-    await act(async () => back.props.onPress());
-
-    assert.deepEqual(dismissedToPaths, ['/settings']);
-    assert.equal(router.back.mock.callCount(), 0);
-  });
-
-  it('mobile Web migration route는 shared title과 /settings back을 사용한다', async () => {
-    platform.OS = 'web';
-    layout = 'mobile';
-    pathname = '/settings/profile-migration';
-    await renderShell();
-
-    const header = renderer?.root.findByType('PageHeader' as ElementType);
-    assert.ok(header);
-    assert.equal(header.props.title, '다른 서비스에서 이전');
-    const back = renderer?.root.findByProps({ accessibilityLabel: '뒤로 가기' });
-    assert.ok(back);
-    await act(async () => back.props.onPress());
-
-    assert.deepEqual(dismissedToPaths, ['/settings']);
-    assert.equal(router.back.mock.callCount(), 0);
+    pathname = '/bookmarks';
+    await act(async () => {
+      renderer = create(
+        createElement(
+          UniversalShell,
+          null,
+          createElement('Pressable', { accessibilityLabel: '메뉴 열기' }),
+        ),
+      );
+    });
+    assert.equal(
+      renderer!.root.findAll(
+        (node) =>
+          (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === '메뉴 열기',
+      ).length,
+      1,
+    );
   });
 
   it('Native에서는 shell root를 실제 focusable 접근성 target으로 만든다', async () => {
@@ -593,8 +593,7 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(modal.props.visible, false);
     assert.equal(renderer?.root.findAllByType('Drawer' as ElementType).length, 0);
 
-    const menu = renderer?.root.findByProps({ accessibilityLabel: '메뉴 열기' });
-    assert.ok(menu);
+    assert.ok(shellChromeProps?.openNavigationDrawer);
 
     const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
     const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -609,7 +608,7 @@ describe('UniversalShell screen fallback focus target', () => {
     });
 
     try {
-      await act(async () => menu.props.onPress());
+      await act(async () => shellChromeProps?.openNavigationDrawer());
       assert.equal(modal.props.visible, true);
     } finally {
       await act(async () => renderer?.unmount());
@@ -677,10 +676,32 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(rightRailFooterCount, 1);
   });
 
+  it('keeps one selected Profile notification stream mounted across tab routes', async () => {
+    sessionProfile = { id: 'profile-a' };
+    await renderShell();
+
+    assert.equal(notificationStreamMounts, 1);
+    assert.deepEqual(notificationStreamProfileIds, ['profile-a']);
+
+    pathname = '/notifications';
+    await act(async () => {
+      renderer?.update(createElement(UniversalShell, null, createElement('NotificationsRoute')));
+    });
+
+    assert.equal(notificationStreamMounts, 1);
+    assert.deepEqual(notificationStreamProfileIds, ['profile-a']);
+  });
+
   it('compact와 mobile compose control은 route 이동 없이 같은 Host를 연다', async () => {
     layout = 'compact';
     sessionProfile = { id: 'profile-1' };
     await renderShell();
+
+    assert.ok(shellChromeProps?.openComposer);
+    await act(async () => shellChromeProps?.openComposer?.());
+    assert.equal(rightRailProps?.mode, 'overlay');
+    assert.equal(rightRailProps?.open, true);
+    assert.equal(router.push.mock.callCount(), 0);
 
     assert.ok(sidebarNavigationProps?.onComposeOpen);
     await act(async () => sidebarNavigationProps?.onComposeOpen?.());

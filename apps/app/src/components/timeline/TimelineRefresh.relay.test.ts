@@ -1,18 +1,23 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, Fragment } from 'react';
+import { createElement, Fragment, useEffect } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import {
   ConnectionHandler,
+  createOperationDescriptor,
   Environment,
+  getRequest,
   Network,
   Observable,
   RecordSource,
+  ROOT_ID,
   Store,
 } from 'relay-runtime';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import { colors } from '@/theme/tokens';
+import deletePostMutation from '../post/__generated__/PostDeletionActionDeletePostMutation.graphql';
 import { createTabReselectionRegistry } from '../shell/tabReselection';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -28,11 +33,21 @@ let TimelineTabs: ComponentType<{ value: 'home' | 'local' }>;
 let LocalTimelineScreen: ComponentType<{ publicEntry?: boolean }>;
 const platform = { OS: 'ios' };
 let sessionStatus: 'error' | 'guest' | 'valid' = 'valid';
+let postRequestSummaryMode: 'empty' | 'pending' | 'error' | 'ready' = 'empty';
+const pendingPostRequestSummary = new Promise<never>(() => undefined);
 const openProfileSwitcher = mock.fn();
 const browserListeners = new Map<string, () => void>();
+const browserScrollCalls: unknown[] = [];
 const browserWindow = {
   scrollY: 0,
   innerHeight: 600,
+  scrollTo: (options: unknown) => {
+    browserScrollCalls.push(options);
+    if (typeof options === 'object' && options !== null && 'top' in options) {
+      browserWindow.scrollY = Number(options.top);
+      browserListeners.get('scroll')?.();
+    }
+  },
   addEventListener: (type: string, listener: () => void) => browserListeners.set(type, listener),
   removeEventListener: (type: string) => browserListeners.delete(type),
   requestAnimationFrame: (callback: () => void) => {
@@ -40,6 +55,15 @@ const browserWindow = {
     return 1;
   },
   cancelAnimationFrame: () => undefined,
+};
+const browserDocument = {
+  visibilityState: 'visible',
+  documentElement: { scrollHeight: 10000 },
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+};
+const appState = {
+  addEventListener: () => ({ remove: () => undefined }),
 };
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -49,6 +73,11 @@ type Request = {
   sink: { next(value: GraphQLResponse): void; complete(): void; error(error: Error): void };
 };
 const requests: Request[] = [];
+type Subscription = Request & {
+  connected?: (reconnected: boolean) => void;
+  disposed: boolean;
+};
+const subscriptions: Subscription[] = [];
 const toasts: Array<{
   message: string;
   options: { action?: { onPress: () => void }; persistent?: boolean };
@@ -63,12 +92,41 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
 };
 const navigations: unknown[] = [];
 const tabRegistry = createTabReselectionRegistry();
+let homeReselectionHandler: (() => void) | null = null;
+let homeFocusEffect: (() => void | (() => void)) | null = null;
+let homeFocusCleanup: (() => void) | null = null;
+const registerHomeReselection = (handler: () => void) => {
+  homeReselectionHandler = handler;
+  return () => {
+    if (homeReselectionHandler === handler) {
+      homeReselectionHandler = null;
+    }
+  };
+};
 const shellChrome = {
   openProfileSwitcher,
-  registerHomeReselection: () => () => undefined,
+  registerHomeReselection,
   registerTabReselection: tabRegistry.register,
   reselectTab: tabRegistry.reselect,
+  reselectHome: () => homeReselectionHandler?.(),
 };
+
+function timelineScreenWithPushContext(timeline: 'Home' | 'Local') {
+  const screen = createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen);
+  return timeline === 'Home'
+    ? createElement(
+        WebPushPermissionContext.Provider,
+        {
+          value: {
+            permission: 'default',
+            requestPermission: async () => undefined,
+            support: 'unsupported',
+          },
+        },
+        screen,
+      )
+    : screen;
+}
 class AnimatedValueMock {
   constructor(public value: number) {}
   setValue(value: number) {
@@ -89,7 +147,7 @@ class AnimatedColorMock {
 mockModule('react-relay', {
   ...ReactRelay,
   graphql: (parts: TemplateStringsArray) => {
-    const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
+    const name = parts.join('').match(/(?:query|fragment|mutation|subscription) (\w+)/)?.[1];
     assert.ok(name);
     return require(
       `${name.startsWith('PostList') || name.startsWith('ProfilePinOrder') ? '../post' : '.'}/__generated__/${name}.graphql.ts`,
@@ -97,23 +155,39 @@ mockModule('react-relay', {
   },
 });
 mockModule('expo-router', {
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    useEffect(() => {
+      homeFocusEffect = effect;
+      return () => {
+        homeFocusCleanup?.();
+        homeFocusCleanup = null;
+        if (homeFocusEffect === effect) {
+          homeFocusEffect = null;
+        }
+      };
+    }, [effect]);
+  },
   useRouter: () => ({
     replace: (href: string) => navigations.push(href),
     setParams: (params: object) => navigations.push(params),
   }),
+  useIsFocused: () => true,
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
 });
 mockModule('lucide-react-native', {
+  Bell: 'Bell',
   UserRoundPlus: 'UserRoundPlus',
   ArrowUp: 'ArrowUp',
   ArrowDown: 'ArrowDown',
 });
 mockModule(require.resolve('lucide-react-native'), {
+  Bell: 'Bell',
   UserRoundPlus: 'UserRoundPlus',
   ArrowUp: 'ArrowUp',
   ArrowDown: 'ArrowDown',
 });
 mockModule('react-native', {
+  AppState: appState,
   Platform: platform,
   Animated: {
     Color: AnimatedColorMock,
@@ -130,18 +204,25 @@ mockModule('react-native', {
   FlatList: (props: {
     data: unknown[];
     keyExtractor: (item: unknown, index: number) => string;
+    ListEmptyComponent?: ReactNode;
+    ListFooterComponent?: ReactNode;
+    ListHeaderComponent?: ReactNode;
     renderItem: (value: object) => ReactNode;
   }) =>
     createElement(
       'FlatList',
       props,
-      props.data.map((item, index) =>
-        createElement(
-          Fragment,
-          { key: props.keyExtractor(item, index) },
-          props.renderItem({ item, index }),
-        ),
-      ),
+      props.ListHeaderComponent,
+      props.data.length === 0
+        ? props.ListEmptyComponent
+        : props.data.map((item, index) =>
+            createElement(
+              Fragment,
+              { key: props.keyExtractor(item, index) },
+              props.renderItem({ item, index }),
+            ),
+          ),
+      props.ListFooterComponent,
     ),
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
@@ -149,6 +230,28 @@ mockModule('react-native', {
   View: 'View',
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+
+function MockPostRequestListSummary() {
+  if (postRequestSummaryMode === 'pending') {
+    throw pendingPostRequestSummary;
+  }
+  if (postRequestSummaryMode === 'error') {
+    throw new Error('post requests unavailable');
+  }
+  return postRequestSummaryMode === 'ready'
+    ? createElement('Text', { accessibilityLabel: '게시 요청 요약' }, '게시 요청 요약')
+    : null;
+}
+
+mockModule('@/components/post/PostRequestList', {
+  PostRequestHomeSummaryFallback: () => null,
+  PostRequestHomeSummaryLoading: () => null,
+  PostRequestListSummary: MockPostRequestListSummary,
+});
+mockModule('@/components/shell/NavigationDrawerTrigger', { NavigationDrawerTrigger: () => null });
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+});
 
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
@@ -160,9 +263,28 @@ mockModule('@/session/SessionProvider', { useSession: () => ({ status: sessionSt
 mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => shellChrome });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
-  getWebMobileShellHeaderStickyOffset: () => 0,
 });
-mockModule('@/components/ui/Button', { Button: (props: object) => createElement('Button', props) });
+mockModule('@/components/ui/Button', {
+  Button: ({
+    accessibilityLabel,
+    children,
+    ...props
+  }: {
+    accessibilityLabel?: string;
+    children?: ReactNode;
+    [key: string]: unknown;
+  }) =>
+    createElement(
+      'Button',
+      {
+        ...props,
+        accessibilityLabel:
+          accessibilityLabel ?? (typeof children === 'string' ? children : undefined),
+        accessibilityRole: 'button',
+      },
+      children,
+    ),
+});
 mockModule('@/components/ui/StateView', {
   Skeleton: () => null,
   StateView: (props: object) => createElement('StateView', props),
@@ -201,10 +323,10 @@ before(async () => {
 beforeEach(() => {
   mock.timers.enable({ apis: ['setTimeout'] });
   Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
-  Object.defineProperty(globalThis, 'document', {
-    configurable: true,
-    value: { documentElement: { scrollHeight: 10000 } },
-  });
+  browserWindow.scrollY = 0;
+  browserDocument.visibilityState = 'visible';
+  browserDocument.documentElement.scrollHeight = 10000;
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
 });
 afterEach(async () => {
   await act(async () => renderer?.unmount());
@@ -212,11 +334,17 @@ afterEach(async () => {
   mock.timers.reset();
   renderer = null;
   requests.length = 0;
+  subscriptions.length = 0;
   toasts.length = 0;
   platform.OS = 'ios';
   sessionStatus = 'valid';
+  postRequestSummaryMode = 'empty';
   browserWindow.scrollY = 0;
+  browserScrollCalls.length = 0;
   browserListeners.clear();
+  homeReselectionHandler = null;
+  homeFocusEffect = null;
+  homeFocusCleanup = null;
   openProfileSwitcher.mock.resetCalls();
   for (const [key, descriptor] of [
     ['window', originalWindow],
@@ -237,10 +365,16 @@ const profile = {
   handle: 'author',
   relativeHandle: '@author',
   avatar: null,
+  instance: null,
   private: { defaultPostVisibility: 'PUBLIC' },
-  viewerState: { profileBlock: null, profileMute: null },
+  viewerState: { blockedBy: false, isSelf: true, profileBlock: null, profileMute: null },
 };
-function payload(field: string, ids: string[], hasNextPage = true) {
+function payload(
+  field: string,
+  ids: string[],
+  hasNextPage = true,
+  endCursor = `cursor-${ids.at(-1)}`,
+) {
   return {
     currentSession: { id: 'session', selectedProfile: profile },
     me: { id: 'account', name: 'Author', profiles: [{ id: profile.id }] },
@@ -256,12 +390,15 @@ function payload(field: string, ids: string[], hasNextPage = true) {
             id: `content-${id}`,
             bodyText: id,
             contentWarning: null,
+            linkPreview: null,
             document: null,
             media: [],
             mentionedProfiles: [],
           },
           replyParent: null,
           repostSource: null,
+          replyCount: 0,
+          isPinned: false,
           visibility: 'PUBLIC',
           state: 'ACTIVE',
           viewerBookmark: null,
@@ -271,7 +408,7 @@ function payload(field: string, ids: string[], hasNextPage = true) {
           repostCount: 0,
         },
       })),
-      pageInfo: { endCursor: `cursor-${ids.at(-1)}`, hasNextPage },
+      pageInfo: { endCursor, hasNextPage },
     },
   };
 }
@@ -286,15 +423,78 @@ async function respond(request: Request, data: object) {
     request.sink.complete();
   });
 }
+async function focusHome() {
+  const effect = homeFocusEffect;
+  assert.ok(effect, 'Home should register its focus revalidation');
+  await act(async () => {
+    homeFocusCleanup?.();
+    const cleanup = effect();
+    homeFocusCleanup = typeof cleanup === 'function' ? cleanup : null;
+  });
+}
+async function scrollHomeTo(y: number) {
+  await act(async () => {
+    list().props.onScroll({ nativeEvent: { contentOffset: { y } } });
+  });
+}
+function homePost(id: string) {
+  const homeTimeline = payload('homeTimeline', [id]).homeTimeline as {
+    edges: Array<{ node: unknown }>;
+  };
+  const post = homeTimeline.edges[0]?.node;
+  assert.ok(post);
+  return post;
+}
+function emitHomeTimelineEvent(subscription: Subscription, post: object | null) {
+  const response = {
+    data: { timeline: { __typename: 'TimelinePostAdded', post } },
+  } as GraphQLResponse;
+  subscription.sink.next(response);
+}
+function emitHomePost(subscription: Subscription, id: string) {
+  emitHomeTimelineEvent(subscription, homePost(id));
+}
+function createTimelineNetwork() {
+  return Network.create(
+    (operation, variables) =>
+      Observable.create<GraphQLResponse>((sink) => {
+        requests.push({ name: operation.name, variables, sink });
+      }),
+    (operation, variables, cacheConfig) =>
+      Observable.create<GraphQLResponse>((sink) => {
+        const connected = cacheConfig.metadata?.onSubscriptionConnected;
+        const subscription: Subscription = {
+          name: operation.name,
+          variables,
+          sink,
+          connected:
+            typeof connected === 'function'
+              ? (connected as (reconnected: boolean) => void)
+              : undefined,
+          disposed: false,
+        };
+        subscriptions.push(subscription);
+        return () => {
+          subscription.disposed = true;
+        };
+      }),
+  );
+}
 function list() {
   assert.ok(renderer);
   return renderer.root.find((node) => (node.type as unknown) === 'FlatList');
+}
+function loadMoreButton() {
+  assert.ok(renderer);
+  return renderer.root.findByProps({ accessibilityLabel: '더 보기', accessibilityRole: 'button' });
 }
 function assertConnection(
   environment: Environment,
   field: string,
   ids: string[],
   hasNextPage = true,
+  endCursor = `cursor-${ids.at(-1)}`,
+  edgeCursors: readonly (string | null)[] = ids.map((id) => `cursor-${id}`),
 ) {
   assert.ok(renderer);
   assert.deepEqual(
@@ -315,23 +515,483 @@ function assertConnection(
   );
   assert.deepEqual(
     edgeIds.map((edgeId) => source.get(edgeId)?.cursor),
-    ids.map((id) => `cursor-${id}`),
+    edgeCursors,
   );
   const pageInfo = source.get((connection.pageInfo as { __ref: string }).__ref);
-  assert.equal(pageInfo?.endCursor, `cursor-${ids.at(-1)}`);
+  assert.equal(pageInfo?.endCursor, endCursor);
   assert.equal(pageInfo?.hasNextPage, hasNextPage);
 }
 
 describe('Timeline refresh and pagination with real Relay', () => {
+  it('Home: pending optional request summary preserves actual posts and connection', async () => {
+    postRequestSummaryMode = 'pending';
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+
+    assert.equal(renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length, 0);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+  });
+
+  it('Home subscription prepends actual Posts once and preserves the server pagination cursor', async () => {
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+    const subscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
+    );
+    assert.ok(subscription);
+    assert.deepEqual(subscription.variables.connections, [
+      ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'),
+    ]);
+
+    const requestCount = requests.length;
+    await scrollHomeTo(480);
+    await act(async () => emitHomeTimelineEvent(subscription, null));
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    assert.equal(requests.length, requestCount);
+
+    await act(async () => emitHomePost(subscription, 'incoming'));
+    await act(async () => emitHomePost(subscription, 'incoming'));
+    await act(async () => emitHomePost(subscription, 'a'));
+    assert.equal(requests.length, requestCount, 'Post events do not trigger Home queries');
+    assertConnection(environment, 'homeTimeline', ['incoming', 'a', 'b'], true, 'cursor-b', [
+      null,
+      'cursor-a',
+      'cursor-b',
+    ]);
+
+    await act(async () => list().props.onEndReached());
+    const nextPage = latest('PostListHomeNextPageQuery');
+    assert.equal(nextPage.variables.cursor, 'cursor-b');
+    await respond(nextPage, payload('homeTimeline', ['older'], false));
+    assertConnection(
+      environment,
+      'homeTimeline',
+      ['incoming', 'a', 'b', 'older'],
+      false,
+      'cursor-older',
+      [null, 'cursor-a', 'cursor-b', 'cursor-older'],
+    );
+  });
+
+  it('Home lifecycle read does not restore a streamed Post deleted before completion', async () => {
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    const initialRead = latest('HomePageQuery');
+    await respond(initialRead, payload('homeTimeline', ['a', 'b']));
+
+    const activeSubscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
+    );
+    assert.ok(activeSubscription);
+
+    await focusHome();
+    const canonicalRead = latest('HomePageQuery');
+    assert.notEqual(canonicalRead, initialRead);
+    assert.equal(requests.length, 2);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await act(async () => emitHomePost(activeSubscription, 'incoming'));
+    assert.equal(requests.length, 2, 'A Post event does not start another Home query');
+    assertConnection(environment, 'homeTimeline', ['incoming', 'a', 'b'], true, 'cursor-b', [
+      null,
+      'cursor-a',
+      'cursor-b',
+    ]);
+
+    const deleteOperation = createOperationDescriptor(getRequest(deletePostMutation), {
+      id: 'incoming',
+    });
+    await act(async () => {
+      environment.commitPayload(deleteOperation, {
+        deletePost: { postId: 'incoming', replyParent: null },
+      });
+    });
+
+    await respond(canonicalRead, payload('homeTimeline', ['a', 'b']));
+    assert.equal(requests.length, 2);
+    assert.equal(environment.getStore().getSource().get('incoming'), null);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+  });
+
+  it('Home: optional request summary error preserves posts and retries with Home refresh', async () => {
+    postRequestSummaryMode = 'error';
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+
+    const initialRequest = latest('HomePageQuery');
+    await respond(initialRequest, payload('homeTimeline', ['a', 'b']));
+
+    assert.equal(renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length, 0);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    postRequestSummaryMode = 'ready';
+    await act(async () => list().props.onRefresh());
+
+    const refresh = latest('HomePageQuery');
+    assert.notEqual(refresh, initialRequest);
+    assert.equal(list().props.refreshing, true);
+    assert.equal(renderer!.root.findAllByProps({ accessibilityLabel: '게시 요청 요약' }).length, 1);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await respond(refresh, payload('homeTimeline', ['fresh']));
+    assert.equal(list().props.refreshing, false);
+    assertConnection(environment, 'homeTimeline', ['fresh']);
+  });
+
+  it('Home: cached re-entry keeps rows visible during a quiet latest refresh', async () => {
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    const render = () =>
+      createElement(ReactRelay.RelayEnvironmentProvider, {
+        environment,
+        children: timelineScreenWithPushContext('Home'),
+      });
+
+    await act(async () => {
+      renderer = create(render());
+    });
+    assert.equal(requests.length, 1);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    const firstSubscription = subscriptions.at(-1);
+    assert.ok(firstSubscription);
+
+    await focusHome();
+    assert.equal(requests.length, 2);
+    assert.equal(list().props.refreshing, false);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+
+    await act(async () => {
+      renderer?.unmount();
+      renderer = create(render());
+    });
+    assert.equal(requests.length, 2, 'complete cache renders without a route query');
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    assert.equal(firstSubscription.disposed, true);
+
+    await focusHome();
+    assert.equal(requests.length, 3, 'focus should check the latest Home data');
+    assert.equal(list().props.refreshing, false);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['fresh', 'a']));
+    assertConnection(environment, 'homeTimeline', ['fresh', 'a']);
+
+    const activeSubscription = subscriptions.at(-1);
+    assert.ok(activeSubscription);
+    await scrollHomeTo(480);
+    const beforePostEvent = requests.length;
+    await act(async () => emitHomePost(activeSubscription, 'streamed'));
+    assert.equal(
+      requests.length,
+      beforePostEvent,
+      'a Post event updates Relay without a Home query',
+    );
+    assertConnection(environment, 'homeTimeline', ['streamed', 'fresh', 'a'], true, 'cursor-a', [
+      null,
+      'cursor-fresh',
+      'cursor-a',
+    ]);
+
+    await scrollHomeTo(480);
+    await act(async () => {
+      activeSubscription.connected?.(false);
+      activeSubscription.connected?.(true);
+    });
+    assert.equal(requests.length, beforePostEvent, 'revalidation waits while reading older posts');
+    await scrollHomeTo(0);
+    assert.equal(requests.length, beforePostEvent + 1, 'the pending revalidation runs at the top');
+    assert.equal(list().props.refreshing, false);
+
+    const interruptedRefresh = latest('HomePageQuery');
+    await act(async () => activeSubscription.connected?.(true));
+    await scrollHomeTo(480);
+    const requestCountWhileReading = requests.length;
+    await respond(interruptedRefresh, payload('homeTimeline', ['late']));
+    assert.equal(requests.length, requestCountWhileReading);
+
+    await scrollHomeTo(0);
+    assert.equal(
+      requests.length,
+      requestCountWhileReading + 1,
+      'returning to the top starts one fresh query after the interrupted response',
+    );
+    assert.equal(list().props.refreshing, false);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['latest', 'fresh']));
+    assertConnection(environment, 'homeTimeline', ['latest', 'fresh']);
+
+    await act(async () => {
+      renderer?.unmount();
+      renderer = null;
+    });
+    environment.commitUpdate((store) => {
+      store
+        .get(ConnectionHandler.getConnectionID(ROOT_ID, 'PostList_homeTimeline'))
+        ?.invalidateRecord();
+    });
+    await act(async () => {
+      renderer = create(render());
+    });
+    assert.equal(requests.length, 6, 'invalidated cached data should still trigger a request');
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['fresh']));
+    assertConnection(environment, 'homeTimeline', ['fresh']);
+  });
+
+  it('Home reselect turns queued lifecycle revalidation into one manual read', async () => {
+    platform.OS = 'web';
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+    const activeSubscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
+    );
+    assert.ok(activeSubscription);
+
+    await act(async () => {
+      browserWindow.scrollY = 480;
+      browserListeners.get('scroll')?.();
+    });
+    const requestsBeforeReconnect = requests.length;
+    await act(async () => activeSubscription.connected?.(true));
+    assert.equal(requests.length, requestsBeforeReconnect);
+
+    const scrollCallsBeforeReselect = browserScrollCalls.length;
+    await act(async () => shellChrome.reselectHome());
+    assert.ok(browserScrollCalls.length > scrollCallsBeforeReselect);
+    assert.equal(browserWindow.scrollY, 0);
+    assert.equal(requests.length, requestsBeforeReconnect + 1);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['fresh', 'a']));
+    assert.equal(requests.length, requestsBeforeReconnect + 1);
+    assertConnection(environment, 'homeTimeline', ['fresh', 'a']);
+
+    await act(async () => activeSubscription.connected?.(true));
+    assert.equal(requests.length, requestsBeforeReconnect + 2);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['latest', 'fresh']));
+    assertConnection(environment, 'homeTimeline', ['latest', 'fresh']);
+  });
+
+  it('Home reselect replaces an active automatic read and keeps the manual result', async () => {
+    platform.OS = 'web';
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['a', 'b']));
+
+    await focusHome();
+    const automaticRead = latest('HomePageQuery');
+    assert.equal(requests.length, 2);
+
+    const scrollCallsBeforeReselect = browserScrollCalls.length;
+    await act(async () => shellChrome.reselectHome());
+    assert.ok(browserScrollCalls.length > scrollCallsBeforeReselect);
+    assert.equal(requests.length, 3);
+    const manualRead = latest('HomePageQuery');
+    assert.notEqual(manualRead, automaticRead);
+    assertConnection(environment, 'homeTimeline', ['a', 'b']);
+
+    await act(async () => shellChrome.reselectHome());
+    assert.equal(requests.length, 3, 'a repeated manual gesture should not start another read');
+
+    await respond(manualRead, payload('homeTimeline', ['manual', 'a']));
+    assertConnection(environment, 'homeTimeline', ['manual', 'a']);
+    await respond(automaticRead, payload('homeTimeline', ['automatic', 'a']));
+    assert.equal(requests.length, 3);
+    assertConnection(environment, 'homeTimeline', ['manual', 'a']);
+  });
+
+  it('Home actor Environment replacement disposes its previous subscription owner', async () => {
+    const firstEnvironment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    const nextEnvironment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    const render = (environment: Environment) =>
+      createElement(ReactRelay.RelayEnvironmentProvider, {
+        environment,
+        children: timelineScreenWithPushContext('Home'),
+      });
+
+    await act(async () => {
+      renderer = create(render(firstEnvironment));
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['first-actor']));
+    const previousSubscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
+    );
+    assert.ok(previousSubscription);
+
+    const requestCountBeforeSwitch = requests.length;
+    await act(async () => renderer?.update(render(nextEnvironment)));
+    assert.equal(requests.length, requestCountBeforeSwitch + 1);
+    await respond(latest('HomePageQuery'), payload('homeTimeline', ['next-actor']));
+
+    const nextSubscription = subscriptions.findLast(
+      (candidate) => candidate.name === 'HomeTimelineSubscription',
+    );
+    assert.ok(nextSubscription);
+    assert.notEqual(nextSubscription, previousSubscription);
+    assert.equal(previousSubscription.disposed, true);
+    assertConnection(nextEnvironment, 'homeTimeline', ['next-actor']);
+  });
+
+  it('Home: continues through empty pages with each Relay cursor until a post is visible', async () => {
+    platform.OS = 'web';
+    browserDocument.documentElement.scrollHeight = 100;
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    const cursorA = 'db:00000000-0000-4000-8000-000000000001';
+    const cursorB = 'db:00000000-0000-4000-8000-000000000002';
+    const cursorC = 'db:00000000-0000-4000-8000-000000000003';
+
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Home'),
+        }),
+      );
+    });
+    await respond(latest('HomePageQuery'), payload('homeTimeline', [], true, cursorA));
+    assertConnection(environment, 'homeTimeline', [], true, cursorA);
+    const firstNextPage = latest('PostListHomeNextPageQuery');
+    assert.equal(firstNextPage.variables.cursor, cursorA);
+    assert.equal(firstNextPage.variables.count, 20);
+
+    await respond(firstNextPage, payload('homeTimeline', [], true, cursorB));
+    assertConnection(environment, 'homeTimeline', [], true, cursorB);
+    await act(async () => mock.timers.tick(0));
+    const secondNextPage = latest('PostListHomeNextPageQuery');
+    assert.notEqual(secondNextPage, firstNextPage);
+    assert.equal(secondNextPage.variables.cursor, cursorB);
+    assert.equal(secondNextPage.variables.count, 20);
+
+    await respond(secondNextPage, payload('homeTimeline', ['visible'], false, cursorC));
+    assertConnection(environment, 'homeTimeline', ['visible'], false, cursorC);
+    await act(async () => mock.timers.tick(0));
+    assert.equal(requests.length, 3, 'pagination stops when the visible page has no successor');
+  });
+
+  it('Local: load-more continues from the Relay cursor after a page adds no visible posts', async () => {
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    const cursorA = 'db:00000000-0000-4000-8000-000000000001';
+    const cursorB = 'db:00000000-0000-4000-8000-000000000002';
+    const cursorC = 'db:00000000-0000-4000-8000-000000000003';
+
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Local'),
+        }),
+      );
+    });
+    await respond(latest('LocalPageQuery'), payload('localTimeline', [], true, cursorA));
+    assertConnection(environment, 'localTimeline', [], true, cursorA);
+
+    const initialButton = loadMoreButton();
+    await act(async () => initialButton.props.onPress());
+    const firstNextPage = latest('PostListLocalNextPageQuery');
+    assert.equal(firstNextPage.variables.cursor, cursorA);
+    await respond(firstNextPage, payload('localTimeline', ['visible'], true, cursorB));
+    assertConnection(environment, 'localTimeline', ['visible'], true, cursorB);
+
+    await act(async () => list().props.onEndReached());
+    const noGrowthPage = latest('PostListLocalNextPageQuery');
+    assert.notEqual(noGrowthPage, firstNextPage);
+    assert.equal(noGrowthPage.variables.cursor, cursorB);
+    await respond(noGrowthPage, payload('localTimeline', [], true, cursorC));
+    assertConnection(environment, 'localTimeline', ['visible'], true, cursorC);
+
+    const moreButton = loadMoreButton();
+    await act(async () => moreButton.props.onPress());
+    const finalPage = latest('PostListLocalNextPageQuery');
+    assert.equal(finalPage.variables.cursor, cursorC);
+    await respond(finalPage, payload('localTimeline', ['next-visible'], false));
+    assertConnection(environment, 'localTimeline', ['visible', 'next-visible'], false);
+
+    assert.throws(loadMoreButton, 'terminal pagination removes the More action');
+  });
+
   for (const timeline of ['Home', 'Local'] as const) {
     for (const first of ['pagination', 'refresh'] as const) {
       it(`${timeline}: ${first} completes first without stale connection edges or cursor`, async () => {
         const environment = new Environment({
-          network: Network.create((operation, variables) =>
-            Observable.create<GraphQLResponse>((sink) => {
-              requests.push({ name: operation.name, variables, sink });
-            }),
-          ),
+          network: createTimelineNetwork(),
           store: new Store(new RecordSource()),
         });
         const field = timeline === 'Home' ? 'homeTimeline' : 'localTimeline';
@@ -340,9 +1000,7 @@ describe('Timeline refresh and pagination with real Relay', () => {
           renderer = create(
             createElement(ReactRelay.RelayEnvironmentProvider, {
               environment,
-              children: createElement(
-                timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen,
-              ),
+              children: timelineScreenWithPushContext(timeline),
             }),
           );
         });
@@ -386,17 +1044,13 @@ describe('Timeline refresh and pagination with real Relay', () => {
 for (const timeline of ['Home', 'Local'] as const) {
   it(`${timeline}: parent updates preserve rows while Relay connection updates remain visible`, async () => {
     const environment = new Environment({
-      network: Network.create((operation, variables) =>
-        Observable.create<GraphQLResponse>((sink) => {
-          requests.push({ name: operation.name, variables, sink });
-        }),
-      ),
+      network: createTimelineNetwork(),
       store: new Store(new RecordSource()),
     });
     const render = () =>
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment,
-        children: createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen),
+        children: timelineScreenWithPushContext(timeline),
       });
     await act(async () => {
       renderer = create(render());
@@ -420,11 +1074,7 @@ async function renderLocal(status: 'guest' | 'valid' = 'guest') {
   platform.OS = 'web';
   sessionStatus = status;
   const environment = new Environment({
-    network: Network.create((operation, variables) =>
-      Observable.create<GraphQLResponse>((sink) => {
-        requests.push({ name: operation.name, variables, sink });
-      }),
-    ),
+    network: createTimelineNetwork(),
     store: new Store(new RecordSource()),
   });
   await act(async () => {
@@ -465,7 +1115,7 @@ describe('Guest Local with real Relay', () => {
     await respond(latest('LocalPageQuery'), guestPayload(['a', 'b']));
     assertConnection(environment, 'localTimeline', ['a', 'b']);
     assert.equal(renderer!.root.findAllByType(TimelineTabs).length, 0);
-    assert.equal(renderer!.root.findAllByType('Button' as never).length, 0);
+    assert.ok(loadMoreButton());
 
     await scrollGuestNearEnd();
     const next = latest('PostListLocalNextPageQuery');
@@ -473,6 +1123,7 @@ describe('Guest Local with real Relay', () => {
     assert.equal(next.variables.count, 20);
     await respond(next, guestPayload(['c'], false));
     assertConnection(environment, 'localTimeline', ['a', 'b', 'c'], false);
+    assert.throws(loadMoreButton, 'terminal pagination removes the More action');
     const requestCount = requests.length;
     await scrollGuestNearEnd();
     assert.equal(requests.length, requestCount);
@@ -536,16 +1187,12 @@ describe('Guest Local with real Relay', () => {
   });
 });
 
-for (const os of ['ios', 'android']) {
+for (const os of ['web', 'ios', 'android']) {
   for (const timeline of ['Home', 'Local'] as const) {
-    it(`${os} ${timeline}: 실제 상단 탭 재선택은 새로고침 중에도 스크롤만 한다`, async () => {
+    it(`${os} ${timeline}: 상단 탭 재선택은 목록을 유지하며 refresh하고 pending 입력은 합친다`, async () => {
       platform.OS = os;
       const environment = new Environment({
-        network: Network.create((operation, variables) =>
-          Observable.create<GraphQLResponse>((sink) => {
-            requests.push({ name: operation.name, variables, sink });
-          }),
-        ),
+        network: createTimelineNetwork(),
         store: new Store(new RecordSource()),
       });
       let offset = 480;
@@ -553,7 +1200,7 @@ for (const os of ['ios', 'android']) {
         renderer = create(
           createElement(ReactRelay.RelayEnvironmentProvider, {
             environment,
-            children: createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen),
+            children: timelineScreenWithPushContext(timeline),
           }),
           {
             createNodeMock: ({ type }) =>
@@ -577,35 +1224,61 @@ for (const os of ['ios', 'android']) {
             node.props.accessibilityLabel === (timeline === 'Home' ? '홈' : '로컬'),
         );
       const initialRequests = requests.length;
-      for (let repeat = 0; repeat < 2; repeat += 1) {
-        offset = 480;
-        await act(async () => tab().props.onPress());
-        assert.equal(offset, 0);
-        assert.equal(requests.length, initialRequests);
-        assert.deepEqual(navigations, []);
-        assert.equal(tab().props.accessibilityState.selected, true);
-      }
-      assertConnection(environment, field, ['a', 'b']);
 
-      await act(async () => list().props.onRefresh());
-      const refresh = latest(timeline === 'Home' ? 'HomePageQuery' : 'LocalContentRefetchQuery');
-      assert.equal(requests.length, initialRequests + 1);
-      for (let repeat = 0; repeat < 2; repeat += 1) {
+      const reselect = async () => {
+        const scrollCallsBefore = browserScrollCalls.length;
         offset = 640;
         await act(async () => tab().props.onPress());
-        assert.equal(offset, 0);
-        assert.equal(requests.length, initialRequests + 1);
-        assert.equal(list().props.refreshing, true);
+        if (os === 'web') {
+          assert.ok(browserScrollCalls.length > scrollCallsBefore);
+        } else {
+          assert.equal(offset, 0);
+        }
         assert.deepEqual(navigations, []);
+        assert.equal(tab().props.accessibilityState.selected, true);
+      };
+      await reselect();
+      const firstRefresh = latest(
+        timeline === 'Home' ? 'HomePageQuery' : 'LocalContentRefetchQuery',
+      );
+      assert.equal(requests.length, initialRequests + 1);
+      assertConnection(environment, field, ['a', 'b']);
+      assert.equal(
+        renderer!.root.findAllByType('StateView' as never).some((node) => node.props.loading),
+        false,
+      );
+
+      for (let repeat = 0; repeat < 2; repeat += 1) {
+        await reselect();
+        assert.equal(requests.length, initialRequests + 1);
+        if (os !== 'web') {
+          assert.equal(list().props.refreshing, true);
+        }
+        assertConnection(environment, field, ['a', 'b']);
       }
-      await respond(refresh, payload(field, ['new', 'a']));
-      assert.equal(list().props.refreshing, false);
+      await respond(firstRefresh, payload(field, ['new', 'a']));
+      if (os !== 'web') {
+        assert.equal(list().props.refreshing, false);
+      }
       assertConnection(environment, field, ['new', 'a']);
-      await act(async () => list().props.onEndReached());
-      const next = latest(`PostList${timeline}NextPageQuery`);
-      assert.equal(next.variables.cursor, 'cursor-a');
-      await respond(next, payload(field, ['b'], false));
-      assertConnection(environment, field, ['new', 'a', 'b'], false);
+
+      await reselect();
+      const secondRefresh = latest(
+        timeline === 'Home' ? 'HomePageQuery' : 'LocalContentRefetchQuery',
+      );
+      assert.notEqual(secondRefresh, firstRefresh);
+      assert.equal(requests.length, initialRequests + 2);
+      assertConnection(environment, field, ['new', 'a']);
+      await respond(secondRefresh, payload(field, ['latest', 'new']));
+      assertConnection(environment, field, ['latest', 'new']);
+
+      if (os !== 'web') {
+        await act(async () => list().props.onEndReached());
+        const next = latest(`PostList${timeline}NextPageQuery`);
+        assert.equal(next.variables.cursor, 'cursor-new');
+        await respond(next, payload(field, ['b'], false));
+        assertConnection(environment, field, ['latest', 'new', 'b'], false);
+      }
     });
   }
 }

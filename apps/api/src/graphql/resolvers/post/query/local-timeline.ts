@@ -1,8 +1,10 @@
-import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { db, first, Instances, NaturalLanguageMuteRules, Posts, Profiles } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
+import { getNaturalLanguageMuteDecision } from '@kosmo/core/home-timeline/natural-language-mute-cache';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, getColumns, gt, isNotNull, isNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, getColumns, gt, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
+import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
@@ -17,7 +19,7 @@ builder.queryField('localTimeline', (t) =>
       resolve: async (_, args, ctx) => {
         const localInstance = await resolveConfiguredLocalInstance();
 
-        return resolveCursorConnection<Promise<PostRow[]>>(
+        const connection = await resolveCursorConnection<Promise<PostRow[]>>(
           {
             args,
             defaultSize: 20,
@@ -32,7 +34,10 @@ builder.queryField('localTimeline', (t) =>
               .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
               .where(
                 and(
-                  eq(Profiles.instanceId, localInstance.id),
+                  inArray(Profiles.instanceId, [
+                    localInstance.id,
+                    ...env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS,
+                  ]),
                   eq(Posts.visibility, PostVisibility.PUBLIC),
                   isNotNull(Posts.currentContentId),
                   isNull(Posts.replyParentId),
@@ -44,6 +49,40 @@ builder.queryField('localTimeline', (t) =>
               .orderBy(inverted ? asc(Posts.id) : desc(Posts.id))
               .limit(limit),
         );
+
+        const profileId = ctx.session?.profile?.id;
+        if (!profileId || connection.edges.length === 0) {
+          return connection;
+        }
+
+        const activeRule = await db
+          .select({ id: NaturalLanguageMuteRules.id })
+          .from(NaturalLanguageMuteRules)
+          .where(eq(NaturalLanguageMuteRules.ownerProfileId, profileId))
+          .limit(1)
+          .then(first);
+        if (!activeRule) {
+          return connection;
+        }
+
+        const excludedPostIds = new Set<string>();
+        await Promise.all(
+          connection.edges.map(async ({ node }) => {
+            if (node.profileId === profileId) {
+              return;
+            }
+
+            const decision = await getNaturalLanguageMuteDecision(profileId, node.id);
+            if (decision?.decision === 'exclude') {
+              excludedPostIds.add(node.id);
+            }
+          }),
+        );
+
+        return {
+          ...connection,
+          edges: connection.edges.filter(({ node }) => !excludedPostIds.has(node.id)),
+        };
       },
     },
     PostConnection as never,

@@ -177,12 +177,15 @@ source를 하나만 가질 수 있고, 같은 Remote source는 하나의 target 
 검증된 원격 actor를 Remote Profile로 먼저 materialize한다. Local Actor의 ActivityPub `alsoKnownAs` aliases는 이
 관계의 Remote source canonical Actor URI에서 파생하며 별도 Profile 속성이나 사용자 입력으로 저장하지 않는다.
 
-Profile Migration source 지정은 Settings의 `다른 서비스에서 이전`에서 feature flag가 켜져 있을 때만 노출한다. 현재
-선택된 Profile을 target으로 사용하며 별도 target Profile ID를 입력받지 않는다. 현재 context의 `Account.Active`와
-`Profile.Owner` 권한을 재사용하고 별도 target eligibility를 적용하지 않는다. flag는 UI 노출 조건일 뿐 권한 증거가
-아니며, Profile Owner 검증은 기존 `Account.Active`와 `Profile.Owner`를 사용한다. flag가
-꺼져 있거나 값을 확인할 수 없거나 로딩 중이면 source 준비 control을 노출하지 않는다. 이미 준비된 관계와 그로부터
-파생된 alias, inbound Move 처리는 flag 상태로 중단하거나 제거하지 않는다. remote-to-local Move는 준비 관계의 target
+현재 context에서 `Account.Active`를 만족하며 현재 선택된 target Profile의 `Profile.Owner`인 Account는 준비 관계의 존재 여부를
+source Profile identity의 조회 가능성과 분리해 확인할 수 있다. 이 확인 권한은 `Profile.Member`나 비로그인 요청자에게
+추가하지 않으며, source Profile identity에는 기존 조회 정책을 그대로 적용한다.
+
+Settings의 `다른 서비스에서 이전` entry는 기능 공개 플래그와 관계없이 항상 표시한다. `계정 이전`의 source 준비
+control은 현재 선택된 Profile을 target으로 사용하고 기존 `Account.Active`와 `Profile.Owner` 권한에 따라 제공한다.
+별도 target Profile ID를 입력받지 않으며 Settings 노출 여부는 권한 증거가 아니다. Profile Owner에는 별도 target
+eligibility를 적용하지 않는다. 이미 준비된 관계와 그로부터
+파생된 alias, inbound Move 처리는 feature flag 상태로 중단하거나 제거하지 않는다. remote-to-local Move는 준비 관계의 target
 Profile과 source 관계를 검증하고, 해당 target Profile의 기존 Follow Approval Policy에 따라 Follow Relationship 또는 Follow
 Request를 선택한다. remote-to-remote Move는 준비 관계 없이 canonical target identity와 해당 target Profile의 기존 Follow
 Approval Policy를 검증한다. Kosmo가 source가 되어 Move를 발행하는 동작은
@@ -242,17 +245,24 @@ Hashtag에는 영향을 주지 않는다.
 
 ## 조회 정책
 
-- 공개 Profile 정보는 Lifecycle State가 Active이고 Suspension State가 Normal일 때 조회할 수 있다.
-- GraphQL `node(id:)`와 `profileByHandle` 직접 조회는 위 공개 조회 정책과 기존 lifecycle·membership 정책을 적용해
-  기본 Profile 정보 범위를 제공한다. Profile 자체가 기존 lifecycle 정책으로 조회 불가하면 기존 null/unavailable 결과를
-  유지하며 Block 전용 identity payload를 만들지 않는다.
+- 일반 공개 Profile 정보는 Lifecycle State가 Active이고 Suspension State가 Normal일 때 조회할 수 있다.
+- 이미 알려진 Profile ID에 대한 GraphQL `node(id:)` 참조와 게시물 등에서 참조하는 Profile 객체는 현재 Profile 상태와
+  관계없이 저장된 Profile을 반환한다.
+  Active/Normal Profile은 각 필드의 기존 조회 권한을 적용하고, 그 외 상태의 Profile은 `id`, `handle`, `relativeHandle`
+  만 제공한다. 나머지 GraphQL Profile 필드는 요청자가 Owner여도 `null`로 반환하며, 이 제한 응답으로 GraphQL 오류를
+  발생시키지 않는다. 이 제한은 Profile 상태만으로 결정하며, 알려진 ID의 참조를 위해 연결된 Instance 상태를 별도로
+  검사하지 않는다.
+- `profileByHandle` 직접 조회, Profile 검색 후보와 Profile collection은 기존 Active/lifecycle·membership·moderation
+  조회 조건을 유지한다. 이 경로는 비활성 Profile을 새로 찾거나 검색하는 기능이 아니다. Profile이 기존 직접 조회
+  조건을 통과하지 못하면 기존 null/unavailable 결과를 유지하며 Block 전용 identity payload를 만들지 않는다.
 - 유효한 Account에 현재 selected Profile이 있으면 그 Profile을 viewer로 사용한다. GraphQL `searchProfiles`가
   exact-match 또는 partial-match 후보를 반환할 때는 위 공개 조회 조건을 통과한 후보 중 viewer와 양방향 Active Profile
   Block 관계인 Profile을 pagination·cursor·limit 전에 제외한다.
 - selected Profile이 없는 경우에는 기존 Account 인증과 공개 후보 결과를 유지하며 Profile Block predicate를 적용하거나
   selected Profile을 새로 요구하지 않는다. viewer는 임의 입력 actor나 이전 selected Profile·client cache에서
   재사용하지 않고 현재 요청의 Account 상태에서만 결정한다.
-- Local Profile의 Owner와 운영자 Account는 운영에 필요한 비공개 상태를 조회할 수 있다.
+- Local Profile Owner와 운영자 Account의 운영상 비공개 상태 조회는 기존 별도 운영 조회 경계에 따른다. 이는 public
+  GraphQL Profile projection과 구분되며, 비활성 Profile의 나머지 GraphQL Profile 필드를 허용하지 않는다.
 - Remote Profile은 Instance의 Safety State가 Domain Block이 아니어야 한다.
 - viewer Profile의 Profile Domain Block 대상 Instance에 속한 Remote Profile은 viewer에게 없는 것처럼 취급한다.
 - 공개 검색 후보는 위 조회 조건을 통과해야 하며 Domain Limit Instance의 Remote Profile은 제외한다.
@@ -294,9 +304,10 @@ materialization이나 refresh 없이 저장된 Profile만 조회한다. 원격 l
 검증된 actor document apply가 성공한 경우에만 조회 관측 시각으로 7일 기준을 갱신한다. 검증된 inbound Update의
 document apply가 성공하면 수신 시각으로 freshness를 갱신하며 Unresponsive Instance를 복구할 수 있다.
 
-- Remote Profile lookup은 Instance의 Safety State가 Domain Block이 아니고 Service State가 Active여야 한다.
+- 새 Remote Profile lookup 요청은 Instance의 Safety State가 Domain Block이 아니고 Service State가 Active여야 한다.
   Reachability State가 Reachable이면 새 원격 요청을 보낼 수 있다. Unreachable이면 Remote Profile materialization·갱신에
-  필요한 해당 canonical actor URI의 exact lookup을 시도할 수 있다.
+  필요한 해당 canonical actor URI의 exact lookup을 시도할 수 있다. 이 원격 요청 조건은 이미 저장된 Profile ID의
+  `node(id:)` 참조에는 별도로 적용하지 않는다.
 
 ### Profile 고정 Post
 

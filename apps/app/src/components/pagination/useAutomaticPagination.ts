@@ -21,6 +21,7 @@ export type UseAutomaticPaginationOptions = {
   loadNext: LoadNext;
   nativePagination?: 'endReached' | 'metrics';
   pageSize: number;
+  webDocumentActive?: boolean;
   webScrollTarget?: 'container' | 'document';
 };
 
@@ -40,6 +41,7 @@ export function useAutomaticPagination({
   loadNext,
   nativePagination = 'metrics',
   pageSize,
+  webDocumentActive = true,
   webScrollTarget = 'document',
 }: UseAutomaticPaginationOptions): UseAutomaticPaginationResult {
   const [loadError, setLoadError] = useState(false);
@@ -150,7 +152,7 @@ export function useAutomaticPagination({
   }, [containerPageRevision, isLoadingNext, maybeLoadNextPage, nativePagination, webScrollTarget]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || webScrollTarget !== 'document') {
+    if (Platform.OS !== 'web' || webScrollTarget !== 'document' || !webDocumentActive) {
       return;
     }
     const check = () =>
@@ -171,11 +173,12 @@ export function useAutomaticPagination({
       window.removeEventListener('scroll', check);
       window.removeEventListener('resize', check);
     };
-  }, [itemCount, maybeLoadNextPage, webScrollTarget]);
+  }, [itemCount, maybeLoadNextPage, webDocumentActive, webScrollTarget]);
 
   useEffect(() => {
     if (
       Platform.OS !== 'web' ||
+      (webScrollTarget === 'document' && !webDocumentActive) ||
       !endRef.current ||
       !hasNext ||
       isLoadingNext ||
@@ -186,7 +189,11 @@ export function useAutomaticPagination({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && !pageErrorRef.current) {
+        if (
+          entries[0]?.isIntersecting &&
+          !pageErrorRef.current &&
+          (webScrollTarget !== 'document' || webNearEndCheckRef.current !== null)
+        ) {
           loadNextPage();
         }
       },
@@ -194,7 +201,15 @@ export function useAutomaticPagination({
     );
     observer.observe(endRef.current as unknown as Element);
     return () => observer.disconnect();
-  }, [hasNext, isLoadingNext, itemCount, loadError, loadNextPage]);
+  }, [
+    hasNext,
+    isLoadingNext,
+    itemCount,
+    loadError,
+    loadNextPage,
+    webDocumentActive,
+    webScrollTarget,
+  ]);
 
   return { endRef, loadError, loadNextPage, nativeScrollProps, onEndReached, resetError };
 }

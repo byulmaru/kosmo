@@ -10,10 +10,10 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 type QueryData = {
   currentSession: {
     selectedProfile: {
-      displayName: string;
-      followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
+      displayName: string | null;
+      followPolicy: 'APPROVAL_REQUIRED' | 'OPEN' | null;
       id: string;
-      instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+      instance: { kind: 'ACTIVITYPUB' | 'LOCAL' } | null;
       private: { defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' } | null;
       relativeHandle: string;
       viewerState: {

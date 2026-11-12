@@ -19,6 +19,7 @@ import {
 } from '@/components/profile/ProfileRouteShell';
 import { getProfileConnectionKind, normalizeProfileHandle } from '@/components/profile/route';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteMenu } from '@/components/shell/MobileWebRouteMenu';
 import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { getShellLayout } from '@/components/shell/shellLayout';
@@ -45,7 +46,6 @@ const ProfileLayoutQuery = graphql`
     profileByHandle(handle: $handle) {
       id
       displayName
-      handle
       relativeHandle
       instance {
         kind
@@ -109,64 +109,67 @@ export default function ProfileLayout() {
   const headerLeading = guestMobileWebProfileHome ? <NavigationDrawerTrigger /> : backButton;
 
   return (
-    <RouteBoundary
-      error={
-        connectionKind
-          ? (retry) => (
-              <ProfileRouteContainer scrollKey={scrollKey}>
+    <>
+      {!isProfileHome && !connectionKind ? <MobileWebRouteMenu /> : null}
+      <RouteBoundary
+        error={
+          connectionKind
+            ? (retry) => (
+                <ProfileRouteContainer scrollKey={scrollKey}>
+                  <ProfileConnectionChrome
+                    displayName={fallbackRelativeHandle}
+                    kind={connectionKind}
+                    relativeHandle={fallbackRelativeHandle}
+                  />
+                  <ProfileConnectionListState kind={connectionKind} onRetry={retry} state="error" />
+                </ProfileRouteContainer>
+              )
+            : isProfileHome
+              ? (retry) => (
+                  <ProfileRouteContainer scrollKey={scrollKey}>
+                    <PageHeader leading={headerLeading} title="" />
+                    <StateView
+                      actionLabel="다시 시도"
+                      alert
+                      description="잠시 후 다시 시도해주세요."
+                      onAction={retry}
+                      title="프로필을 불러오지 못했어요"
+                    />
+                  </ProfileRouteContainer>
+                )
+              : undefined
+        }
+        key={`${handle}:${connectionKind ?? 'profile'}`}
+        loading={
+          <ProfileRouteContainer scrollKey={scrollKey}>
+            {connectionKind ? (
+              <>
                 <ProfileConnectionChrome
                   displayName={fallbackRelativeHandle}
                   kind={connectionKind}
                   relativeHandle={fallbackRelativeHandle}
                 />
-                <ProfileConnectionListState kind={connectionKind} onRetry={retry} state="error" />
-              </ProfileRouteContainer>
-            )
-          : isProfileHome
-            ? (retry) => (
-                <ProfileRouteContainer scrollKey={scrollKey}>
-                  <PageHeader leading={headerLeading} title="" />
-                  <StateView
-                    actionLabel="다시 시도"
-                    alert
-                    description="잠시 후 다시 시도해주세요."
-                    onAction={retry}
-                    title="프로필을 불러오지 못했어요"
-                  />
-                </ProfileRouteContainer>
-              )
-            : undefined
-      }
-      key={`${handle}:${connectionKind ?? 'profile'}`}
-      loading={
-        <ProfileRouteContainer scrollKey={scrollKey}>
-          {connectionKind ? (
-            <>
-              <ProfileConnectionChrome
-                displayName={fallbackRelativeHandle}
-                kind={connectionKind}
-                relativeHandle={fallbackRelativeHandle}
-              />
-              <ProfileConnectionListState kind={connectionKind} state="loading" />
-            </>
-          ) : (
-            <>
-              {isProfileHome ? <PageHeader leading={headerLeading} title="" /> : null}
-              <ProfileHero loading />
-            </>
-          )}
-        </ProfileRouteContainer>
-      }
-      title="프로필을 불러오지 못했어요"
-    >
-      <ProfileLayoutContent
-        headerLeading={headerLeading}
-        connectionKind={connectionKind}
-        handle={handle}
-        scrollKey={scrollKey}
-        showPageHeader={isProfileHome}
-      />
-    </RouteBoundary>
+                <ProfileConnectionListState kind={connectionKind} state="loading" />
+              </>
+            ) : (
+              <>
+                {isProfileHome ? <PageHeader leading={headerLeading} title="" /> : null}
+                <ProfileHero loading />
+              </>
+            )}
+          </ProfileRouteContainer>
+        }
+        title="프로필을 불러오지 못했어요"
+      >
+        <ProfileLayoutContent
+          headerLeading={headerLeading}
+          connectionKind={connectionKind}
+          handle={handle}
+          scrollKey={scrollKey}
+          showPageHeader={isProfileHome}
+        />
+      </RouteBoundary>
+    </>
   );
 }
 
@@ -200,7 +203,7 @@ function ProfileLayoutContent({
   const blocking = Boolean(profile?.viewerState?.profileBlock);
   const blockedBy = Boolean(profile?.viewerState?.blockedBy);
 
-  if (!profile) {
+  if (!profile || !profile.instance) {
     const missingState = (
       <StateView
         description={`@${handle} 프로필이 존재하지 않아요.`}
@@ -221,7 +224,7 @@ function ProfileLayoutContent({
   if (connectionKind) {
     const chrome = (
       <ProfileConnectionChrome
-        displayName={profile.displayName || profile.handle}
+        displayName={profile.displayName || profile.relativeHandle}
         kind={connectionKind}
         relativeHandle={profile.relativeHandle}
       />
@@ -255,9 +258,12 @@ function ProfileLayoutContent({
   );
   const chrome = (
     <>
-      <ProfileViewAnalytics key={profile.id} />
       {showPageHeader ? (
-        <PageHeader leading={headerLeading} title={profile.displayName} titleLines={1} />
+        <PageHeader
+          leading={headerLeading}
+          title={profile.displayName ?? profile.relativeHandle}
+          titleLines={1}
+        />
       ) : null}
       <ProfileHero
         key={selectedProfileId}
@@ -281,6 +287,7 @@ function ProfileLayoutContent({
 
   return (
     <ProfileRouteProvider chrome={chrome} scrollKey={scrollKey}>
+      <ProfileViewAnalytics key={profile.id} />
       {blockedProfileRoute ??
         (Platform.OS === 'web' ? (
           <Slot />

@@ -8,7 +8,7 @@
 
 PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 콘텐츠에 Local 목록을 표시한다. 로그인과 선택 Profile 없이 첫 조회·다음 페이지 조회와 공개 Profile·Post 탐색을 제공한다. 방문자 메뉴·긴 로고·하단 CTA는 [public-content-onboarding.md](./public-content-onboarding.md)를 따른다.
 
-비로그인 첫 화면의 헤더는 모든 Web 화면 폭에서 `타임라인 둘러보기`로 표시한다.
+비로그인 첫 화면의 헤더는 route가 소유하며 모든 Web 화면 폭에서 `타임라인 둘러보기`로 표시한다. 모바일 Web에서는 같은 헤더에 메뉴 진입점을 유지한다.
 
 공개 첫 화면에는 인증용 Home·Local 탭을 추가하지 않는다. 모바일 메뉴 헤더와 기존 목록의 로딩·빈 결과·오류·재시도 표현을 재사용하며, Profile이 없다는 이유로 공개 읽기를 Profile 준비 화면으로 바꾸지 않는다. 인증 `/local`과 Native의 Profile 준비·로그인 흐름은 그대로 유지한다.
 
@@ -21,8 +21,9 @@ PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 
   border가 아니라 `Tab/Underline`이 소유하는 별도 요소다.
 - TabList 하단 전체에는 탭과 타임라인 콘텐츠를 구분하는 1px `border/subtle` boundary를 표시한다. 64×4px
   인디케이터는 이 하단 boundary 위에 놓이며 Home과 Local 사이의 세로 border나 바깥 좌우 border는 추가하지 않는다.
-- 탭은 상단에 고정하고 목록만 스크롤한다.
+- 탭은 상단에 고정하고 목록만 스크롤한다. 모바일 Web에서는 route의 브랜드 헤더와 탭을 하나의 sticky 영역으로 유지한다.
 - Home과 Local은 기존 `PostListItem`을 사용하며 Local 전용 게시글 카드나 목록 primitive를 만들지 않는다.
+- Home은 선택한 Profile의 실제 게시 요청 가운데 처리 중이거나 실패한 항목만 카드로 게시글 목록 위에 표시하며, 카드 배치는 목록의 header로 조합한다. 표시 상태는 `QUEUED`·`PROCESSING`·`PUBLISHING`·`CONFIRMING`·`FAILED`다. 게시 완료(`PUBLISHED`)·취소(`CANCELLED`)된 요청은 Home 카드에서 사라지고, 실제 Post 표시는 기존 권한·목록 정책을 따른다. 표시할 카드가 없으면 영역을 생략하고 빈 상태·로딩·오류 안내, 제목, 테두리, 이력·전체 보기 링크를 표시하지 않는다. 전용 게시 요청 화면이나 사이드바 메뉴·대체 경로를 두지 않는다. Native에서는 하나의 `FlatList`가 스크롤을 소유하고 Web에서는 기존 문서 흐름을 유지한다.
 - 목록의 색상, 간격과 typography는 기존 semantic token을 사용한다. 현재 앱 설정과 전역 Provider가 Light로
   고정되어 있으므로 Local은 별도 theme 전환을 추가하지 않으며, Dark 실화면 검증은 앱 전역 theme 활성화 뒤
   수행한다.
@@ -36,10 +37,21 @@ PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 
 - Web에서 비활성 탭을 선택하면 해당 canonical route로 전환한다. Android/iOS에서는 현재 타임라인
   부모 route의 `timeline` 파라미터와 자식 콘텐츠만 바꾸며 새 Stack 화면이나 전환 animation을 만들지 않는다.
   `/home`과 `/local`은 Native 직접 진입의 canonical route로도 계속 동작한다.
-- 이미 선택된 상단 홈 또는 로컬 탭을 다시 선택하면 현재 타임라인 맨 위로 스크롤한다. 이 입력으로 데이터를
-  다시 요청하거나 새로고침하지 않으며, 현재 탭과 route를 유지한다. 연속 입력이나 다른 경로의 새로고침 진행
-  중에도 스크롤만 수행한다. 이는 PROD-1162의 2026-10-22 사용자 결정이다.
+- Home에 새 Post가 추가되면 이미 열린 목록에 수동 새로고침 없이 반영한다. 실제 Post를 목록 맨 위에 자동으로
+  추가하므로 최신 위치에서는 바로 보이고, 이전 Post를 읽고 있으면 읽던 위치를 유지한다. 사용자가 자연스럽게
+  목록 맨 위로 스크롤하면 새 Post가 보인다.
+- 이미 선택된 상단 홈 또는 로컬 탭을 다시 선택하면 현재 타임라인 맨 위로 스크롤하고 해당 화면의 기존 refresh
+  경로를 실행한다. 현재 탭과 route를 유지하며, 새로고침 중에도 마지막 목록을 계속 표시한다. 진행 중 반복 입력은
+  스크롤을 수행하고 기존 refresh 경로가 중복 요청을 막는다.
 - 비활성 탭 선택은 기존 타임라인 진입 동작을 따른다. 이 재선택 정책으로 전환에 별도 새로고침을 추가하지 않는다.
+- 같은 Profile actor에서 Home route로 재진입하면 직전 목록을 즉시 표시하면서 최신 Home을 백그라운드에서 다시
+  가져온다. 이 자동 갱신은 별도 loading indicator를 표시하지 않는다. 당겨서 새로고침은 사용자가 요청하는 기존
+  새로고침 경로로 유지한다.
+  Mute·unmute 또는 확정된 follow·unfollow 성공 후에는 다음 Home 재진입에서 서버의 목록 정책을 다시 적용한다.
+  Follow 요청 생성·취소는 해당하지 않으며, mutation 직후 timeline을 강제로 조회하지 않는다.
+- 앱이 다시 활성화되거나 실시간 업데이트 연결이 복구되면 최신 Home을 자동으로 확인한다. 이전 Post를 읽고 있을
+  때는 최신 목록으로 교체해 읽던 내용을 밀어내지 않고 생명주기 갱신을 대기한다. 사용자가 자연스럽게 목록 맨
+  위로 돌아오면 대기 중인 최신 Home 확인을 실행해 그 결과를 반영한다.
 - Web의 sidebar·mobile drawer·하단 탭 바에서 `/local`의 active 홈 항목을 다시 실행하면 `/home`으로 이동하지
   않고 document scroll을 최상단으로 이동한 뒤 같은 Local 새로고침 경로를 실행한다.
 - compact·full Web의 Local 헤더 브랜드 마크도 현재 Local 타임라인을 재선택한다. 실제 link 대상은 `/home`으로
@@ -64,17 +76,16 @@ PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 
 
 추가 로딩 spinner는 공용 secondary 전경 색상(`theme.foregroundSecondary`)을 사용한다.
 
-Local의 shell 홈 항목 재선택과 Native pull-to-refresh의 hard refresh는 기존 Relay query·environment를 재사용한다. 성공 payload는
-동일 store에 적용하고, hard transport error에서는 마지막 성공 목록과 scroll position을 유지한 채 persistent retry
-toast를 표시한다. Web과 Native 모두 새로고침 요청이 진행 중이면 새로고침을 실행하는 경로의 반복 입력을
-무시하고, 요청이 끝나면 다시 새로고침할 수 있다.
-refresh token을 사용하고 `onComplete` 오류를 공용 Relay fail-open boundary로 전달해 Toast를 열며, route
-이탈·selected Profile 전환 때 stale toast를 정리한다.
-목록은 refetch 오류 경계 밖에서 동일한 Relay store를 계속 읽는다. 실패·재시도 때 경계는 refetch와 Toast만
-교체하며, 목록과 열린 답글 작성창·입력 내용은 재마운트하지 않는다. Relay refetch lifecycle을 사용한다.
-이 사용자가 다시 시도할 수 있는 hard refresh 오류는 unexpected-error reporter에 별도 보고하지 않는다.
-HTTP 200의 `data + errors`는 Relay가 처리하며 사용 가능한 부분 데이터를 적용한다. `localTimeline: null`이면 목록의
-빈 상태를 표시할 수 있다. query·cursor·filtering 정책과 추가 페이지 로딩 동작은 유지한다.
+상단 Home·Local 탭 재선택, Local의 shell 홈 항목 재선택과 Native pull-to-refresh는 각 화면이 소유한 기존 Relay
+query·environment와 refresh 경로를 재사용한다. 성공 payload는 동일 store에 적용하고, hard transport error에서는
+마지막 성공 목록과 scroll position을 유지한 채 persistent retry toast를 표시한다. Web과 Native 모두 새로고침
+요청이 진행 중이면 refresh owner가 반복 입력에 따른 중복 요청을 막고, 요청이 끝나면 다시 새로고침할 수 있다.
+Local은 refresh token을 사용하고 `onComplete` 오류를 공용 Relay fail-open boundary로 전달해 Toast를 열며, route
+이탈·selected Profile 전환 때 stale toast를 정리한다. Local 목록은 refetch 오류 경계 밖에서 동일한 Relay store를
+계속 읽는다. 실패·재시도 때 경계는 refetch와 Toast만 교체하며, 목록과 열린 답글 작성창·입력 내용은 재마운트하지
+않는다. Relay refetch lifecycle을 사용한다. 사용자가 다시 시도할 수 있는 Local hard refresh 오류는 unexpected-error
+reporter에 별도 보고하지 않는다. HTTP 200의 `data + errors`는 Relay가 처리하며 사용 가능한 부분 데이터를 적용한다.
+`localTimeline: null`이면 목록의 빈 상태를 표시할 수 있다. Local은 선택한 Profile에 규칙이 있는 경우 기존 제외 판정이 있는 다른 Profile 게시글만 숨기며, 자기 게시글과 판정이 없는 게시글은 표시한다. 다음 페이지가 더 있어도 보이는 게시글이 늘지 않으면 `더 보기`로 이어서 볼 수 있다. 기존 접근 권한과 cursor 기준은 유지한다.
 
 Local query가 성공 결과를 렌더링하기 전 발생한 오류는 Web의 빈 목록 영역 또는 Android/iOS Native의 2행 skeleton과
 공용 persistent Toast로 표시한다. 성공 결과에는 빈 목록과 route 재진입 뒤 Relay cache에서 렌더링한 목록도 포함한다.

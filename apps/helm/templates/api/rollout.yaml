@@ -3,7 +3,7 @@ kind: Rollout
 metadata:
   name: {{ printf "%s-api" .Release.Name | trunc 63 | trimSuffix "-" }}
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave: "3"
   labels:
     helm.sh/chart: {{ include "kosmo.chart" . }}
     app.kubernetes.io/name: api
@@ -65,6 +65,8 @@ spec:
               value: {{ .Values.temporal.frontendAddress | quote }}
             - name: TEMPORAL_NAMESPACE
               value: {{ include "kosmo.temporalNamespaceName" . | quote }}
+            - name: REDIS_URL
+              value: {{ printf "redis://%s:6379" (include "kosmo.redisName" .) | quote }}
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:

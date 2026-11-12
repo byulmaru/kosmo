@@ -39,7 +39,11 @@ export function PostContentMention({
   return (
     <NavigationLink href={`/${data.relativeHandle}` as Href} resetScroll>
       <Text
-        accessibilityLabel={`${data.relativeHandle}, ${data.displayName}, 프로필 보기`}
+        accessibilityLabel={
+          data.displayName != null
+            ? `${data.relativeHandle}, ${data.displayName}, 프로필 보기`
+            : `${data.relativeHandle}, 프로필 보기`
+        }
         accessibilityRole="link"
         onPress={(event) => event.stopPropagation()}
         style={StyleSheet.flatten([styles.link, styles.mentionLink, { color: linkColor }])}

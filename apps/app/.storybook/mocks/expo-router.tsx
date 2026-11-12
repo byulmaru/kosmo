@@ -4,11 +4,12 @@ import {
   Fragment,
   isValidElement,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
 import { Platform, Text } from 'react-native';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { EffectCallback, PropsWithChildren, ReactNode } from 'react';
 
 export type Href = string | { params?: Record<string, string | undefined>; pathname: string };
 
@@ -103,6 +104,14 @@ export function useCurrentRouteInfo() {
 
 export function useSegments() {
   return useContext(RouterContext).segments;
+}
+
+export function useIsFocused() {
+  return true;
+}
+
+export function useFocusEffect(effect: EffectCallback) {
+  useEffect(effect, [effect]);
 }
 
 export function useLocalSearchParams<T extends Record<string, string | undefined>>() {

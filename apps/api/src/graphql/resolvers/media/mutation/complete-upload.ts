@@ -26,10 +26,10 @@ builder.mutationField('completeMediaUpload', (t) =>
     }),
     input: {
       id: t.input.globalID({ for: Media }),
-      applyNightshade: t.input.boolean({ required: false, defaultValue: false }),
+      applyAiProhibitFilter: t.input.boolean({ required: false, defaultValue: false }),
     },
     resolve: async (_, { input }, ctx) => {
-      const applyNightshade = input.applyNightshade ?? false;
+      const applyNightshade = input.applyAiProhibitFilter ?? false;
       const media = await db
         .select()
         .from(MediaTable)

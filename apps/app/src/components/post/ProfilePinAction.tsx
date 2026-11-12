@@ -85,7 +85,7 @@ export function useProfilePinAction(postKey: ProfilePinAction_post$key): Readonl
   const pending = pinPending || unpinPending;
   const ownEligible = Boolean(
     selectedProfileId === post.profile.id &&
-    post.profile.instance.kind === 'LOCAL' &&
+    post.profile.instance?.kind === 'LOCAL' &&
     post.state === 'ACTIVE' &&
     post.content &&
     ['PUBLIC', 'UNLISTED', 'FOLLOWERS'].includes(post.visibility),

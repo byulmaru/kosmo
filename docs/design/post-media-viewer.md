@@ -85,6 +85,9 @@ Wide Web의 오른쪽 thread rail은 fullscreen modal 안의 별도 elevation su
 ## 선택과 탐색
 
 - 선택한 gallery tile의 document index에서 viewer를 시작한다.
+- 현재 선택한 Media가 탐색 가능한 `Ready` 상태이고 `rights.licenseUrl`이 있으면 image chrome의 닫기 control 반대편에 `이용 조건` 48×48 icon link를 표시한다. 이용조건 link가 없으면 생략한다.
+- 현재 이미지의 `Media.aiProhibitFilterApplied`가 strict `true`이면 실제 이미지 frame의 오른쪽 아래에 passive `Shield` badge를 표시한다. 상단 close/counter와 분리하고, Gallery와 같은 overlay pill·16px white glyph를 사용한다. false·null·누락 값에는 표시하지 않는다.
+- Viewer badge는 모든 플랫폼의 accessibility tree에서 장식으로 숨기며 별도 focus stop이나 활성화 동작을 만들지 않는다. Web에서는 hover하면 공용 [Tooltip](./tooltips.md)이 `AI 학습방지 필터가 적용되었어요. 이 표시는 나에게만 보여요.`를 별도의 정보 surface로 표시한다. 이 문구는 accessibility-hidden badge의 시각적 내용이 아니다. Native에서는 badge가 pointer 입력을 가로막지 않는다. 기존 Alt Text 또는 document 순서 fallback과 accessible image name의 `학습방지 필터 적용됨`은 유지하며, 탐색·zoom·close·focus 동작은 바뀌지 않는다.
 - 2장 이상이면 시각적 `현재 위치/전체`를 표시하고, 1장이면 시각 counter를 생략한다. Screen Reader에는 장수와 관계없이 현재 위치와 전체 개수를 알린다.
 - 현재 이미지의 nullable Alt Text를 accessible name으로 사용하고, 없으면 document 순서 기반의 `N번째 첨부 이미지`를 사용한다. 현재 위치 안내는 이미지 이름과 별도로 전달해 내용을 위치 정보로 대체하거나 중복 낭독하지 않는다.
 - 이전·다음 control은 document 순서를 따르며 첫 장의 이전과 마지막 장의 다음은 비활성화한다. 끝에서 반대편으로 순환하지 않는다.
@@ -149,8 +152,8 @@ Compact Post detail, Wide 346px full-height rail, 상태별 visibility와 비순
 Production Host/Relay/route 연결이나 runtime 완료를 증명하지 않는다.
 DSN-50·DSN-51의 Figma·문서 완료도 Production runtime이나 component 반영 증거로 사용하지 않는다.
 
-- Component test는 Compact·Wide와 Ready·Loading·Error·Unavailable 상태, canonical frame·control geometry, 상태별 navigation·counter·detail·rail visibility, Loading 단일 announcement·reduced-motion 정적 표시·Error retry, 1장·다중 위치와 비순환 경계를 확인한다.
-- Storybook은 실제 `PostLayout` detail과 thread 맥락 fixture, Controls/Actions, 390 Compact·1024/1440 Wide와 theme 상태, 1장·다중 이미지, 첫·중간·마지막 위치와 Error retry callback을 확인한다. Sensitive 공개는 Gallery 진입 경계가 소유하며 Viewer state·callback·story로 복제하지 않는다. Media 저장·공유처럼 계약에 없는 action은 넣지 않는다.
+- Component test는 Compact·Wide와 Ready·Loading·Error·Unavailable 상태, canonical frame·control geometry, strict-true Filtered Media badge와 false/null/unknown omission, 상태별 navigation·counter·detail·rail visibility, Loading 단일 announcement·reduced-motion 정적 표시·Error retry, 1장·다중 위치와 비순환 경계를 확인한다.
+- Storybook은 실제 `PostLayout` detail과 thread 맥락 fixture, Controls/Actions, 390 Compact·1024/1440 Wide와 theme 상태, 적용·미적용·unknown Media, 1장·다중 이미지, 첫·중간·마지막 위치와 Error retry callback을 확인한다. Sensitive 공개는 Gallery 진입 경계가 소유하며 Viewer state·callback·story로 복제하지 않는다. Media 저장·공유처럼 계약에 없는 action은 넣지 않는다.
 
 ## PROD-849 Production 후속 검증 경계
 
@@ -164,4 +167,4 @@ Figma·Storybook 정적 완료를 현재 runtime 검증이나 component 반영 �
 
 ## 제외 범위
 
-Web Zoom·pan, Media 편집·crop·caption·metadata, gallery layout 변경, viewer route·deep link, Media 전용 action bar와 파일 공유·다운로드·기기 저장은 제외한다. 기기 저장은 플랫폼별 permission, 파일 전달 방식과 실패·재시도 UX가 별도 제품·기술 계약을 필요로 하므로 후속 범위에서 다룬다.
+Web Zoom·pan, Media 편집·crop·caption, 이용 조건 link 외 metadata 표시, gallery layout 변경, viewer route·deep link, Media 전용 action bar와 파일 공유·다운로드·기기 저장은 제외한다. 기기 저장은 플랫폼별 permission, 파일 전달 방식과 실패·재시도 UX가 별도 제품·기술 계약을 필요로 하므로 후속 범위에서 다룬다.

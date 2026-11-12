@@ -77,6 +77,7 @@ import {
 import { Catalog, Section } from '../StoryFrame';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { GraphQLResponse, RequestParameters, Variables } from 'relay-runtime';
+import type { PostComposerCreatePostMutation$variables } from '@/components/post/__generated__/PostComposerCreatePostMutation.graphql';
 import type { ComposerMediaItem } from '@/components/post/PostComposerMediaControls';
 import type { StoryPost } from '../fixtures';
 import type { PostDeletionListEdgeSafetyQuery as PostDeletionListEdgeSafetyQueryType } from './__generated__/PostDeletionListEdgeSafetyQuery.graphql';
@@ -88,6 +89,14 @@ const postMediaImageUri = ogDefaultUrl;
 
 const storyShareOrigin = () => window.location.origin;
 const quoteMutationRequestObserver = fn().mockName('Quote composer mutation');
+const postComposerMutationRequestObserver = fn().mockName('Post composer mutation');
+const composerFileDropIssueMutationObserver = fn().mockName(
+  'Composer file drop issue upload mutation',
+);
+const composerFileDropCreatePostMutationObserver = fn().mockName(
+  'Composer file drop create post mutation',
+);
+const postDetailQueryRequestObserver = fn().mockName('Post detail query');
 const actionBarNavigationObserver = fn().mockName('Action Bar route request');
 
 async function dispatchPointerBoundary(
@@ -522,6 +531,26 @@ const pureRepost = {
   repostCount: 1,
   viewerRepost: null,
 };
+const visibilityOwnershipSourcePost = post({
+  bodyText: '공개 범위가 다른 Quote·Repost의 원문입니다.',
+  id: 'visibility-ownership-source',
+  profile: sourceAuthor,
+  visibility: 'PUBLIC',
+});
+const visibilityOwnershipQuotePost = post({
+  bodyText: '팔로워에게만 공개하는 인용 게시글입니다.',
+  id: 'visibility-ownership-quote',
+  profile: repostAuthor,
+  repostSource: visibilityOwnershipSourcePost,
+  visibility: 'FOLLOWERS',
+});
+const visibilityOwnershipPureRepost = post({
+  bodyText: null,
+  id: 'visibility-ownership-repost',
+  profile: repostAuthor,
+  repostSource: visibilityOwnershipSourcePost,
+  visibility: 'DIRECT',
+});
 const longPureRepost = post({
   bodyText: null,
   id: 'post-repost-long-author',
@@ -715,18 +744,6 @@ const routeChildPost = {
   ...post({
     bodyText: 'Child 본문',
     id: 'route-child',
-    replyParent: {
-      __typename: 'Post',
-      id: routeCurrentPost.id,
-      profile: routeCurrentPost.profile,
-    },
-  }),
-  viewerReactions: [],
-};
-const routeCreatedReply = {
-  ...post({
-    bodyText: 'targeted refetch로 반영된 새 Reply',
-    id: 'route-created-reply',
     replyParent: {
       __typename: 'Post',
       id: routeCurrentPost.id,
@@ -963,6 +980,9 @@ const storyPosts = [
   loadErrorThreeMediaPost,
   replyPost,
   ...authorBoundaryPosts,
+  visibilityOwnershipSourcePost,
+  visibilityOwnershipQuotePost,
+  visibilityOwnershipPureRepost,
 ];
 const composerAvatarUrl =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="96" height="96"%3E%3Crect width="96" height="96" fill="%232563eb"/%3E%3C/svg%3E';
@@ -980,6 +1000,47 @@ const composerUnavailableProfile = {
   private: null,
 } as unknown as typeof composerProfile;
 const alternateComposerProfile = profile({ id: 'profile-composer-alternate' });
+
+type PostComposerCreatePostInput = PostComposerCreatePostMutation$variables['input'];
+
+let generatedPostRequestIdSequence = 0;
+
+function acceptedCreatePostResponse(variables: PostComposerCreatePostMutation$variables) {
+  const { input } = variables;
+  const authorProfile = [composerProfile, alternateComposerProfile].find(
+    (candidate) => candidate.id === input.actorProfileId,
+  );
+  if (!authorProfile) {
+    throw new Error('Accepted Post request fixture requires its actor ID.');
+  }
+  const requestId = `00000000-0000-4000-8000-${String(++generatedPostRequestIdSequence).padStart(12, '0')}`;
+
+  return {
+    data: {
+      createPost: {
+        request: {
+          __typename: 'PostRequest',
+          authorProfile,
+          bodyText: input.bodyText,
+          contentWarning: input.contentWarning ?? null,
+          id: `post-request-${requestId}`,
+          media: (input.media ?? []).map((item) => ({
+            __typename: 'Media',
+            altText: item.altText ?? null,
+            aiProhibitFilterApplied: null,
+            id: item.mediaId,
+            url: postMediaImageUri,
+          })),
+          post: null,
+          requestId,
+          sensitiveMedia: input.sensitiveMedia ?? false,
+          status: 'QUEUED',
+        },
+      },
+    },
+  };
+}
+
 const emptyPostsProfile = profileWithPosts([], { id: 'profile-posts-empty' });
 const contentPostsProfile = profileWithPosts(
   [shortPost, pureRepostOfQuote, quotePost, quoteWithoutSource].map(withReactionViewerState),
@@ -1004,9 +1065,6 @@ const paginationHomeInitialPost = withReactionViewerState(
 );
 const paginationHomeNextPost = withReactionViewerState(
   post({ bodyText: 'Home 다음 page 게시글', id: 'post-pagination-home-next' }),
-);
-const paginationHomeCreatedPost = withReactionViewerState(
-  post({ bodyText: 'Home에 새로 작성한 게시글', id: 'post-pagination-home-created' }),
 );
 const paginationProfileInitialPost = withReactionViewerState(
   post({ bodyText: 'Profile 첫 page 게시글', id: 'post-pagination-profile-initial' }),
@@ -2081,7 +2139,7 @@ function ComposerStory() {
 }
 
 function ProductionComposerAdapterStory() {
-  const [createdPostId, setCreatedPostId] = useState<string | null>(null);
+  const [acceptedRequestCount, setAcceptedRequestCount] = useState(0);
   const data = useLazyLoadQuery<PostsProductionComposerAdapterStoryQuery>(
     ProductionComposerAdapterStoryQuery,
     {},
@@ -2094,12 +2152,12 @@ function ProductionComposerAdapterStory() {
     <Catalog>
       <PostComposerController
         onExpand={() => undefined}
-        onPostCreated={(post) => setCreatedPostId(post.id)}
+        onPostRequestAccepted={() => setAcceptedRequestCount((count) => count + 1)}
         onRequestClose={() => undefined}
         presentation="rail"
         profile={requireFragment(data.composerProfile.composer, 'production composer profile')}
       />
-      <Text testID="production-composer-created-post">{createdPostId ?? 'none'}</Text>
+      <Text testID="production-composer-accepted-count">{acceptedRequestCount}</Text>
     </Catalog>
   );
 }
@@ -2191,6 +2249,40 @@ function ContentWarningRevealStory() {
         ]}
         mentionedProfiles={[]}
         postId="content-warning-story-post"
+      />
+    </Catalog>
+  );
+}
+
+function PostMediaProtectionStory() {
+  return (
+    <Catalog>
+      <PostContentRenderer
+        bodyText="오늘 산책길에서 찍은 사진이에요."
+        contentWarning={null}
+        document={null}
+        media={[
+          {
+            aiProhibitFilterApplied: true,
+            altText: '필터가 적용된 이미지',
+            id: 'post-media-protection-filtered',
+            url: postMediaImageUri,
+          },
+          {
+            aiProhibitFilterApplied: false,
+            altText: '필터가 적용되지 않은 이미지',
+            id: 'post-media-protection-unfiltered',
+            url: postMediaImageUri,
+          },
+          {
+            aiProhibitFilterApplied: null,
+            altText: '적용 상태를 알 수 없는 이미지',
+            id: 'post-media-protection-unknown',
+            url: postMediaImageUri,
+          },
+        ]}
+        mentionedProfiles={[]}
+        postId="post-media-protection-story-post"
       />
     </Catalog>
   );
@@ -2396,20 +2488,14 @@ function ReplyListSurfaceStory() {
   );
 }
 
-type ReplyComposerRequest = Readonly<{
-  bodyText: string;
-  media: readonly Readonly<{ altText: string | null; mediaId: string }>[];
-  replyParentId?: string;
-  sensitiveMedia: boolean;
-  visibility: string;
-}>;
+type ReplyComposerRequest = PostComposerCreatePostInput;
 
 function ReplyComposerContractStory({
   defaultPostVisibility = 'UNLISTED',
 }: {
   defaultPostVisibility?: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED';
 } = {}) {
-  const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
+  const [acceptedRequestCount, setAcceptedRequestCount] = useState(0);
   const [requests, setRequests] = useState<ReplyComposerRequest[]>([]);
   const fixtureProfile =
     defaultPostVisibility === 'PUBLIC' ? composerPublicProfile : composerProfile;
@@ -2432,13 +2518,9 @@ function ReplyComposerContractStory({
         if (request.name === 'PostComposerCreatePostMutation') {
           const input = variables.input as ReplyComposerRequest;
           setRequests((current) => [...current, input]);
-          return Promise.resolve({
-            data: {
-              createPost: {
-                post: { __typename: 'Post', id: 'reply-created-in-story' },
-              },
-            },
-          } as GraphQLResponse);
+          return Promise.resolve(
+            acceptedCreatePostResponse(variables as PostComposerCreatePostMutation$variables),
+          );
         }
         if (request.name === 'PostComposerIssueMediaUploadUrlMutation') {
           nextMediaId += 1;
@@ -2467,27 +2549,25 @@ function ReplyComposerContractStory({
     <RelayEnvironmentProvider environment={environment}>
       <Suspense fallback={<Text>Reply Composer fixture를 불러오는 중입니다.</Text>}>
         <ReplyComposerContractContents
-          onPostCreated={(createdPost) =>
-            setCreatedPostIds((current) => [...current, createdPost.id])
-          }
+          onPostRequestAccepted={() => setAcceptedRequestCount((count) => count + 1)}
         />
       </Suspense>
       <Text testID="reply-composer-request-log">{JSON.stringify(requests)}</Text>
-      <Text testID="reply-composer-created-log">{JSON.stringify(createdPostIds)}</Text>
+      <Text testID="reply-composer-accepted-count">{acceptedRequestCount}</Text>
     </RelayEnvironmentProvider>
   );
 }
 
 function ReplyComposerContractContents({
-  onPostCreated,
+  onPostRequestAccepted,
 }: {
-  onPostCreated: (post: Readonly<{ id: string }>) => void;
+  onPostRequestAccepted: () => void;
 }) {
   const { composerProfile } = usePostsStoryData();
 
   return (
     <PostComposerController
-      onPostCreated={onPostCreated}
+      onPostRequestAccepted={onPostRequestAccepted}
       profile={composerProfile}
       replyParentId="post-parent"
       replyParentVisibility="UNLISTED"
@@ -2496,7 +2576,8 @@ function ReplyComposerContractContents({
 }
 
 function ReplyComposerContextIsolationStory() {
-  const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
+  const [acceptedRequestCount, setAcceptedRequestCount] = useState(0);
+  const [requests, setRequests] = useState<ReplyComposerRequest[]>([]);
   const [firstCommittedBody, setFirstCommittedBody] = useState<string | null>(null);
   const [alternateProfile, setAlternateProfile] = useState(false);
   const [parentId, setParentId] = useState('post-parent-a');
@@ -2505,7 +2586,7 @@ function ReplyComposerContextIsolationStory() {
   const environment = useMemo(
     () =>
       new Environment({
-        network: Network.create(async (request: RequestParameters) => {
+        network: Network.create(async (request: RequestParameters, variables: Variables) => {
           if (request.name === 'PostsStoriesQuery') {
             return {
               data: {
@@ -2519,12 +2600,10 @@ function ReplyComposerContextIsolationStory() {
             } as GraphQLResponse;
           }
           if (request.name === 'PostComposerCreatePostMutation') {
+            const input = variables as PostComposerCreatePostMutation$variables;
+            setRequests((current) => [...current, input.input]);
             await new Promise((resolve) => setTimeout(resolve, 200));
-            return {
-              data: {
-                createPost: { post: { __typename: 'Post', id: 'late-reply-created-in-story' } },
-              },
-            } as GraphQLResponse;
+            return acceptedCreatePostResponse(input);
           }
           if (request.name === 'PostComposerIssueMediaUploadUrlMutation') {
             return {
@@ -2573,14 +2652,13 @@ function ReplyComposerContextIsolationStory() {
           <Suspense fallback={<Text>Reply Composer context fixture를 불러오는 중입니다.</Text>}>
             <ReplyComposerContextIsolationContents
               alternateProfile={alternateProfile}
-              onPostCreated={(createdPost) =>
-                setCreatedPostIds((current) => [...current, createdPost.id])
-              }
+              onPostRequestAccepted={() => setAcceptedRequestCount((count) => count + 1)}
               parentId={parentId}
             />
           </Suspense>
         </Profiler>
       </View>
+      <Text testID="reply-context-request-log">{JSON.stringify(requests)}</Text>
       <Pressable
         accessibilityLabel="다른 Parent로 전환"
         accessibilityRole="button"
@@ -2593,25 +2671,25 @@ function ReplyComposerContextIsolationStory() {
         <Text>다른 Parent로 전환</Text>
       </Pressable>
       <Text testID="reply-context-first-committed-body">{JSON.stringify(firstCommittedBody)}</Text>
-      <Text testID="reply-context-created-log">{JSON.stringify(createdPostIds)}</Text>
+      <Text testID="reply-context-accepted-count">{acceptedRequestCount}</Text>
     </RelayEnvironmentProvider>
   );
 }
 
 function ReplyComposerContextIsolationContents({
   alternateProfile,
-  onPostCreated,
+  onPostRequestAccepted,
   parentId,
 }: {
   alternateProfile: boolean;
-  onPostCreated: (post: Readonly<{ id: string }>) => void;
+  onPostRequestAccepted: () => void;
   parentId: string;
 }) {
   const data = usePostsStoryData();
 
   return (
     <PostComposerController
-      onPostCreated={onPostCreated}
+      onPostRequestAccepted={onPostRequestAccepted}
       profile={alternateProfile ? data.alternateComposerProfile : data.composerProfile}
       replyParentId={parentId}
       replyParentVisibility="UNLISTED"
@@ -2627,7 +2705,7 @@ function createReplyComposerEnvironment({
   queryDelay?: number;
 }) {
   return new Environment({
-    network: Network.create(async (request: RequestParameters) => {
+    network: Network.create(async (request: RequestParameters, variables: Variables) => {
       if (request.name === 'PostsStoriesQuery') {
         await new Promise((resolve) => setTimeout(resolve, queryDelay));
         return {
@@ -2643,11 +2721,7 @@ function createReplyComposerEnvironment({
       }
       if (request.name === 'PostComposerCreatePostMutation') {
         await new Promise((resolve) => setTimeout(resolve, mutationDelay));
-        return {
-          data: {
-            createPost: { post: { __typename: 'Post', id: 'old-environment-reply' } },
-          },
-        } as GraphQLResponse;
+        return acceptedCreatePostResponse(variables as PostComposerCreatePostMutation$variables);
       }
       if (request.name === 'PostComposerIssueMediaUploadUrlMutation') {
         return {
@@ -2675,7 +2749,6 @@ function createReplyComposerEnvironment({
 }
 
 function ReplyComposerEnvironmentIsolationStory() {
-  const [createdPostIds, setCreatedPostIds] = useState<string[]>([]);
   const [closeRequests, setCloseRequests] = useState(0);
   const [environment, setEnvironment] = useState(() =>
     createReplyComposerEnvironment({ mutationDelay: 200 }),
@@ -2704,9 +2777,6 @@ function ReplyComposerEnvironmentIsolationStory() {
               captureNextCommit.current = false;
               setFirstCommittedState({ body: body.value, closeDisabled: close.disabled });
             }}
-            onPostCreated={(createdPost) =>
-              setCreatedPostIds((current) => [...current, createdPost.id])
-            }
             onRequestClose={() => setCloseRequests((current) => current + 1)}
           />
         </Suspense>
@@ -2726,17 +2796,14 @@ function ReplyComposerEnvironmentIsolationStory() {
         {JSON.stringify(firstCommittedState)}
       </Text>
       <Text testID="reply-environment-close-log">{closeRequests}</Text>
-      <Text testID="reply-environment-created-log">{JSON.stringify(createdPostIds)}</Text>
     </RelayEnvironmentBoundary>
   );
 }
 
 function ReplyComposerEnvironmentIsolationContents({
-  onPostCreated,
   onRequestClose,
   onSurfaceRender,
 }: {
-  onPostCreated: (post: Readonly<{ id: string }>) => void;
   onRequestClose: () => void;
   onSurfaceRender: () => void;
 }) {
@@ -2749,7 +2816,6 @@ function ReplyComposerEnvironmentIsolationContents({
   return (
     <Profiler id="reply-environment-surface" onRender={onSurfaceRender}>
       <ReplyComposerSurface
-        onPostCreated={onPostCreated}
         onRequestClose={onRequestClose}
         open
         parent={parent}
@@ -2826,6 +2892,7 @@ function QuoteListSurfaceStory() {
   return (
     <PostComposerCoordinatorProvider owner="list" profile={data.replyComposerProfile}>
       <Catalog>
+        <StoryPathname testID="quote-success-pathname" />
         <PostListItem post={post} presentation="wide" />
       </Catalog>
     </PostComposerCoordinatorProvider>
@@ -3150,10 +3217,13 @@ const postListPaginationRelayData = {
 };
 const meta = {
   beforeEach: () => {
+    generatedPostRequestIdSequence = 0;
     mocked(trackAnalytics).mockClear();
     mocked(startWebLogin).mockReset();
     mocked(startWebLogin).mockImplementation(() => undefined);
     quoteMutationRequestObserver.mockClear();
+    postComposerMutationRequestObserver.mockClear();
+    postDetailQueryRequestObserver.mockClear();
     actionBarNavigationObserver.mockClear();
     resetClipboardMock();
     resetImagePickerMock();
@@ -3166,6 +3236,7 @@ const meta = {
     'ActionBarRepostOfQuoteNavigation',
     'ActionBarThreadNavigation',
     'ActionBarPendingNavigation',
+    'VisibilityListRows',
 
     'AuthorNavigationLongName',
     'AuthorNavigationLongHandle',
@@ -3175,6 +3246,7 @@ const meta = {
     'AuthorNavigationRepost',
     'AuthorNavigationRepostOfQuote',
     'ComposerBeforeUnloadContract',
+    'ComposerKeyboardSubmitInteraction',
     'ContentWarningProductionConsumersShareRevealStateInteraction',
     'ContentWarningCardPressableFeedbackInteraction',
     'ContentWarningQuoteIndependentLifecycleInteraction',
@@ -3185,6 +3257,9 @@ const meta = {
     'ReactionSummaryPostNavigation',
     'ReactionSummaryQuoteNavigation',
     'ReactionSummaryRepostNavigation',
+    'ReplyModalBackdropDismissInteraction',
+    'ReplyModalComposerMediaEditorGeometry',
+    'ReplyFullscreenVisibleViewport',
   ],
   decorators: [
     (Story) => (
@@ -3202,7 +3277,10 @@ const meta = {
   parameters: {
     relay: {
       data: postsStoryRelayData,
-      mutationResponse: { createPost: { post: { id: 'post-created-in-story' } } },
+      operationResponses: {
+        PostComposerCreatePostMutation: (_selectedProfileId: string | null, variables: Variables) =>
+          acceptedCreatePostResponse(variables as PostComposerCreatePostMutation$variables),
+      },
     },
     router: {
       pathname: '/@kosmo/post-1',
@@ -3587,10 +3665,11 @@ export const HomePostListPageFailureClearsOnIdentityChange: Story = {
 };
 
 export const HomePostPrependAndPaginationShareConnection: Story = {
+  name: 'Home request acceptance and pagination',
   parameters: {
     relay: {
       data: postListPaginationRelayData,
-      mutationResponse: { createPost: { post: paginationHomeCreatedPost } },
+      mutationRequestObserver: postComposerMutationRequestObserver,
       paginationRequestObserver: homePrependPaginationRequestObserver,
       paginationResponses: [paginationHomeNextPageResponse],
     },
@@ -3602,18 +3681,29 @@ export const HomePostPrependAndPaginationShareConnection: Story = {
       'Home에 새로 작성한 게시글',
     );
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
-    await expect(canvas.findByText('Home에 새로 작성한 게시글')).resolves.toBeVisible();
+    await waitFor(() =>
+      expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
+    );
+    expect(canvas.queryByText('Home에 새로 작성한 게시글')).not.toBeInTheDocument();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent('게시 요청을 접수했어요');
+    expect(postComposerMutationRequestObserver).toHaveBeenCalledOnce();
+    const submittedInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
+      .input as PostComposerCreatePostInput;
+    expect(submittedInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: 'Home에 새로 작성한 게시글',
+      media: [],
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
 
     const storyWindow = scrollStoryToEnd(canvasElement);
     await expect(canvas.findByText('Home 다음 page 게시글')).resolves.toBeVisible();
 
-    expect(canvas.getAllByText('Home에 새로 작성한 게시글')).toHaveLength(1);
+    expect(canvas.queryByText('Home에 새로 작성한 게시글')).not.toBeInTheDocument();
     expect(canvas.getAllByText('Home 첫 page 게시글')).toHaveLength(1);
     expect(canvas.getAllByText('Home 다음 page 게시글')).toHaveLength(1);
     const rows = canvas.getAllByRole('article').map((row) => row.textContent ?? '');
-    expect(rows.findIndex((row) => row.includes('Home에 새로 작성한 게시글'))).toBeLessThan(
-      rows.findIndex((row) => row.includes('Home 첫 page 게시글')),
-    );
     expect(rows.findIndex((row) => row.includes('Home 첫 page 게시글'))).toBeLessThan(
       rows.findIndex((row) => row.includes('Home 다음 page 게시글')),
     );
@@ -4785,7 +4875,6 @@ export const Quote: Story = {
     const outerTimestamp = canvas.getByTestId('post-timestamp');
     const outerTimestampLink = outerTimestamp.closest('[role="link"]');
     expect(outerTimestamp).toHaveTextContent(formatTimelineTimestamp(quotePost.createdAt));
-    expect(window.getComputedStyle(outerTimestamp).textAlign).toBe('right');
     expect(outerTimestampLink).not.toBeNull();
     expect(outerTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(outerTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
@@ -4831,18 +4920,6 @@ export const QuoteComposerListIntegration: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: {
     relay: {
-      mutationResponse: {
-        createPost: {
-          post: withReactionViewerState(
-            post({
-              bodyText: '실제 메뉴에서 작성한 인용입니다.',
-              id: 'quote-created-in-story',
-              profile: composerProfile,
-              repostSource: shortPost,
-            }),
-          ),
-        },
-      },
       mutationRequestObserver: quoteMutationRequestObserver,
     },
   },
@@ -4873,8 +4950,30 @@ export const QuoteComposerListIntegration: Story = {
         }),
       }),
     );
+    const submittedInput = quoteMutationRequestObserver.mock.calls[0]?.[1]
+      .input as PostComposerCreatePostInput &
+      Readonly<{ repostSourceId: string; visibility: string }>;
+    expect(submittedInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: '실제 메뉴에서 작성한 인용입니다.',
+      media: [],
+      repostSourceId: shortPost.id,
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
+    expect(submittedInput).not.toHaveProperty('replyParentId');
     expect(trigger).toHaveFocus();
-    expect(await screen.findByRole('alert')).toHaveTextContent('인용 게시글을 게시했어요');
+    expect(canvas.getByTestId('quote-success-pathname')).toHaveTextContent('/@kosmo/post-1');
+    expect(canvas.queryByText('실제 메뉴에서 작성한 인용입니다.')).not.toBeInTheDocument();
+    const success = await screen.findByRole('alert');
+    expect(success).toHaveTextContent('게시 요청을 접수했어요');
+    expect(within(success).queryByRole('button', { name: '보기' })).not.toBeInTheDocument();
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
+      selected_profile_id: composerProfile.id,
+      visibility: 'UNLISTED',
+    });
   },
   render: () => <QuoteListSurfaceStory />,
 };
@@ -5057,6 +5156,149 @@ export const QuoteWithoutSource: Story = {
     expect(canvas.getAllByRole('link')).toHaveLength(2);
   },
   render: () => <RepostQuotePresentationStory postId="post-quote-source-null" />,
+};
+
+function VisibilityListRowsStory() {
+  const { posts } = usePostsStoryData();
+
+  return (
+    <Catalog>
+      {visibilityPosts.map((visibilityPost) => (
+        <View key={visibilityPost.id} testID={`visibility-${visibilityPost.visibility}`}>
+          <PostListItem
+            post={requireFragment(
+              requirePostById(posts, visibilityPost.id).listItem,
+              `${visibilityPost.visibility} post item`,
+            )}
+            presentation="mobile"
+          />
+        </View>
+      ))}
+      <View testID="visibility-quote-row">
+        <PostListItem
+          post={requireFragment(
+            requirePostById(posts, visibilityOwnershipQuotePost.id).listItem,
+            'visibility ownership Quote post item',
+          )}
+          presentation="mobile"
+        />
+      </View>
+      <View testID="visibility-pure-repost-row">
+        <PostListItem
+          post={requireFragment(
+            requirePostById(posts, visibilityOwnershipPureRepost.id).listItem,
+            'visibility ownership pure Repost item',
+          )}
+          presentation="mobile"
+        />
+      </View>
+    </Catalog>
+  );
+}
+
+export const VisibilityListRows: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const listVisibilityCases = [
+      ['PUBLIC', '공개'],
+      ['UNLISTED', '조용한 공개'],
+      ['FOLLOWERS', '팔로워만'],
+      ['DIRECT', '언급한 프로필만'],
+    ] as const;
+
+    for (const [visibility, label] of listVisibilityCases) {
+      const postFixture = visibilityPosts.find((postItem) => postItem.visibility === visibility)!;
+      const row = canvas.getByTestId(`visibility-${visibility}`);
+      const icon = within(row).getByRole('img', { name: label });
+      const timestamp = within(row).getByTestId('post-timestamp');
+      const timestampLink = timestamp.closest<HTMLAnchorElement>('a[role="link"]');
+
+      expect(timestampLink).toHaveAttribute(
+        'href',
+        `/${postFixture.profile.relativeHandle}/${postFixture.id}`,
+      );
+      expect(timestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+      expect(timestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+      const textRange = row.ownerDocument.createRange();
+      textRange.selectNodeContents(timestamp);
+      const textBounds = textRange.getBoundingClientRect();
+      const iconBounds = icon.getBoundingClientRect();
+      const textIconGap = iconBounds.left - textBounds.right;
+      expect(
+        Math.abs(textBounds.top + textBounds.height / 2 - (iconBounds.top + iconBounds.height / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(textIconGap).toBeGreaterThanOrEqual(3);
+      expect(textIconGap).toBeLessThanOrEqual(5);
+      expect(
+        timestampLink!.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).not.toBe(0);
+    }
+
+    const quoteRow = canvas.getByTestId('visibility-quote-row');
+    const quoteIcon = within(quoteRow).getByRole('img', { name: '팔로워만' });
+    const quoteTimestamp = within(quoteRow).getByTestId('post-timestamp');
+    const quoteTimestampLink = quoteTimestamp.closest<HTMLAnchorElement>('a[role="link"]');
+    const publicTimestamp = within(canvas.getByTestId('visibility-PUBLIC')).getByTestId(
+      'post-timestamp',
+    );
+    const publicTimestampStyle = window.getComputedStyle(publicTimestamp);
+    const quoteTimestampStyle = window.getComputedStyle(quoteTimestamp);
+    expect(publicTimestampStyle.fontSize).toBe('14px');
+    expect(publicTimestampStyle.lineHeight).toBe('20px');
+    expect(publicTimestampStyle.fontWeight).toBe('400');
+    expect(quoteTimestampStyle.fontSize).toBe(publicTimestampStyle.fontSize);
+    expect(quoteTimestampStyle.lineHeight).toBe(publicTimestampStyle.lineHeight);
+    expect(quoteTimestampStyle.fontWeight).toBe(publicTimestampStyle.fontWeight);
+    expect(quoteTimestampLink).toHaveAttribute(
+      'href',
+      `/${visibilityOwnershipQuotePost.profile.relativeHandle}/${visibilityOwnershipQuotePost.id}`,
+    );
+    expect(quoteTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(quoteTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    const quoteTextRange = quoteRow.ownerDocument.createRange();
+    quoteTextRange.selectNodeContents(quoteTimestamp);
+    const quoteTextBounds = quoteTextRange.getBoundingClientRect();
+    const quoteIconBounds = quoteIcon.getBoundingClientRect();
+    const quoteTextIconGap = quoteIconBounds.left - quoteTextBounds.right;
+    expect(
+      Math.abs(
+        quoteTextBounds.top +
+          quoteTextBounds.height / 2 -
+          (quoteIconBounds.top + quoteIconBounds.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(quoteTextIconGap).toBeGreaterThanOrEqual(3);
+    expect(quoteTextIconGap).toBeLessThanOrEqual(5);
+    expect(
+      quoteTimestampLink!.compareDocumentPosition(quoteIcon) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+
+    const sourcePreview = within(quoteRow).getByTestId('source-post-preview');
+    expect(within(sourcePreview).queryByRole('img', { name: '공개' })).not.toBeInTheDocument();
+    expect(within(sourcePreview).getByRole('link', { name: '원문 게시글 보기' })).toHaveAttribute(
+      'href',
+      `/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}`,
+    );
+
+    const repostRow = canvas.getByTestId('visibility-pure-repost-row');
+    const repostSourceRow = within(repostRow).getByTestId('post-list-standard-row');
+    const repostSourceIcon = within(repostSourceRow).getByRole('img', { name: '공개' });
+    const repostSourceTimestamp = repostSourceRow.querySelector<HTMLAnchorElement>(
+      `a[href="/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}"]`,
+    );
+    expect(
+      within(repostRow).queryByRole('img', { name: '언급한 프로필만' }),
+    ).not.toBeInTheDocument();
+    expect(repostSourceTimestamp).not.toBeNull();
+    expect(repostSourceTimestamp!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(repostSourceTimestamp!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expect(
+      repostSourceTimestamp!.compareDocumentPosition(repostSourceIcon) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+  },
+  render: () => <VisibilityListRowsStory />,
 };
 
 export const OrdinaryPost: Story = {
@@ -5983,8 +6225,14 @@ export const MobilePostDetailThreadRoute: Story = {
     const canvas = within(canvasElement);
 
     await canvas.findByTestId('post-thread');
-    expect(canvas.queryByRole('heading', { name: '게시글' })).not.toBeInTheDocument();
-    expect(canvas.queryByRole('button', { name: '뒤로 가기' })).not.toBeInTheDocument();
+    const heading = canvas.getByRole('heading', { name: '게시글' });
+    const menuButton = canvas.getByRole('button', { name: '메뉴 열기' });
+    expect(heading).toBeVisible();
+    expect(menuButton).toBeVisible();
+    expect(heading.parentElement?.getBoundingClientRect().height).toBe(64);
+    expect(
+      menuButton.getBoundingClientRect().left - heading.parentElement!.getBoundingClientRect().left,
+    ).toBe(16);
   },
 };
 
@@ -6157,47 +6405,31 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
 export const PostDetailReplyTargetedRefetch: Story = {
   parameters: {
     relay: {
-      mutationResponse: {
-        createPost: { post: { __typename: 'Post', id: routeCreatedReply.id } },
+      mutationRequestObserver: postComposerMutationRequestObserver,
+      queryRequestObserver: (request: RequestParameters, variables: Variables) => {
+        if (request.name === 'PostDetailQuery') {
+          postDetailQueryRequestObserver(request, variables);
+        }
       },
       operationResponses: {
+        PostComposerCreatePostMutation: (_selectedProfileId: string | null, variables: Variables) =>
+          acceptedCreatePostResponse(variables as PostComposerCreatePostMutation$variables),
         PostDetailQuery: {
-          sequence: [
-            {
-              data: {
-                currentSession: {
-                  __typename: 'Session',
-                  id: 'session',
-                  selectedProfile: composerProfile,
-                },
-                node: {
-                  ...routeCurrentPostWithoutReactions,
-                  replyAncestors: [],
-                  replyDescendants: {
-                    edges: [],
-                    pageInfo: { endCursor: null, hasNextPage: false },
-                  },
-                },
+          data: {
+            currentSession: {
+              __typename: 'Session',
+              id: 'session',
+              selectedProfile: composerProfile,
+            },
+            node: {
+              ...routeCurrentPostWithoutReactions,
+              replyAncestors: [],
+              replyDescendants: {
+                edges: [],
+                pageInfo: { endCursor: null, hasNextPage: false },
               },
             },
-            {
-              data: {
-                currentSession: {
-                  __typename: 'Session',
-                  id: 'session',
-                  selectedProfile: composerProfile,
-                },
-                node: {
-                  ...routeCurrentPostWithoutReactions,
-                  replyAncestors: [],
-                  replyDescendants: {
-                    edges: [{ cursor: routeCreatedReply.id, node: routeCreatedReply }],
-                    pageInfo: { endCursor: null, hasNextPage: false },
-                  },
-                },
-              },
-            },
-          ],
+          },
         },
       },
     },
@@ -6216,11 +6448,36 @@ export const PostDetailReplyTargetedRefetch: Story = {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
     await userEvent.type(body, '현재 상세에 반영할 Reply');
+    const detailQueryCountBeforeSubmit = postDetailQueryRequestObserver.mock.calls.length;
+    expect(detailQueryCountBeforeSubmit).toBeGreaterThan(0);
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
 
-    await expect(canvas.findByText('targeted refetch로 반영된 새 Reply')).resolves.toBeVisible();
-    expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull();
-    expect(canvas.getAllByRole('button', { name: '답글' })[0]).toHaveFocus();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
+    expect(canvas.queryByText('targeted refetch로 반영된 새 Reply')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(postDetailQueryRequestObserver).toHaveBeenCalledTimes(detailQueryCountBeforeSubmit);
+    expect(postComposerMutationRequestObserver).toHaveBeenCalledOnce();
+    const submittedInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
+      .input as PostComposerCreatePostInput &
+      Readonly<{ replyParentId: string; visibility: string }>;
+    expect(submittedInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: '@kosmo 현재 상세에 반영할 Reply',
+      media: [],
+      replyParentId: routeCurrentPost.id,
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
+    expect(submittedInput).not.toHaveProperty('repostSourceId');
+    const success = await screen.findByRole('alert');
+    expect(success).toHaveTextContent('게시 요청을 접수했어요');
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
+      selected_profile_id: composerProfile.id,
+      visibility: 'UNLISTED',
+    });
   },
   render: () => <PostDetailScreen />,
 };
@@ -6669,18 +6926,8 @@ export const ProductionComposerAdapterSuccess: Story = {
         PostsProductionComposerAdapterStoryQuery: {
           data: { composerProfile, homeTimeline },
         },
-        PostComposerCreatePostMutation: {
-          data: {
-            createPost: {
-              post: {
-                ...shortPost,
-                __typename: 'Post',
-                id: 'post-created-in-story',
-                viewerReactions: [],
-              },
-            },
-          },
-        },
+        PostComposerCreatePostMutation: (_selectedProfileId: string | null, variables: Variables) =>
+          acceptedCreatePostResponse(variables as PostComposerCreatePostMutation$variables),
       },
     },
   },
@@ -6694,9 +6941,7 @@ export const ProductionComposerAdapterSuccess: Story = {
     await waitFor(() =>
       expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
     );
-    expect(canvas.getByTestId('production-composer-created-post')).toHaveTextContent(
-      'post-created-in-story',
-    );
+    expect(canvas.getByTestId('production-composer-accepted-count')).toHaveTextContent('1');
   },
   render: () => <ProductionComposerAdapterStory />,
 };
@@ -6708,7 +6953,15 @@ export const ProductionComposerAdapterFailure: Story = {
         PostsProductionComposerAdapterStoryQuery: {
           data: { composerProfile, homeTimeline },
         },
-        PostComposerCreatePostMutation: { error: 'create post failed' },
+        PostComposerCreatePostMutation: {
+          data: { createPost: null },
+          errors: [
+            {
+              message: '게시글 본문을 확인해 주세요.',
+              extensions: { code: 'VALIDATION' },
+            },
+          ],
+        },
       },
     },
   },
@@ -6720,11 +6973,11 @@ export const ProductionComposerAdapterFailure: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
     expect(body).toHaveValue('실패 뒤 보존할 본문');
-    expect(canvas.getByTestId('production-composer-created-post')).toHaveTextContent('none');
+    expect(canvas.getByTestId('production-composer-accepted-count')).toHaveTextContent('0');
   },
   render: () => <ProductionComposerAdapterStory />,
 };
@@ -6807,6 +7060,10 @@ export const ProductionComposerDefaultVisibilityUpdate: Story = {
 
 export const ContentWarningReveal: Story = {
   render: () => <ContentWarningRevealStory />,
+};
+
+export const PostMediaProtectionStates: Story = {
+  render: () => <PostMediaProtectionStory />,
 };
 
 export const ContentWarningRevealInteraction: Story = {
@@ -7233,6 +7490,11 @@ export const ComposerMediaStates: Story = {
 export const ComposerMediaUploadInteraction: Story = {
   parameters: {
     relay: {
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) => {
+        if (request.name === 'PostComposerCreatePostMutation') {
+          postComposerMutationRequestObserver(request, variables);
+        }
+      },
       operationResponses: {
         PostComposerCompleteMediaUploadMutation: {
           sequence: [1, 2, 3, 4].map((index) => ({
@@ -7301,6 +7563,32 @@ export const ComposerMediaUploadInteraction: Story = {
       expect(
         canvas.queryByRole('switch', { name: '민감한 이미지로 표시' }),
       ).not.toBeInTheDocument();
+      expect(postComposerMutationRequestObserver).toHaveBeenCalledOnce();
+      const submittedInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
+        .input as PostComposerCreatePostInput & Readonly<{ visibility: string }>;
+      expect(submittedInput).toMatchObject({
+        actorProfileId: composerProfile.id,
+        bodyText: '',
+        media: [
+          {
+            altText: '첫 번째 이미지',
+            applyAiProhibitFilter: false,
+            mediaId: 'media-1',
+          },
+          ...['media-2', 'media-3', 'media-4'].map((mediaId) => ({
+            altText: null,
+            applyAiProhibitFilter: false,
+            mediaId,
+          })),
+        ],
+        sensitiveMedia: true,
+        visibility: 'UNLISTED',
+      });
+      expect(submittedInput).not.toHaveProperty('contentWarning');
+      expect(submittedInput).not.toHaveProperty('mentions');
+      expect(submittedInput).not.toHaveProperty('replyParentId');
+      expect(submittedInput).not.toHaveProperty('repostSourceId');
+      await expect(screen.findByRole('alert')).resolves.toHaveTextContent('게시 요청을 접수했어요');
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -7657,6 +7945,163 @@ export const ComposerClipboardFailureAndScopeInteraction: Story = {
   render: () => <ComposerClipboardScopeStory />,
 };
 
+export const ComposerFileDropInteraction: Story = {
+  parameters: {
+    relay: {
+      mutationLoading: true,
+      mutationRequestObserver: (request: RequestParameters, variables: Variables) => {
+        if (request.name === 'PostComposerIssueMediaUploadUrlMutation') {
+          composerFileDropIssueMutationObserver(request, variables);
+        } else if (request.name === 'PostComposerCreatePostMutation') {
+          composerFileDropCreatePostMutationObserver(request, variables);
+        }
+      },
+      operationResponses: {
+        PostComposerCompleteMediaUploadMutation: {
+          sequence: [1, 2, 3, 4].map((index) => ({
+            data: {
+              completeMediaUpload: {
+                media: { id: `media-file-drop-${index}`, state: 'READY' },
+              },
+            },
+          })),
+        },
+        PostComposerCreatePostMutation: () => undefined,
+        PostComposerIssueMediaUploadUrlMutation: {
+          sequence: [1, 2, 3, 4].map((index) => ({
+            data: {
+              issueMediaUploadUrl: {
+                media: { id: `media-file-drop-${index}` },
+                uploadUrl: `https://upload.example/file-drop/${index}`,
+              },
+            },
+          })),
+        },
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' });
+    const dropTarget = canvas.getByRole('button', { name: 'Composer 확장' });
+    const expectedFileNames = [
+      'drop-first.svg',
+      'drop-second.svg',
+      'drop-third.svg',
+      'drop-fourth.svg',
+    ];
+    const filePreviewNames: string[] = [];
+    const originalCreateObjectURL = URL.createObjectURL;
+    const createObjectURL = URL.createObjectURL.bind(URL);
+    const { originalFetch, upload } = installImageUploadFetch(
+      async () => new Response(null, { status: 200 }),
+    );
+    URL.createObjectURL = (file) => {
+      const uri = createObjectURL(file);
+      if (file instanceof File) {
+        filePreviewNames.push(file.name);
+      }
+      return uri;
+    };
+    const dragEvent = (type: 'dragover' | 'drop', dataTransfer: DataTransfer) =>
+      new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer });
+    composerFileDropIssueMutationObserver.mockClear();
+    composerFileDropCreatePostMutationObserver.mockClear();
+
+    try {
+      await userEvent.type(body, '드롭 뒤에도 유지할 본문');
+
+      const outside = document.createElement('div');
+      document.body.append(outside);
+      try {
+        const outsideData = new DataTransfer();
+        outsideData.items.add(createComposerMediaFile('outside-drop.svg'));
+        const outsideDragOver = dragEvent('dragover', outsideData);
+        outside.dispatchEvent(outsideDragOver);
+        const outsideDrop = dragEvent('drop', outsideData);
+        outside.dispatchEvent(outsideDrop);
+        expect(outsideDragOver.defaultPrevented).toBe(false);
+        expect(outsideDrop.defaultPrevented).toBe(false);
+        expect(composerFileDropIssueMutationObserver).not.toHaveBeenCalled();
+      } finally {
+        outside.remove();
+      }
+
+      const textData = new DataTransfer();
+      textData.items.add(new File(['plain file'], 'notes.txt', { type: 'text/plain' }));
+      textData.setData('text/plain', 'ordinary text');
+      const textDragOver = dragEvent('dragover', textData);
+      dropTarget.dispatchEvent(textDragOver);
+      const textDrop = dragEvent('drop', textData);
+      dropTarget.dispatchEvent(textDrop);
+      expect(textDragOver.defaultPrevented).toBe(false);
+      expect(textDrop.defaultPrevented).toBe(false);
+      expect(body).toHaveValue('드롭 뒤에도 유지할 본문');
+      expect(composerFileDropIssueMutationObserver).not.toHaveBeenCalled();
+
+      const droppedData = new DataTransfer();
+      expectedFileNames.forEach((fileName) =>
+        droppedData.items.add(createComposerMediaFile(fileName)),
+      );
+      droppedData.items.add(new File(['plain file'], 'ignored.txt', { type: 'text/plain' }));
+      droppedData.items.add(createComposerMediaFile('drop-overflow.svg'));
+      droppedData.setData('text/plain', 'ordinary text');
+      const dragOver = dragEvent('dragover', droppedData);
+      dropTarget.dispatchEvent(dragOver);
+      expect(dragOver.defaultPrevented).toBe(true);
+
+      const drop = dragEvent('drop', droppedData);
+      dropTarget.dispatchEvent(drop);
+      expect(drop.defaultPrevented).toBe(true);
+      expect(body).toHaveValue('드롭 뒤에도 유지할 본문');
+
+      await waitFor(() => {
+        expect(canvas.getByLabelText('첨부 이미지 4, 업로드 완료')).toBeVisible();
+        expect(composerFileDropIssueMutationObserver).toHaveBeenCalledTimes(4);
+        expect(upload).toHaveBeenCalledTimes(4);
+      });
+      expect(filePreviewNames).toEqual(expectedFileNames);
+      expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
+      expect(canvas.queryByLabelText('첨부 이미지 5, 업로드 중')).toBeNull();
+
+      const fullDropData = new DataTransfer();
+      fullDropData.items.add(createComposerMediaFile('full-drop.svg'));
+      const fullDrop = dragEvent('drop', fullDropData);
+      dropTarget.dispatchEvent(fullDrop);
+      expect(fullDrop.defaultPrevented).toBe(true);
+      expect(composerFileDropIssueMutationObserver).toHaveBeenCalledTimes(4);
+      expect(upload).toHaveBeenCalledTimes(4);
+      expect(filePreviewNames).toEqual(expectedFileNames);
+      expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(4);
+
+      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 4 제거' }));
+      await waitFor(() => {
+        expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(3);
+      });
+      expect(canvas.getByRole('button', { name: '이미지 추가, 1개 더 선택 가능' })).toBeVisible();
+
+      await userEvent.click(canvas.getByRole('button', { name: '게시' }));
+      await expect(canvas.getByRole('button', { name: '게시' })).toBeDisabled();
+      await expect(canvas.findByLabelText('게시 처리 중')).resolves.toBeVisible();
+      expect(composerFileDropCreatePostMutationObserver).toHaveBeenCalledTimes(1);
+
+      const disabledDropData = new DataTransfer();
+      disabledDropData.items.add(createComposerMediaFile('disabled-drop.svg'));
+      const disabledDrop = dragEvent('drop', disabledDropData);
+      dropTarget.dispatchEvent(disabledDrop);
+      expect(disabledDrop.defaultPrevented).toBe(true);
+      expect(composerFileDropIssueMutationObserver).toHaveBeenCalledTimes(4);
+      expect(upload).toHaveBeenCalledTimes(4);
+      expect(filePreviewNames).toEqual(expectedFileNames);
+      expect(canvas.getAllByLabelText(/첨부 이미지 \d, 업로드 완료/)).toHaveLength(3);
+    } finally {
+      globalThis.fetch = originalFetch;
+      URL.createObjectURL = originalCreateObjectURL;
+    }
+  },
+  render: () => <ComposerStory />,
+};
+
 export const ComposerPickerResultAfterUnmount: Story = {
   parameters: {
     relay: {
@@ -7708,7 +8153,12 @@ export const ComposerPickerResultAfterUnmount: Story = {
 };
 
 export const ComposerSubmitting: Story = {
-  parameters: { relay: { mutationLoading: true } },
+  parameters: {
+    relay: {
+      mutationLoading: true,
+      operationResponses: { PostComposerCreatePostMutation: () => undefined },
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.type(canvas.getByRole('textbox', { name: '게시글 본문' }), '제출 중 상태');
@@ -7721,6 +8171,7 @@ export const ComposerSubmitting: Story = {
 
 export const ComposerVisibilityAndSubmitInteraction: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { relay: { mutationRequestObserver: postComposerMutationRequestObserver } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const body = canvas.getByRole('textbox', { name: '게시글 본문' });
@@ -7758,8 +8209,22 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
       expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
     );
     expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
-    expect(trackAnalytics).toHaveBeenCalledOnce();
+    expect(postComposerMutationRequestObserver).toHaveBeenCalledOnce();
+    const submittedInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
+      .input as PostComposerCreatePostInput & Readonly<{ visibility: string }>;
+    expect(submittedInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: '스토리에서 작성한 게시글입니다.',
+      media: [],
+      sensitiveMedia: false,
+      visibility: 'PUBLIC',
+    });
+    expect(submittedInput).not.toHaveProperty('mentions');
+    expect(submittedInput).not.toHaveProperty('replyParentId');
+    expect(submittedInput).not.toHaveProperty('repostSourceId');
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
     expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
       selected_profile_id: composerProfile.id,
       visibility: 'PUBLIC',
     });
@@ -7768,30 +8233,55 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
 };
 
 export const ComposerKeyboardSubmitInteraction: Story = {
+  parameters: { relay: { mutationRequestObserver: postComposerMutationRequestObserver } },
   play: async ({ canvasElement }) => {
-    const form = canvasElement.querySelector('form');
-    expect(form).not.toBeNull();
-    if (!form) {
-      return;
-    }
-    const body = within(form).getByRole('textbox', { name: '게시글 본문' });
+    const getBody = () => {
+      const form = canvasElement.querySelector('form');
+      if (!form) {
+        throw new Error('Composer form is missing');
+      }
+      return within(form).getByRole('textbox', { name: '게시글 본문' });
+    };
 
-    await userEvent.type(body, 'modifier 없는 Enter는 줄바꿈으로 남습니다.');
+    await userEvent.type(getBody(), 'modifier 없는 Enter는 줄바꿈으로 남습니다.');
     await userEvent.keyboard('{Enter}');
-    await waitFor(() => expect(body).toHaveValue('modifier 없는 Enter는 줄바꿈으로 남습니다.\n'));
+    await waitFor(() =>
+      expect(getBody()).toHaveValue('modifier 없는 Enter는 줄바꿈으로 남습니다.\n'),
+    );
 
-    await userEvent.type(body, 'Command+Enter로 제출한 게시글입니다.');
+    await userEvent.type(getBody(), 'Command+Enter로 제출한 게시글입니다.');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
-    await waitFor(() =>
-      expect(within(form).getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
-    );
+    await waitFor(() => expect(getBody()).toHaveValue(''));
+    await waitFor(() => expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(1));
 
-    const resetBody = within(form).getByRole('textbox', { name: '게시글 본문' });
-    await userEvent.type(resetBody, 'Control+Enter로 제출한 게시글입니다.');
+    await userEvent.type(getBody(), 'Control+Enter로 제출한 게시글입니다.');
     await userEvent.keyboard('{Control>}{Enter}{/Control}');
-    await waitFor(() =>
-      expect(within(form).getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
-    );
+    await waitFor(() => expect(getBody()).toHaveValue(''));
+    await waitFor(() => expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(2));
+    const firstInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
+      .input as PostComposerCreatePostInput & Readonly<{ visibility: string }>;
+    const secondInput = postComposerMutationRequestObserver.mock.calls[1]?.[1]
+      .input as PostComposerCreatePostInput & Readonly<{ visibility: string }>;
+    expect(firstInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: 'modifier 없는 Enter는 줄바꿈으로 남습니다.\nCommand+Enter로 제출한 게시글입니다.',
+      media: [],
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
+    expect(secondInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: 'Control+Enter로 제출한 게시글입니다.',
+      media: [],
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
+    expect(firstInput).not.toHaveProperty('mentions');
+    expect(secondInput).not.toHaveProperty('mentions');
+    expect(firstInput).not.toHaveProperty('replyParentId');
+    expect(secondInput).not.toHaveProperty('replyParentId');
+    expect(firstInput).not.toHaveProperty('repostSourceId');
+    expect(secondInput).not.toHaveProperty('repostSourceId');
   },
   render: () => <ComposerStory />,
 };
@@ -7922,7 +8412,16 @@ export const ComposerVisibilityKeyboardFocusLifecycle: Story = {
 };
 
 export const ComposerErrorInteraction: Story = {
-  parameters: { relay: { mutationError: '게시글 작성 실패' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCreatePostMutation: {
+          data: { createPost: null },
+          errors: [{ message: '게시글 본문을 확인해 주세요.', extensions: { code: 'VALIDATION' } }],
+        },
+      },
+    },
+  },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.type(
@@ -7931,7 +8430,7 @@ export const ComposerErrorInteraction: Story = {
     );
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
     expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveAttribute(
@@ -7944,10 +8443,23 @@ export const ComposerErrorInteraction: Story = {
 };
 
 export const ComposerPartialGraphQLErrorCompletesCommittedPost: Story = {
+  name: 'Composer partial GraphQL error with accepted request',
   parameters: {
     relay: {
-      mutationGraphQLErrors: ['nullable loader 조회에 실패했습니다.'],
-      mutationResponse: { createPost: { post: { id: 'post-committed-in-story' } } },
+      operationResponses: {
+        PostComposerCreatePostMutation: (
+          _selectedProfileId: string | null,
+          variables: Variables,
+        ) => ({
+          ...acceptedCreatePostResponse(variables as PostComposerCreatePostMutation$variables),
+          errors: [
+            {
+              message: 'nullable loader 조회에 실패했습니다.',
+              path: ['createPost', 'request', 'post'],
+            },
+          ],
+        }),
+      },
     },
   },
   play: async ({ canvasElement }) => {
@@ -7958,8 +8470,13 @@ export const ComposerPartialGraphQLErrorCompletesCommittedPost: Story = {
     await waitFor(() =>
       expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(''),
     );
-    expect(canvas.queryByRole('alert')).not.toBeInTheDocument();
-    expect(trackAnalytics).toHaveBeenCalledOnce();
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent('게시 요청을 접수했어요');
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
+      selected_profile_id: composerProfile.id,
+      visibility: 'UNLISTED',
+    });
   },
   render: () => <ComposerStory />,
 };
@@ -7967,8 +8484,13 @@ export const ComposerPartialGraphQLErrorCompletesCommittedPost: Story = {
 export const ComposerGraphQLErrorWithoutCommittedPostPreservesInput: Story = {
   parameters: {
     relay: {
-      mutationGraphQLErrors: ['본문 형식이 올바르지 않습니다.'],
-      mutationResponse: { createPost: null },
+      mutationRequestObserver: postComposerMutationRequestObserver,
+      operationResponses: {
+        PostComposerCreatePostMutation: {
+          data: { createPost: null },
+          errors: [{ message: '본문 형식이 올바르지 않습니다.' }],
+        },
+      },
     },
   },
   play: async ({ canvasElement }) => {
@@ -7977,10 +8499,22 @@ export const ComposerGraphQLErrorWithoutCommittedPostPreservesInput: Story = {
     await userEvent.type(body, '생성되지 않으면 보존할 본문입니다.');
     await userEvent.click(canvas.getByRole('button', { name: '게시' }));
     await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
-    expect(within(canvas.getByTestId('post-composer-editor')).queryByRole('alert')).toBeNull();
     expect(body).toHaveValue('생성되지 않으면 보존할 본문입니다.');
+    expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(1);
+    const originalInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
+      .input as PostComposerCreatePostInput & Readonly<{ visibility: string }>;
+    expect(originalInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: '생성되지 않으면 보존할 본문입니다.',
+      media: [],
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
+    expect(originalInput).not.toHaveProperty('requestId');
+    expect(originalInput).not.toHaveProperty('replyParentId');
+    expect(originalInput).not.toHaveProperty('repostSourceId');
     expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ComposerStory />,
@@ -7990,8 +8524,13 @@ export const ComposerReplyGraphQLErrorWithoutCommittedPostPreservesInput: Story 
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: {
     relay: {
-      mutationGraphQLErrors: ['본문 형식이 올바르지 않습니다.'],
-      mutationResponse: { createPost: null },
+      mutationRequestObserver: postComposerMutationRequestObserver,
+      operationResponses: {
+        PostComposerCreatePostMutation: {
+          data: { createPost: null },
+          errors: [{ message: '본문 형식이 올바르지 않습니다.' }],
+        },
+      },
     },
   },
   play: async () => {
@@ -7999,10 +8538,25 @@ export const ComposerReplyGraphQLErrorWithoutCommittedPostPreservesInput: Story 
     const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
     await userEvent.type(body, '오류가 나도 보존할 답글입니다.');
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
-    await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(body).toHaveValue('@kosmo 오류가 나도 보존할 답글입니다.');
+    expect(postComposerMutationRequestObserver).toHaveBeenCalledTimes(1);
+    const originalInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
+      .input as PostComposerCreatePostInput &
+      Readonly<{ replyParentId: string; visibility: string }>;
+    expect(originalInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: '@kosmo 오류가 나도 보존할 답글입니다.',
+      media: [],
+      replyParentId: shortPost.id,
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
+    expect(originalInput).not.toHaveProperty('requestId');
+    expect(originalInput).not.toHaveProperty('repostSourceId');
+    expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ReplyModalPresentationStory />,
 };
@@ -8018,22 +8572,24 @@ export const ComposerReplyMutationContract: Story = {
     await userEvent.type(body, '부모 게시물에 작성한 답글입니다.');
     await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
 
-    await waitFor(() => {
-      expect(canvas.getByTestId('reply-composer-request-log')).toHaveTextContent(
-        JSON.stringify([
-          {
-            bodyText: '부모 게시물에 작성한 답글입니다.',
-            replyParentId: 'post-parent',
-            visibility: 'FOLLOWERS',
-            media: [],
-            sensitiveMedia: false,
-          },
-        ]),
-      );
-      expect(canvas.getByTestId('reply-composer-created-log')).toHaveTextContent(
-        JSON.stringify(['reply-created-in-story']),
-      );
+    await waitFor(() =>
+      expect(canvas.getByTestId('reply-composer-accepted-count')).toHaveTextContent('1'),
+    );
+    const requests = JSON.parse(
+      canvas.getByTestId('reply-composer-request-log').textContent ?? '[]',
+    ) as ReplyComposerRequest[];
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: '부모 게시물에 작성한 답글입니다.',
+      media: [],
+      replyParentId: 'post-parent',
+      sensitiveMedia: false,
+      visibility: 'FOLLOWERS',
     });
+    expect(requests[0]).not.toHaveProperty('contentWarning');
+    expect(requests[0]).not.toHaveProperty('mentions');
+    expect(requests[0]).not.toHaveProperty('repostSourceId');
     expect(canvas.getByRole('textbox', { name: '답글 본문' })).toHaveValue('');
     expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toBeVisible();
   },
@@ -8076,19 +8632,30 @@ export const ComposerReplyMediaMutationContract: Story = {
       await userEvent.click(canvas.getByRole('button', { name: '완료' }));
       await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
 
-      await waitFor(() => {
-        expect(canvas.getByTestId('reply-composer-request-log')).toHaveTextContent(
-          JSON.stringify([
-            {
-              bodyText: '',
-              replyParentId: 'post-parent',
-              visibility: 'UNLISTED',
-              media: [{ altText: '답글 이미지', mediaId: 'media-reply-story-1' }],
-              sensitiveMedia: true,
-            },
-          ]),
-        );
+      await waitFor(() =>
+        expect(canvas.getByTestId('reply-composer-accepted-count')).toHaveTextContent('1'),
+      );
+      const requests = JSON.parse(
+        canvas.getByTestId('reply-composer-request-log').textContent ?? '[]',
+      ) as ReplyComposerRequest[];
+      expect(requests).toHaveLength(1);
+      expect(requests[0]).toMatchObject({
+        actorProfileId: composerProfile.id,
+        bodyText: '',
+        media: [
+          {
+            altText: '답글 이미지',
+            applyAiProhibitFilter: false,
+            mediaId: 'media-reply-story-1',
+          },
+        ],
+        replyParentId: 'post-parent',
+        sensitiveMedia: true,
+        visibility: 'UNLISTED',
       });
+      expect(requests[0]).not.toHaveProperty('contentWarning');
+      expect(requests[0]).not.toHaveProperty('mentions');
+      expect(requests[0]).not.toHaveProperty('repostSourceId');
       expect(upload).toHaveBeenCalledTimes(1);
     } finally {
       globalThis.fetch = originalFetch;
@@ -8192,18 +8759,69 @@ export const ComposerReplyContextIsolation: Story = {
 
     await userEvent.type(body, '이전 Parent의 늦은 답글');
     await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
+      ) as ReplyComposerRequest[];
+      expect(requests).toHaveLength(1);
+    });
+    const originalInput = (
+      JSON.parse(
+        canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
+      ) as ReplyComposerRequest[]
+    )[0]!;
+    expect(originalInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: '이전 Parent의 늦은 답글',
+      media: [],
+      replyParentId: 'post-parent-a',
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
+    expect(originalInput).not.toHaveProperty('requestId');
     await userEvent.click(canvas.getByRole('button', { name: '다른 Parent로 전환' }));
 
     await waitFor(() =>
       expect(canvas.getByTestId('reply-context-first-committed-body')).toHaveTextContent('""'),
     );
-    const currentBody = canvas.getByRole('textbox', { name: '답글 본문' });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(canvas.getByTestId('reply-context-accepted-count')).toHaveTextContent('0');
+    let currentBody = await canvas.findByRole('textbox', { name: '답글 본문' });
+    expect(currentBody).toHaveValue('');
+    expect(
+      JSON.parse(canvas.getByTestId('reply-context-request-log').textContent ?? '[]'),
+    ).toHaveLength(1);
+
+    await userEvent.type(currentBody, '새 Parent의 답글');
+    await userEvent.click(canvas.getByRole('button', { name: '답글 게시' }));
+    await waitFor(() => {
+      const requests = JSON.parse(
+        canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
+      ) as ReplyComposerRequest[];
+      expect(requests).toHaveLength(2);
+    });
+    const currentInput = (
+      JSON.parse(
+        canvas.getByTestId('reply-context-request-log').textContent ?? '[]',
+      ) as ReplyComposerRequest[]
+    )[1]!;
+    expect(currentInput).toMatchObject({
+      actorProfileId: alternateComposerProfile.id,
+      bodyText: '새 Parent의 답글',
+      replyParentId: 'post-parent-b',
+    });
+    expect(currentInput).not.toHaveProperty('requestId');
+
+    await waitFor(() =>
+      expect(canvas.getByTestId('reply-context-accepted-count')).toHaveTextContent('1'),
+    );
+    currentBody = await canvas.findByRole('textbox', { name: '답글 본문' });
+    await waitFor(() =>
+      expect(canvas.getByTestId('reply-context-first-committed-body')).toHaveTextContent('""'),
+    );
     expect(currentBody).toHaveValue('');
     await userEvent.type(currentBody, '새 Parent의 답글');
-    expect(canvas.getByRole('button', { name: '답글 게시' })).toBeEnabled();
-    await new Promise((resolve) => setTimeout(resolve, 250));
     expect(currentBody).toHaveValue('새 Parent의 답글');
-    expect(canvas.getByTestId('reply-context-created-log')).toHaveTextContent('[]');
   },
   render: () => <ReplyComposerContextIsolationStory />,
 };
@@ -8218,7 +8836,6 @@ export const ComposerReplyEnvironmentIsolation: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Relay Environment 교체' }));
 
     await new Promise((resolve) => setTimeout(resolve, 250));
-    expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
     expect(canvas.getByTestId('reply-environment-close-log')).toHaveTextContent('0');
     const currentBody = await screen.findByRole('textbox', { name: '답글 본문' });
     await waitFor(() =>
@@ -8229,7 +8846,7 @@ export const ComposerReplyEnvironmentIsolation: Story = {
     expect(currentBody).toHaveValue('@kosmo ');
     await userEvent.type(currentBody, '새 Environment의 답글');
     expect(currentBody).toHaveValue('@kosmo 새 Environment의 답글');
-    expect(canvas.getByTestId('reply-environment-created-log')).toHaveTextContent('[]');
+    expect(canvas.getByTestId('reply-environment-close-log')).toHaveTextContent('0');
   },
   render: () => <ReplyComposerEnvironmentIsolationStory />,
 };
@@ -8363,7 +8980,13 @@ export const ReplyModalComposerMediaEditorGeometry: Story = {
       },
     },
   },
-  play: async () => {
+  play: async ({ canvasElement }) => {
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    const visualViewport = storyWindow?.visualViewport;
+    if (!storyWindow || !visualViewport) {
+      throw new Error('Reply media editor story requires visualViewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
     const { originalFetch } = installImageUploadFetch(
       async () => new Response(null, { status: 200 }),
     );
@@ -8375,6 +8998,20 @@ export const ReplyModalComposerMediaEditorGeometry: Story = {
     try {
       const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
       const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+      const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 844 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => expect(surface.getBoundingClientRect().top).toBeCloseTo(48, 0));
+      await userEvent.click(body);
+      await userEvent.paste(
+        Array.from({ length: 40 }, (_, index) => `긴 답글 줄 ${index + 1}`).join('\n'),
+      );
+      await waitFor(() => {
+        const bounds = surface.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(48, 0);
+        expect(bounds.height).toBeCloseTo(748, 0);
+      });
       expect(surface.getBoundingClientRect().width).toBe(600);
       await userEvent.click(
         within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
@@ -8385,7 +9022,31 @@ export const ReplyModalComposerMediaEditorGeometry: Story = {
 
       await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
       expect(screen.getAllByRole('dialog')).toHaveLength(1);
-      await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(720));
+      await waitFor(() => {
+        expect(surface.getBoundingClientRect().width).toBe(720);
+        expect(surface.getBoundingClientRect().height).toBe(678);
+      });
+      expect(surface.getBoundingClientRect().top).toBeCloseTo(48, 0);
+      const complete = within(dialog).getByRole('button', { name: '완료' });
+      expect(complete.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        surface.getBoundingClientRect().bottom,
+      );
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 640 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = surface.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(48, 0);
+        expect(bounds.height).toBeCloseTo(544, 0);
+      });
+      expect(complete).toBeVisible();
+      expect(complete.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        surface.getBoundingClientRect().bottom,
+      );
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 844 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => expect(surface.getBoundingClientRect().height).toBe(678));
       await userEvent.click(within(dialog).getByRole('button', { name: '미디어 편집에서 뒤로' }));
       await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(600));
 
@@ -8394,6 +9055,12 @@ export const ReplyModalComposerMediaEditorGeometry: Story = {
       await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
       await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(600));
     } finally {
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
       globalThis.fetch = originalFetch;
       resetImagePickerMock();
     }
@@ -8597,6 +9264,130 @@ export const ReplyModalResponsiveFocusLifecycle: Story = {
   render: () => <ReplyModalPresentationStory />,
 };
 
+export const ReplyFullscreenVisibleViewport: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    if (!storyWindow) {
+      throw new Error('Reply fullscreen viewport story requires a browser window.');
+    }
+    const visualViewport = storyWindow.visualViewport;
+    if (!visualViewport) {
+      throw new Error('Reply fullscreen viewport story requires visualViewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
+    const originalOffsetTopDescriptor = Object.getOwnPropertyDescriptor(
+      visualViewport,
+      'offsetTop',
+    );
+    const originalHeight = visualViewport.height;
+    const originalOffsetTop = visualViewport.offsetTop;
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' }) as HTMLTextAreaElement;
+    const backdrop = screen.getByTestId('reply-composer-backdrop');
+    const surface = within(dialog).getByTestId('reply-composer-dialog-surface');
+    const footer = within(dialog).getByTestId('mobile-composer-footer');
+
+    try {
+      await waitFor(() => expect(body).toHaveFocus());
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 360 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = backdrop.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(360, 0);
+      });
+      expect(surface.getBoundingClientRect().top).toBeCloseTo(originalOffsetTop, 0);
+      expect(surface.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(originalOffsetTop + 361);
+
+      Object.defineProperty(visualViewport, 'offsetTop', { configurable: true, value: 40 });
+      visualViewport.dispatchEvent(new storyWindow.Event('scroll'));
+      await waitFor(() => expect(backdrop.getBoundingClientRect().top).toBeCloseTo(40, 0));
+      expect(backdrop.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      expect(surface.getBoundingClientRect().top).toBeCloseTo(40, 0);
+      expect(surface.getBoundingClientRect().height).toBeCloseTo(360, 0);
+      expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(401);
+
+      // Synthetic input does not trigger native caret scrolling; real keyboard QA covers that behavior.
+      await userEvent.clear(body);
+      for (let line = 1; line <= 16; line += 1) {
+        await userEvent.type(body, `작성 줄 ${line}`);
+        await userEvent.keyboard('{Enter}');
+      }
+      await userEvent.type(body, 'caret 끝');
+      expect(body.selectionStart).toBe(body.value.length);
+      await waitFor(() => {
+        expect(backdrop.getBoundingClientRect().top).toBeCloseTo(40, 0);
+        expect(backdrop.getBoundingClientRect().height).toBeCloseTo(360, 0);
+        expect(surface.getBoundingClientRect().top).toBeCloseTo(40, 0);
+        expect(surface.getBoundingClientRect().height).toBeCloseTo(360, 0);
+        expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(401);
+      });
+
+      Object.defineProperty(visualViewport, 'height', {
+        configurable: true,
+        value: originalHeight,
+      });
+      Object.defineProperty(visualViewport, 'offsetTop', {
+        configurable: true,
+        value: originalOffsetTop,
+      });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = backdrop.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(originalHeight, 0);
+      });
+      expect(surface.getBoundingClientRect().top).toBeCloseTo(originalOffsetTop, 0);
+      expect(surface.getBoundingClientRect().height).toBeCloseTo(originalHeight, 0);
+      expect(footer.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+        originalOffsetTop + originalHeight + 1,
+      );
+    } finally {
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      if (originalOffsetTopDescriptor) {
+        Object.defineProperty(visualViewport, 'offsetTop', originalOffsetTopDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'offsetTop');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+    }
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+export const ReplyModalBackdropDismissInteraction: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
+  play: async () => {
+    const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
+    await waitFor(() => expect(body).toHaveFocus());
+    await userEvent.type(body, '배경을 눌러도 유지할 답글');
+
+    await userEvent.click(screen.getByTestId('reply-composer-backdrop'));
+    const confirm = await screen.findByRole('alertdialog', {
+      name: '답글 작성을 취소할까요?',
+    });
+    expect(body).toHaveValue('@kosmo 배경을 눌러도 유지할 답글');
+
+    await userEvent.click(within(confirm).getByRole('button', { name: '계속 작성' }));
+    await waitFor(() => expect(body).toHaveFocus());
+    expect(body).toHaveValue('@kosmo 배경을 눌러도 유지할 답글');
+  },
+  render: () => <ReplyModalPresentationStory />,
+};
+
+// Direct native keyboard QA opens this fixture without running the simulated viewport interaction above.
+export const ReplyFullscreenKeyboardFixture: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  render: () => <ReplyModalPresentationStory />,
+};
+
 export const ReplyListSurfaceIntegration: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   play: async ({ canvasElement }) => {
@@ -8626,7 +9417,12 @@ export const QuoteModalFailureLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: {
     relay: {
-      mutationError: '인용 전송 네트워크 오류',
+      operationResponses: {
+        PostComposerCreatePostMutation: {
+          data: { createPost: null },
+          errors: [{ message: '인용 본문을 확인해 주세요.', extensions: { code: 'VALIDATION' } }],
+        },
+      },
       mutationRequestObserver: quoteMutationRequestObserver,
     },
   },
@@ -8700,7 +9496,7 @@ export const QuoteModalFailureLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
 
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(quoteMutationRequestObserver).toHaveBeenNthCalledWith(
@@ -8731,7 +9527,7 @@ export const QuoteModalFailureLifecycle: Story = {
       }),
     );
     expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(body).toHaveValue('실패 뒤 유지할 인용\n둘째 줄\n셋째 줄');
     expect(within(dialog).getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
@@ -8769,41 +9565,52 @@ export const QuoteModalNullFailureLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
   parameters: {
     relay: {
-      mutationGraphQLErrors: ['인용 본문 형식이 올바르지 않습니다.'],
-      mutationResponse: { createPost: null },
+      operationResponses: {
+        PostComposerCreatePostMutation: {
+          data: { createPost: null },
+          errors: [{ message: '인용 본문 형식이 올바르지 않습니다.' }],
+        },
+      },
       mutationRequestObserver: quoteMutationRequestObserver,
     },
   },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: '인용 게시글 쓰기' });
-    const source = within(dialog).getByTestId('source-post-preview');
     const body = within(dialog).getByRole('textbox', { name: '인용 게시글 본문' });
     await userEvent.type(body, 'null 응답 뒤 유지할 인용');
     await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
 
-    await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    await expect(screen.findByRole('alert')).resolves.toHaveTextContent(
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(body).toHaveValue('null 응답 뒤 유지할 인용');
-    expect(source).toBeVisible();
-    expect(within(source).getByText('짧은 본문 한 줄.')).toBeVisible();
-    const retry = within(dialog).getByRole('button', { name: '인용 게시' });
-    expect(retry).toBeEnabled();
-    await userEvent.click(retry);
-    await waitFor(() => expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-    );
-    expect(body).toHaveValue('null 응답 뒤 유지할 인용');
-    expect(source).toBeVisible();
+    const originalInput = quoteMutationRequestObserver.mock.calls[0]?.[1]
+      .input as PostComposerCreatePostInput &
+      Readonly<{ repostSourceId: string; visibility: string }>;
+    expect(originalInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: 'null 응답 뒤 유지할 인용',
+      media: [],
+      repostSourceId: shortPost.id,
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
+    expect(originalInput).not.toHaveProperty('requestId');
+    expect(originalInput).not.toHaveProperty('replyParentId');
+    expect(trackAnalytics).not.toHaveBeenCalled();
   },
   render: () => <ReplyModalPresentationStory mode="quote" />,
 };
 
 export const ReplyModalPendingLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
-  parameters: { relay: { mutationLoading: true } },
+  parameters: {
+    relay: {
+      mutationLoading: true,
+      operationResponses: { PostComposerCreatePostMutation: () => undefined },
+    },
+  },
   play: async ({ canvasElement }) => {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
@@ -8828,6 +9635,7 @@ export const ReplyDetailModalPendingLifecycle: Story = {
     relay: {
       mutationLoading: true,
       operationResponses: {
+        PostComposerCreatePostMutation: () => undefined,
         PostDetailThreadIdentityStoryQuery: {
           data: {
             node: {
@@ -8871,7 +9679,16 @@ export const ReplyDetailModalPendingLifecycle: Story = {
 
 export const ReplyModalFailureLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
-  parameters: { relay: { mutationError: '답글 전송 네트워크 오류' } },
+  parameters: {
+    relay: {
+      operationResponses: {
+        PostComposerCreatePostMutation: {
+          data: { createPost: null },
+          errors: [{ message: '답글 본문을 확인해 주세요.', extensions: { code: 'VALIDATION' } }],
+        },
+      },
+    },
+  },
   play: async () => {
     const dialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     const body = within(dialog).getByRole('textbox', { name: '답글 본문' });
@@ -8879,7 +9696,7 @@ export const ReplyModalFailureLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '답글 게시' }));
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(within(dialog).getByText('짧은 본문 한 줄.')).toBeVisible();
     expect(body).toHaveValue('@kosmo 실패 뒤 유지할 답글');
@@ -8890,25 +9707,7 @@ export const ReplyModalFailureLifecycle: Story = {
 
 export const ReplyListSurfaceSuccessLifecycle: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoCompact' } },
-  parameters: {
-    relay: {
-      mutationResponse: {
-        createPost: {
-          post: withReactionViewerState(
-            post({
-              bodyText: '목록에서 작성한 답글',
-              id: 'reply-created-from-list',
-              replyParent: {
-                __typename: 'Post',
-                id: shortPost.id,
-                profile: shortPost.profile,
-              },
-            }),
-          ),
-        },
-      },
-    },
-  },
+  parameters: { relay: { mutationRequestObserver: postComposerMutationRequestObserver } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const trigger = canvas.getAllByRole('button', { name: '답글' })[0]!;
@@ -8924,13 +9723,30 @@ export const ReplyListSurfaceSuccessLifecycle: Story = {
     expect(trigger).toHaveFocus();
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     const success = await screen.findByRole('alert');
-    expect(success).toHaveTextContent('답글을 게시했어요');
+    expect(success).toHaveTextContent('게시 요청을 접수했어요');
+    expect(within(success).queryByRole('button', { name: '보기' })).not.toBeInTheDocument();
+    expect(canvas.queryByText('목록에서 작성한 답글')).not.toBeInTheDocument();
     expect(canvas.getByTestId('reply-success-pathname')).toHaveTextContent('/@kosmo/post-1');
-    await userEvent.click(within(success).getByRole('button', { name: '보기' }));
-    await waitFor(() => {
-      expect(canvas.getByTestId('reply-success-pathname')).toHaveTextContent(
-        '/@kosmo/reply-created-from-list',
-      );
+    expect(postComposerMutationRequestObserver).toHaveBeenCalledOnce();
+    const submittedInput = postComposerMutationRequestObserver.mock.calls[0]?.[1]
+      .input as PostComposerCreatePostInput &
+      Readonly<{ replyParentId: string; visibility: string }>;
+    expect(submittedInput).toMatchObject({
+      actorProfileId: composerProfile.id,
+      bodyText: '@kosmo 목록에서 작성한 답글',
+      media: [],
+      replyParentId: shortPost.id,
+      sensitiveMedia: false,
+      visibility: 'UNLISTED',
+    });
+    expect(submittedInput).not.toHaveProperty('contentWarning');
+    expect(submittedInput).not.toHaveProperty('mentions');
+    expect(submittedInput).not.toHaveProperty('repostSourceId');
+    expect(trackAnalytics).toHaveBeenCalledTimes(1);
+    expect(trackAnalytics).toHaveBeenCalledWith('post_created', {
+      ai_prohibit_image_count: 0,
+      selected_profile_id: composerProfile.id,
+      visibility: 'UNLISTED',
     });
   },
   render: () => <ReplyListSurfaceStory />,

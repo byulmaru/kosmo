@@ -1,4 +1,5 @@
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react-native';
+import { Link } from 'expo-router';
+import { ChevronLeftIcon, ChevronRightIcon, CopyrightIcon, XIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,6 +20,7 @@ import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import { useToastMotion } from '@/theme/useOverlayMotion';
 import { ViewerImage } from './ViewerImage';
 import { ZoomableImage, ZoomableImagePagerGesture } from './ZoomableImage';
+import type { Href } from 'expo-router';
 import type { ReactElement } from 'react';
 import type {
   LayoutChangeEvent,
@@ -195,6 +197,7 @@ export function PostMediaViewerSurface({
       <ZoomableImage
         key={zoomKey}
         accessibilityLabel={imageName}
+        aiProhibitFilterApplied={currentMedia.aiProhibitFilterApplied === true}
         onBlankAreaTap={onClose}
         onStatus={settle}
         onZoomedChange={setZoomed}
@@ -218,6 +221,32 @@ export function PostMediaViewerSurface({
               tabIndex={-1}
               testID="post-media-viewer-media-pane-dismiss"
             />
+          ) : null}
+          {navigable && currentMedia?.licenseUrl ? (
+            <View
+              style={[
+                styles.metadataLinks,
+                presentation === 'compact' ? styles.compactMetadataLinks : styles.wideMetadataLinks,
+              ]}
+            >
+              <Link
+                asChild
+                href={currentMedia.licenseUrl as Href}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <IconButton
+                  accessibilityLabel="이용 조건"
+                  accessibilityRole="link"
+                  feedbackTone="inverse"
+                  targetSize={48}
+                  visualSize={48}
+                  visualStyle={controlVisualStyle()}
+                >
+                  <CopyrightIcon color={theme.fixedWhite} size={20} strokeWidth={2} />
+                </IconButton>
+              </Link>
+            </View>
           ) : null}
           <View
             onLayout={(event: LayoutChangeEvent) => {
@@ -493,6 +522,7 @@ function NativeMediaPager({
           ) : item.url ? (
             <ViewerImage
               accessibilityLabel={item.altText?.trim() || `${index + 1}번째 첨부 이미지`}
+              aiProhibitFilterApplied={item.aiProhibitFilterApplied === true}
               onStatus={() => undefined}
               status="ready"
               url={item.url}
@@ -660,6 +690,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   imagePrivacyBoundary: {},
+  metadataLinks: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space[8],
+    position: 'absolute',
+    top: space[16],
+    zIndex: 4,
+  },
+  compactMetadataLinks: { left: space[16] },
+  wideMetadataLinks: { right: space[16] },
   closeButton: { position: 'absolute', top: space[16], zIndex: 2 },
   compactCloseButton: { right: space[16] },
   wideCloseButton: { left: space[16] },

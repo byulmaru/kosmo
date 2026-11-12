@@ -50,6 +50,9 @@ mock.module('react-native', {
 mock.module(new URL('../ui/StateView.tsx', import.meta.url), {
   exports: { Skeleton: (props: object) => createElement('Skeleton', props) },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('./MediaProtectionBadge', {
+  exports: { MediaProtectionBadge: () => createElement('MediaProtectionBadge') },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 let PostMediaImage: ComponentType<{
   fill?: boolean;
@@ -201,6 +204,28 @@ describe('PostMediaImage', () => {
 
     await render(2, media('landscape', '가로 이미지'), false, true, () => undefined);
     assert.equal(rendered('Pressable').length, 0);
+  });
+
+  it('strictly filtered images show a passive badge and keep the image name and open action', async () => {
+    let openedIndex: number | null = null;
+    const filteredItem = { ...media('filtered', '원본 ALT'), aiProhibitFilterApplied: true };
+    await render(1, filteredItem, true, false, (index) => {
+      openedIndex = index;
+    });
+
+    assert.equal(rendered('MediaProtectionBadge').length, 1);
+    assert.equal(image('filtered').props.accessibilityLabel, '원본 ALT, 학습방지 필터 적용됨');
+    const filteredOpen = pressable('원본 ALT, 학습방지 필터 적용됨 크게 보기');
+    await act(async () => filteredOpen.props.onPress({ stopPropagation: () => undefined }));
+    assert.equal(openedIndex, 1);
+
+    for (const aiProhibitFilterApplied of [false, null, undefined]) {
+      const item = { ...media('unprotected', '원본 ALT'), aiProhibitFilterApplied };
+      await render(1, item, true, false, () => undefined);
+      assert.equal(rendered('MediaProtectionBadge').length, 0);
+      assert.equal(image('unprotected').props.accessibilityLabel, '원본 ALT');
+      assert.equal(pressable('원본 ALT 크게 보기').props.accessibilityRole, 'button');
+    }
   });
 
   it('초기 크기 조회가 실패해도 성공한 Image load 뒤 원본 비율을 다시 조회한다', async () => {

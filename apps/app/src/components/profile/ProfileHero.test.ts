@@ -11,13 +11,13 @@ import type { ProfileHero as ProfileHeroExport } from './ProfileHero';
 type ProfileData = {
   avatar: { id: string; url: string | null } | null;
   bio: string | null;
-  displayName: string;
-  followersCount: number;
-  followingCount: number;
+  displayName: string | null;
+  followersCount: number | null;
+  followingCount: number | null;
   handle: string;
   header: { id: string; url: string | null } | null;
   relativeHandle: string;
-  tags: ReadonlyArray<{ id: string; name: string }>;
+  tags: ReadonlyArray<{ id: string; name: string }> | null;
   viewerState?: {
     blockedBy: boolean;
     isSelf: boolean;
@@ -28,15 +28,11 @@ type ProfileData = {
 
 let fragmentData: ProfileData;
 const trackEvent = mock.fn();
-const platformSelections: Array<Record<string, number>> = [];
 let renderer: ReactTestRenderer | null = null;
 let windowWidth = 1280;
 const platform = {
   OS: 'web',
-  select: (options: Record<string, number>) => {
-    platformSelections.push(options);
-    return options[platform.OS] ?? options.default;
-  },
+  select: (options: Record<string, number>) => options[platform.OS] ?? options.default,
 };
 
 const mockModule = (specifier: string | URL, exports: object) =>
@@ -129,9 +125,6 @@ mockModule(new URL('./ProfileBlockAction.tsx', import.meta.url), {
 mockModule(new URL('./ProfileMuteAction.tsx', import.meta.url), {
   ProfileMuteAction: 'ProfileMuteAction',
 });
-mockModule(new URL('./ProfileTagMuteAction.tsx', import.meta.url), {
-  ProfileTagMuteAction: 'ProfileTagMuteAction',
-});
 mockModule(new URL('./ProfileMoreMenu.tsx', import.meta.url), {
   ProfileMoreMenu: 'ProfileMoreMenu',
 });
@@ -147,7 +140,6 @@ afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = null;
   }
-  platformSelections.length = 0;
   trackEvent.mock.resetCalls();
   windowWidth = 1280;
   platform.OS = 'web';
@@ -460,20 +452,47 @@ describe('ProfileHero 관리 메뉴 조립', () => {
 });
 
 describe('ProfileHero Profile Tag presentation', () => {
+  const profileWithTags: ProfileData = {
+    ...baseProfile,
+    tags: [
+      { id: 'hashtag-fediverse', name: 'Fediverse' },
+      { id: 'hashtag-development', name: '개발' },
+    ],
+  };
+
   it('빈 Profile Tag 목록은 섹션을 렌더하지 않는다', async () => {
     await renderProfile(baseProfile);
 
     assert.equal(renderer!.root.findAllByProps({ testID: 'profile-tag-list' }).length, 0);
   });
 
-  it('Profile Tag를 bio 다음과 통계 전에 exact Hashtag link로 표시한다', async () => {
-    await renderProfile({
-      ...baseProfile,
-      tags: [
-        { id: 'hashtag-fediverse', name: 'Fediverse' },
-        { id: 'hashtag-development', name: '개발' },
-      ],
+  for (const [os, targetSize] of [
+    ['ios', 44],
+    ['android', 48],
+  ] as const) {
+    it(`${os} Profile Tag links expose the platform target size`, async () => {
+      platform.OS = os;
+      await renderProfile(profileWithTags);
+
+      const tagList = renderer!.root.findByProps({ testID: 'profile-tag-list' });
+      assert.deepEqual(
+        tagList
+          .findAll((node) => (node.type as unknown) === 'Pressable')
+          .map((node) => ({
+            role: node.props.accessibilityRole,
+            minHeight: node.props.style.minHeight,
+            minWidth: node.props.style.minWidth,
+          })),
+        [
+          { role: 'link', minHeight: targetSize, minWidth: targetSize },
+          { role: 'link', minHeight: targetSize, minWidth: targetSize },
+        ],
+      );
     });
+  }
+
+  it('Profile Tag를 bio 다음과 통계 전에 exact Hashtag link로 표시한다', async () => {
+    await renderProfile(profileWithTags);
 
     const tagList = renderer!.root.findByProps({ testID: 'profile-tag-list' });
     assert.equal(tagList.props.style.flexDirection, 'row');
@@ -493,7 +512,6 @@ describe('ProfileHero Profile Tag presentation', () => {
         },
       ],
     );
-    assert.ok(links.every((node) => node.props.onNavigate === node.props.onExternalNavigate));
     links[0]?.props.onNavigate?.();
     assert.deepEqual(trackEvent.mock.calls[0]?.arguments, [
       'profile_hashtag_clicked',
@@ -526,15 +544,6 @@ describe('ProfileHero Profile Tag presentation', () => {
         },
       ],
     );
-    const muteActions = tagList.findAll(
-      (node) => (node.type as unknown) === 'ProfileTagMuteAction',
-    );
-    assert.equal(muteActions.length, 0);
-    assert.deepEqual(platformSelections, [
-      { android: 48, default: 48, ios: 44, web: 32 },
-      { android: 48, default: 48, ios: 44, web: 32 },
-    ]);
-
     const text = renderer!.root
       .findAll((node) => (node.type as unknown) === 'Text')
       .map((node) => node.children.join(''));

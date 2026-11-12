@@ -18,7 +18,6 @@ let permission: { granted: boolean; status?: 'denied' | 'granted' | 'undetermine
 };
 let permissionStatusCalls = 0;
 let requestPermissionAndSyncCalls = 0;
-let migrationEnabled = false;
 let webPushConfigAvailable = false;
 let webPushPermissionContextAvailable = false;
 let browserPushSupport:
@@ -30,6 +29,7 @@ let browserPushSupport:
 let browserNotificationPermission: NotificationPermission = 'default';
 let requestedBrowserNotificationPermission: NotificationPermission = 'granted';
 let browserNotificationRequestPromise: Promise<NotificationPermission> | null = null;
+let browserNotificationRequestThrows = false;
 let browserNotificationRequestCalls = 0;
 let syncWebPermissionCalls: NotificationPermission[] = [];
 let requestPermissionAndSync: () => Promise<void> = async () => {
@@ -92,9 +92,6 @@ mock.module(new URL('../native-push/nativePushClient.ts', import.meta.url), {
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
-mock.module(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
-  exports: { useFeatureFlag: (key: string) => key === 'profile-migration' && migrationEnabled },
-} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../native-push/nativePushPermissionContext.ts', import.meta.url), {
   exports: {
     useRequestNativePushPermissionAndSync: () => requestPermissionAndSync,
@@ -109,10 +106,11 @@ mock.module(new URL('../native-push/webPushPermissionContext.ts', import.meta.ur
       return {
         permission: browserNotificationPermission,
         support: browserPushSupport,
-        syncPermission: async (permission: NotificationPermission) => {
-          syncWebPermissionCalls.push(permission);
-          browserNotificationPermission = permission;
-        },
+        requestPermission: () =>
+          Notification.requestPermission().then((permission) => {
+            syncWebPermissionCalls.push(permission);
+            browserNotificationPermission = permission;
+          }),
       };
     },
   },
@@ -167,38 +165,16 @@ let SettingsNavigationList: ComponentType<{
   selected?:
     | 'profile'
     | 'profile-migration'
-    | 'following-import'
     | 'mute-and-block'
     | 'theme'
+    | 'labs'
     | 'info'
     | 'account-deletion';
-}>;
-let SettingsMuteAndBlockNavigation: ComponentType<{
-  selected?: 'blocked-profiles' | 'muted-profiles';
 }>;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
   ({ SettingsNavigationList } = await import('./SettingsNavigationList'));
-  ({ SettingsMuteAndBlockNavigation } = await import('./SettingsMuteAndBlockNavigation'));
-});
-
-describe('SettingsMuteAndBlockNavigation', () => {
-  it('기존 뮤트와 차단 관리 destination을 이 순서로 직접 연결한다', async () => {
-    await act(async () => {
-      renderer = create(createElement(SettingsMuteAndBlockNavigation));
-    });
-    assert.ok(renderer);
-
-    const links = rendered('Pressable');
-    assert.deepEqual(
-      links.map((link) => ({ label: link.props.accessibilityLabel, href: link.props.href })),
-      [
-        { label: '뮤트한 프로필 관리 열기', href: '/settings/muted-profiles' },
-        { label: '차단한 프로필 관리 열기', href: '/settings/blocked-profiles' },
-      ],
-    );
-  });
 });
 
 afterEach(async () => {
@@ -211,13 +187,13 @@ afterEach(async () => {
   requestPermissionAndSync = async () => {
     requestPermissionAndSyncCalls += 1;
   };
-  migrationEnabled = false;
   webPushConfigAvailable = false;
   webPushPermissionContextAvailable = false;
   browserPushSupport = 'supported';
   browserNotificationPermission = 'default';
   requestedBrowserNotificationPermission = 'granted';
   browserNotificationRequestPromise = null;
+  browserNotificationRequestThrows = false;
   browserNotificationRequestCalls = 0;
   syncWebPermissionCalls = [];
   if (originalNotificationDescriptor) {
@@ -234,8 +210,7 @@ afterEach(async () => {
 
 describe('SettingsNavigationList', () => {
   it('실제 데이터가 연결된 설정 진입점만 제공한다', async () => {
-    migrationEnabled = true;
-    await render();
+    await render({ pathname: '/settings/natural-language-mute', selected: 'labs' });
 
     const links = rendered('Pressable');
     assert.equal(
@@ -251,28 +226,39 @@ describe('SettingsNavigationList', () => {
     assert.equal(links[1].props.href, '/settings/profile');
     assert.equal(links[2].props.accessibilityLabel, '다른 서비스에서 이전 설정 열기');
     assert.equal(links[2].props.href, '/settings/profile-migration');
-    assert.equal(links[3].props.accessibilityLabel, '팔로잉 가져오기 설정 열기');
-    assert.equal(links[3].props.href, '/settings/following-import');
-    assert.equal(links[4].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
-    assert.equal(links[4].props.href, '/settings/mute-and-block');
-    assert.equal(links[5].props.accessibilityLabel, '테마 설정 열기, 시스템');
-    assert.equal(links[5].props.href, '/settings/theme');
+    assert.equal(links[3].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
+    assert.equal(links[3].props.href, '/settings/mute-and-block');
+    assert.equal(links[4].props.accessibilityLabel, '테마 설정 열기, 시스템');
+    assert.equal(links[4].props.href, '/settings/theme');
+    assert.equal(links[5].props.accessibilityLabel, '실험실 열기');
+    assert.equal(links[5].props.href, '/settings/labs');
+    assert.equal(links[5].props['aria-current'], undefined);
+    assert.deepEqual(links[5].props.accessibilityState, { selected: true });
     assert.equal(links[6].props.accessibilityLabel, '정보 설정 열기');
     assert.equal(links[6].props.href, '/settings/info');
     assert.equal(links[7].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
     assert.equal(links[7].props.href, '/settings/account-deletion');
+    assert.equal(
+      links.filter((node) => node.props.href === '/settings/profile-migration').length,
+      1,
+    );
+    assert.equal(
+      links.some((node) => node.props.href === '/settings/following-import'),
+      false,
+    );
     assert.equal(
       links.some((node) => node.props.testID === 'native-notification-settings'),
       false,
     );
   });
 
-  it('migration feature flag가 꺼져 있으면 Settings root에 진입점을 노출하지 않는다', async () => {
+  it('provider 없이도 통합 migration destination을 노출한다', async () => {
     await render();
 
     assert.equal(
-      rendered('Pressable').some((node) => node.props.href === '/settings/profile-migration'),
-      false,
+      rendered('Pressable').filter((node) => node.props.href === '/settings/profile-migration')
+        .length,
+      1,
     );
     assert.equal(
       rendered('Pressable').some((node) => node.props.href === '/settings/following-import'),
@@ -316,6 +302,38 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(syncWebPermissionCalls, ['granted']);
     assert.equal(requestPermissionAndSyncCalls, 0);
     assert.deepEqual(toastCalls, []);
+  });
+
+  it('브라우저 권한 요청이 동기적으로 실패하면 재시도 안내를 표시한다', async () => {
+    webPushConfigAvailable = true;
+    webPushPermissionContextAvailable = true;
+    browserNotificationRequestThrows = true;
+    exposeBrowserNotification();
+    await render();
+
+    let notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'web-notification-settings',
+    );
+    assert.ok(notification);
+
+    await act(async () => notification?.props.onPress());
+    assert.equal(browserNotificationRequestCalls, 1);
+    assert.deepEqual(syncWebPermissionCalls, []);
+    assert.deepEqual(toastCalls, [
+      {
+        message: '브라우저 알림 권한을 요청하지 못했어요. 잠시 후 다시 시도해 주세요.',
+        tone: 'danger',
+      },
+    ]);
+
+    browserNotificationRequestThrows = false;
+    notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'web-notification-settings',
+    );
+    assert.ok(notification);
+    await act(async () => notification?.props.onPress());
+    assert.equal(browserNotificationRequestCalls, 2);
+    assert.deepEqual(syncWebPermissionCalls, ['granted']);
   });
 
   it('허용된 권한 상태에서는 동기화를 재시도할 수 있다', async () => {
@@ -389,13 +407,15 @@ describe('SettingsNavigationList', () => {
     const notificationIndex = rows.findIndex(
       (node) => node.props.testID === 'native-notification-settings',
     );
+    const labsIndex = rows.findIndex((node) => node.props.href === '/settings/labs');
     const infoIndex = rows.findIndex((node) => node.props.accessibilityLabel === '정보 설정 열기');
     const notification = rows[notificationIndex];
 
     assert.equal(notificationIndex, muteIndex + 1);
     const themeIndex = rows.findIndex((node) => node.props.href === '/settings/theme');
     assert.equal(themeIndex, notificationIndex + 1);
-    assert.equal(infoIndex, themeIndex + 1);
+    assert.equal(labsIndex, themeIndex + 1);
+    assert.equal(infoIndex, labsIndex + 1);
     assert.equal(notification?.props.accessibilityLabel, 'OS 알림 설정 열기');
     assert.equal(notification?.props.accessibilityRole, 'button');
     const notificationItem = rendered('SettingsItem').find(
@@ -549,8 +569,7 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
   });
 
-  it('migration route는 feature flag가 켜졌을 때 현재·선택 상태를 표시한다', async () => {
-    migrationEnabled = true;
+  it('migration route는 현재·선택 상태를 표시한다', async () => {
     await render({ pathname: '/settings/profile-migration', selected: 'profile-migration' });
 
     const migration = rendered('Pressable').find(
@@ -561,16 +580,15 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(migration.props.accessibilityState, { selected: true });
   });
 
-  it('following import route는 같은 feature flag 아래 현재·선택 상태를 표시한다', async () => {
-    migrationEnabled = true;
-    await render({ pathname: '/settings/following-import', selected: 'following-import' });
+  it('legacy following import path는 canonical migration row의 현재·선택 상태를 사용한다', async () => {
+    await render({ pathname: '/settings/following-import', selected: 'profile-migration' });
 
-    const followingImport = rendered('Pressable').find(
-      (link) => link.props.href === '/settings/following-import',
+    const migration = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/profile-migration',
     );
-    assert.ok(followingImport);
-    assert.equal(followingImport.props['aria-current'], 'page');
-    assert.deepEqual(followingImport.props.accessibilityState, { selected: true });
+    assert.ok(migration);
+    assert.equal(migration.props['aria-current'], 'page');
+    assert.deepEqual(migration.props.accessibilityState, { selected: true });
   });
 
   it('root detail을 visual selected로 표시해도 root path에서는 current page가 아니다', async () => {
@@ -584,7 +602,10 @@ describe('SettingsNavigationList', () => {
   it('차단 프로필 route에서도 뮤트 및 차단 category는 선택 상태만 유지한다', async () => {
     await render({ pathname: '/settings/blocked-profiles', selected: 'mute-and-block' });
 
-    const muteAndBlock = rendered('Pressable')[2];
+    const muteAndBlock = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/mute-and-block',
+    );
+    assert.ok(muteAndBlock);
     assert.equal(muteAndBlock.props['aria-current'], undefined);
     assert.deepEqual(muteAndBlock.props.accessibilityState, { selected: true });
   });
@@ -621,9 +642,9 @@ async function render(
     selected?:
       | 'profile'
       | 'profile-migration'
-      | 'following-import'
       | 'mute-and-block'
       | 'theme'
+      | 'labs'
       | 'info'
       | 'account-deletion';
   } = {},
@@ -643,6 +664,9 @@ function exposeBrowserNotification() {
       },
       requestPermission: () => {
         browserNotificationRequestCalls += 1;
+        if (browserNotificationRequestThrows) {
+          throw new Error('permission request failed');
+        }
         return (
           browserNotificationRequestPromise ??
           Promise.resolve(requestedBrowserNotificationPermission)

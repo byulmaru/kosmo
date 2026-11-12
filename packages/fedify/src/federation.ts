@@ -68,6 +68,7 @@ const localInstanceActorHandle = 'kosmo.instance';
 
 export const federation: Federation<void> = createFederation<void>({
   allowPrivateAddress: false,
+  circuitBreaker: { releaseInterval: { seconds: 10 } },
   kv: fedifyKv ?? new MemoryKvStore(),
   meterProvider: fedifyMeterProvider,
   ...(fedifyQueue

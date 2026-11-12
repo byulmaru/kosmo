@@ -8,10 +8,17 @@ const PostBodyFragment = graphql`
   fragment PostBody_post on Post {
     id
     content {
-      id
       document
       bodyText
       contentWarning
+      linkPreview {
+        description
+        imageHeight
+        imageUrl
+        imageWidth
+        title
+        url
+      }
       mentionedProfiles {
         id
         ...PostContentMention_profile
@@ -19,6 +26,7 @@ const PostBodyFragment = graphql`
       media {
         id
         altText
+        aiProhibitFilterApplied
         url
       }
     }
@@ -58,11 +66,13 @@ export function PostBody({
       contentWarningPresentation={contentWarningPresentation}
       document={content.document}
       interactive={interactive}
+      linkPreview={content.linkPreview}
       media={
         mediaPresentation === 'hidden'
           ? null
-          : (content.media?.map(({ altText, id, url }) => ({
+          : (content.media?.map(({ aiProhibitFilterApplied, altText, id, url }) => ({
               altText: altText ?? null,
+              aiProhibitFilterApplied,
               id,
               url: url ?? null,
             })) ?? null)

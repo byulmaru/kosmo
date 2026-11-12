@@ -19,6 +19,7 @@ import {
   ProfileState,
   SessionState,
 } from '@kosmo/core/enums';
+import { getLinkPreviewUrlHash, normalizeLinkPreviewUrl } from '@kosmo/core/link-preview';
 import {
   headNexusMediaUploadSource,
   parseNexusMediaUploadReference,
@@ -30,7 +31,7 @@ import {
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { MEDIA_UPLOAD_WORKFLOW_TYPE } from '@kosmo/core/temporal/media-upload';
-import { POST_CREATE_WORKFLOW_TYPE } from '@kosmo/core/temporal/post-create';
+import { POST_REQUEST_WORKFLOW_TYPE } from '@kosmo/core/temporal/post-request';
 import { normalizeHandle } from '@kosmo/core/utils';
 import { and, eq, ne } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -62,6 +63,7 @@ let Accounts: typeof CoreDb.Accounts;
 let firstOrThrow: typeof CoreDb.firstOrThrow;
 let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
+let LinkPreviews: typeof CoreDb.LinkPreviews;
 let Media: typeof CoreDb.Media;
 let pg: typeof CoreDb.pg;
 let PostContents: typeof CoreDb.PostContents;
@@ -99,6 +101,7 @@ describe('Post Reply GraphQL 경계', () => {
       firstOrThrow,
       Hashtags,
       Instances,
+      LinkPreviews,
       Media,
       pg,
       PostContents,
@@ -478,6 +481,88 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(remoteDirectRead.data?.node?.content.bodyText, 'remote direct content');
   });
 
+  test('비활성 viewer의 이전 context로는 FOLLOWERS Post Node와 PostContent를 읽을 수 없다', async () => {
+    const author = await createAuthenticatedSession({
+      profileHandle: 'disabled_viewer_post_author',
+    });
+    const viewer = await createAuthenticatedSession({ profileHandle: 'disabled_post_viewer' });
+    await db.insert(ProfileFollows).values({
+      followerProfileId: viewer.profile.id,
+      followeeProfileId: author.profile.id,
+    });
+    const post = await createContentfulPost(author.profile.id, {
+      bodyText: 'private to the still-following viewer',
+      visibility: PostVisibility.FOLLOWERS,
+    });
+    const postContent = await db
+      .select({ id: PostContents.id })
+      .from(PostContents)
+      .where(eq(PostContents.postId, post.id))
+      .then(firstOrThrow);
+    let staleContext: Awaited<ReturnType<typeof deriveContext>> | undefined;
+    const staleContextApp = new Hono<Env>();
+    staleContextApp.use('*', async (c, next) => {
+      const context = staleContext ?? (await deriveContext(c));
+      staleContext = context;
+      c.set('context', context);
+      return next();
+    });
+    staleContextApp.route('/graphql', yoga);
+
+    const query = `query DisabledViewerPost($postId: ID!, $contentId: ID!) {
+      post: node(id: $postId) { ... on Post { id content { bodyText } } }
+      content: node(id: $contentId) { ... on PostContent { id bodyText } }
+    }`;
+    const variables = {
+      contentId: encodeGlobalId('PostContent', postContent.id),
+      postId: encodeGlobalId('Post', post.id),
+    };
+    const readWithCapturedContext = () =>
+      requestGraphQL<{
+        content: { bodyText: string; id: string } | null;
+        post: { content: { bodyText: string }; id: string } | null;
+      }>(query, variables, viewer.token, staleContextApp);
+
+    const beforeStateUpdate = await readWithCapturedContext();
+    assertNoGraphQLErrors(beforeStateUpdate);
+    assert.deepEqual(beforeStateUpdate.data, {
+      content: {
+        bodyText: 'private to the still-following viewer',
+        id: encodeGlobalId('PostContent', postContent.id),
+      },
+      post: {
+        content: { bodyText: 'private to the still-following viewer' },
+        id: encodeGlobalId('Post', post.id),
+      },
+    });
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.DISABLED })
+      .where(eq(Profiles.id, viewer.profile.id));
+    await db
+      .update(Sessions)
+      .set({ activeProfileId: null })
+      .where(eq(Sessions.activeProfileId, viewer.profile.id));
+    assert.equal(
+      await db
+        .select({ id: ProfileFollows.id })
+        .from(ProfileFollows)
+        .where(
+          and(
+            eq(ProfileFollows.followerProfileId, viewer.profile.id),
+            eq(ProfileFollows.followeeProfileId, author.profile.id),
+          ),
+        )
+        .then((follows) => follows.length),
+      1,
+    );
+
+    const afterStateUpdate = await readWithCapturedContext();
+    assertNoGraphQLErrors(afterStateUpdate);
+    assert.deepEqual(afterStateUpdate.data, { content: null, post: null });
+  });
+
   test('DIRECT createPost는 Mention 없이 저장되고 author만 읽을 수 있다', async () => {
     const author = await createAuthenticatedSession();
     const stranger = await createAuthenticatedSession();
@@ -610,19 +695,27 @@ describe('Post Reply GraphQL 경계', () => {
       `@${available.handle}.extra @${available.handle}é ` +
       `@${available.handle}@missing.example @missing@missing.example ` +
       `@${blocked.handle} @${disabled.handle}`;
-    const execute = t.mock.method(temporalClient.workflow, 'execute');
-
+    const originalStart = temporalClient.workflow.start.bind(temporalClient.workflow);
+    const start = t.mock.method(
+      temporalClient.workflow,
+      'start',
+      (...args: Parameters<typeof temporalClient.workflow.start>) => originalStart(...args),
+    );
     const result = await requestCreatePost(
       { bodyText, visibility: PostVisibility.PUBLIC },
       auth.token,
     );
 
     assertNoGraphQLErrors(result);
-    assert.equal(execute.mock.calls.length, 1);
-    const [workflow, options] = execute.mock.calls[0]!.arguments;
-    assert.equal(workflow, POST_CREATE_WORKFLOW_TYPE);
-    const workflowArgs = options.args?.[0] as { input: { origin: string } };
-    assert.equal(workflowArgs.input.origin, 'LOCAL');
+    assert.equal(
+      start.mock.calls.filter((call) => call.arguments[0] === POST_REQUEST_WORKFLOW_TYPE).length,
+      0,
+    );
+    const postId = result.data?.createPost.post.id;
+    assert.ok(postId);
+    const projected = await requestPostContent(postId, auth.token);
+    assertNoGraphQLErrors(projected);
+    assert.equal(projected.data?.node?.content.bodyText, bodyText);
     const post = await db.select().from(Posts).then(firstOrThrow);
     const content = await db
       .select()
@@ -1084,6 +1177,261 @@ describe('Post Reply GraphQL 경계', () => {
     });
   });
 
+  test('PostContent linkPreview는 첫 링크의 저장 metadata를 읽고 stale success도 유지한다', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const post = await createContentfulPost(auth.profile.id);
+    assert.ok(post.currentContentId);
+    const firstUrl = 'https://preview.example/article?source=post&keep=1#summary';
+    const laterUrl = 'https://later.example/ignored';
+    const normalizedFirstUrl = normalizeLinkPreviewUrl(firstUrl);
+    const normalizedLaterUrl = normalizeLinkPreviewUrl(laterUrl);
+    assert.ok(normalizedFirstUrl);
+    assert.ok(normalizedLaterUrl);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentWithLinks([firstUrl, laterUrl]) })
+      .where(eq(PostContents.id, post.currentContentId));
+
+    const firstPreview = {
+      url: normalizedFirstUrl,
+      title: 'Article title',
+      description: 'Article summary',
+      imageUrl: 'https://preview.example/card.png',
+      imageWidth: 1200,
+      imageHeight: 630,
+    };
+    const laterPreview = {
+      url: normalizedLaterUrl,
+      title: 'Later title',
+      description: null,
+      imageUrl: null,
+      imageWidth: null,
+      imageHeight: null,
+    };
+    const now = Temporal.Now.instant();
+    await db.insert(LinkPreviews).values([
+      {
+        ...firstPreview,
+        urlHash: getLinkPreviewUrlHash(normalizedFirstUrl),
+        lastSuccessfulFetchAt: now.subtract({ hours: 192 }),
+      },
+      {
+        ...laterPreview,
+        urlHash: getLinkPreviewUrlHash(normalizedLaterUrl),
+        lastSuccessfulFetchAt: now,
+      },
+    ]);
+
+    let executions = 0;
+    t.mock.method(temporalClient.workflow, 'execute', async () => {
+      executions += 1;
+      throw new Error('Reading a Link Preview must not start a workflow');
+    });
+
+    const result = await requestPostContentLinkPreview(encodeGlobalId('Post', post.id), auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node?.content?.linkPreview, firstPreview);
+    assert.equal(executions, 0);
+
+    await db
+      .update(LinkPreviews)
+      .set({ imageWidth: null, imageHeight: null })
+      .where(eq(LinkPreviews.urlHash, getLinkPreviewUrlHash(normalizedFirstUrl)));
+    const legacyResult = await requestPostContentLinkPreview(
+      encodeGlobalId('Post', post.id),
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(legacyResult);
+    assert.deepEqual(legacyResult.data?.node?.content?.linkPreview, {
+      ...firstPreview,
+      imageWidth: null,
+      imageHeight: null,
+    });
+    await db
+      .update(LinkPreviews)
+      .set({ imageUrl: null, imageWidth: 1200, imageHeight: 630 })
+      .where(eq(LinkPreviews.urlHash, getLinkPreviewUrlHash(normalizedFirstUrl)));
+    const missingImageResult = await requestPostContentLinkPreview(
+      encodeGlobalId('Post', post.id),
+      auth.token,
+    );
+
+    assertNoGraphQLErrors(missingImageResult);
+    assert.deepEqual(missingImageResult.data?.node?.content?.linkPreview, {
+      ...firstPreview,
+      imageUrl: null,
+      imageWidth: null,
+      imageHeight: null,
+    });
+    assert.equal(executions, 0);
+  });
+
+  test('PostContent linkPreview does not fall back to a later link without first-link metadata', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const firstUrl = `https://preview.example/no-metadata-${crypto.randomUUID()}`;
+    const laterUrl = `https://preview.example/has-metadata-${crypto.randomUUID()}`;
+    const normalizedLaterUrl = normalizeLinkPreviewUrl(laterUrl);
+    assert.ok(normalizedLaterUrl);
+    const laterPreview = {
+      url: normalizedLaterUrl,
+      title: 'Later title',
+      description: 'Later description',
+      imageUrl: null,
+    };
+    await db.insert(LinkPreviews).values({
+      ...laterPreview,
+      urlHash: getLinkPreviewUrlHash(normalizedLaterUrl),
+      lastSuccessfulFetchAt: Temporal.Now.instant(),
+    });
+
+    const post = await createContentfulPost(auth.profile.id);
+    assert.ok(post.currentContentId);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentWithLinks([firstUrl, laterUrl]) })
+      .where(eq(PostContents.id, post.currentContentId));
+
+    let executions = 0;
+    t.mock.method(temporalClient.workflow, 'execute', async () => {
+      executions += 1;
+      throw new Error('Reading a Link Preview must not start a workflow');
+    });
+
+    const result = await requestPostContentLinkPreview(encodeGlobalId('Post', post.id), auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node?.content?.linkPreview, null);
+    assert.equal(executions, 0);
+  });
+
+  test('PostContent linkPreview returns null for plain-text URLs and content with Media', async () => {
+    const auth = await createAuthenticatedSession();
+    const media = await createReadyMedia(auth.account.id, auth.profile.id);
+    const mediaUrl = `https://preview.example/media-${crypto.randomUUID()}`;
+    const plainTextUrl = `https://preview.example/plain-${crypto.randomUUID()}`;
+    const normalizedMediaUrl = normalizeLinkPreviewUrl(mediaUrl);
+    const normalizedPlainTextUrl = normalizeLinkPreviewUrl(plainTextUrl);
+    assert.ok(normalizedMediaUrl);
+    assert.ok(normalizedPlainTextUrl);
+    const plainTextPost = await createContentfulPost(auth.profile.id, {
+      bodyText: 'plain URL fixture',
+    });
+    const mediaPost = await createContentfulPost(auth.profile.id);
+    assert.ok(plainTextPost.currentContentId);
+    assert.ok(mediaPost.currentContentId);
+    await Promise.all([
+      db
+        .update(PostContents)
+        .set({
+          document: canonicalizePostContentDocument({
+            version: 1,
+            summary: null,
+            body: {
+              type: 'doc',
+              content: [{ type: 'paragraph', content: [{ type: 'text', text: plainTextUrl }] }],
+            },
+          }),
+        })
+        .where(eq(PostContents.id, plainTextPost.currentContentId)),
+      db
+        .update(PostContents)
+        .set({ document: postContentDocumentWithLinks([mediaUrl], media.id) })
+        .where(eq(PostContents.id, mediaPost.currentContentId)),
+    ]);
+    await db.insert(LinkPreviews).values([
+      {
+        url: normalizedPlainTextUrl,
+        title: 'Plain text URL title',
+        description: null,
+        imageUrl: null,
+        urlHash: getLinkPreviewUrlHash(normalizedPlainTextUrl),
+        lastSuccessfulFetchAt: Temporal.Now.instant(),
+      },
+      {
+        url: normalizedMediaUrl,
+        title: 'Media post URL title',
+        description: null,
+        imageUrl: null,
+        urlHash: getLinkPreviewUrlHash(normalizedMediaUrl),
+        lastSuccessfulFetchAt: Temporal.Now.instant(),
+      },
+    ]);
+
+    const [plainTextResult, mediaResult] = await Promise.all([
+      requestPostContentLinkPreview(encodeGlobalId('Post', plainTextPost.id), auth.token),
+      requestPostContentLinkPreview(encodeGlobalId('Post', mediaPost.id), auth.token),
+    ]);
+
+    assertNoGraphQLErrors(plainTextResult);
+    assertNoGraphQLErrors(mediaResult);
+    assert.equal(plainTextResult.data?.node?.content?.linkPreview, null);
+    assert.equal(mediaResult.data?.node?.content?.linkPreview, null);
+  });
+
+  test('PostContent linkPreview preserves Post visibility and is optional on cache read failure', async (t) => {
+    const auth = await createAuthenticatedSession();
+    const post = await createContentfulPost(auth.profile.id);
+    assert.ok(post.currentContentId);
+    const url = `https://preview.example/database-${crypto.randomUUID()}`;
+    const normalizedUrl = normalizeLinkPreviewUrl(url);
+    assert.ok(normalizedUrl);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentWithLinks([url]) })
+      .where(eq(PostContents.id, post.currentContentId));
+
+    const privatePost = await createContentfulPost(auth.profile.id, {
+      visibility: PostVisibility.DIRECT,
+    });
+    assert.ok(privatePost.currentContentId);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentWithLinks([url]) })
+      .where(eq(PostContents.id, privatePost.currentContentId));
+    await db.insert(LinkPreviews).values({
+      url,
+      title: 'Private link title',
+      description: null,
+      imageUrl: null,
+      urlHash: getLinkPreviewUrlHash(normalizedUrl),
+      lastSuccessfulFetchAt: Temporal.Now.instant(),
+    });
+
+    const stranger = await createAuthenticatedSession();
+    const denied = await requestPostContentLinkPreview(
+      encodeGlobalId('Post', privatePost.id),
+      stranger.token,
+    );
+    assertNoGraphQLErrors(denied);
+    assert.equal(denied.data?.node, null);
+
+    const originalSelect = db.select.bind(db);
+    t.mock.method(db, 'select', (...args: Parameters<typeof db.select>) => {
+      const query = originalSelect(...args);
+      return new Proxy(query as object, {
+        get(target, property) {
+          if (property === 'from') {
+            return (table: unknown) => {
+              if (table === LinkPreviews) {
+                throw new Error('Link preview cache database is unavailable');
+              }
+              const from = Reflect.get(target, 'from', target) as (table: unknown) => unknown;
+              return from.call(target, table);
+            };
+          }
+          const value = Reflect.get(target, property, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }) as typeof query;
+    });
+    const result = await requestPostContentLinkPreview(encodeGlobalId('Post', post.id), auth.token);
+
+    assertNoGraphQLErrors(result);
+    assert.equal(result.data?.node?.content?.linkPreview, null);
+  });
+
   test('여러 PostContent의 Media를 함께 조회한다', async () => {
     const auth = await createAuthenticatedSession();
     const firstMedia = await createReadyMedia(auth.account.id, auth.profile.id);
@@ -1243,6 +1591,82 @@ describe('Post Reply GraphQL 경계', () => {
     });
   });
 
+  test('AI Prohibit Filter Applied는 Media Upload Account만 확인할 수 있다', async () => {
+    const owner = await createAuthenticatedSession();
+    const media = await createReadyMedia(owner.account.id, owner.profile.id);
+    await db.update(Media).set({ aiProhibitFilterApplied: true }).where(eq(Media.id, media.id));
+    const post = await requestCreatePost(
+      {
+        bodyText: '',
+        media: [{ altText: null, mediaId: encodeGlobalId('Media', media.id) }],
+        visibility: PostVisibility.PUBLIC,
+      },
+      owner.token,
+    );
+    assertNoGraphQLErrors(post);
+    const postId = post.data!.createPost.post.id;
+
+    const anotherProfile = await createProfile(`same-account-${crypto.randomUUID()}`);
+    await db.insert(AccountProfiles).values({
+      accountId: owner.account.id,
+      profileId: anotherProfile.id,
+      role: AccountProfileRole.MEMBER,
+    });
+    const anotherProfileToken = `token-${crypto.randomUUID()}`;
+    await db.insert(Sessions).values({
+      accountId: owner.account.id,
+      activeProfileId: anotherProfile.id,
+      state: SessionState.ACTIVE,
+      token: anotherProfileToken,
+    });
+
+    for (const token of [owner.token, anotherProfileToken]) {
+      const result = await requestPostMediaFilter(postId, token);
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(result.data?.node?.content?.media, [{ aiProhibitFilterApplied: true }]);
+    }
+
+    const otherAccount = await createAuthenticatedSession();
+    const otherViewer = await requestPostMediaFilter(postId, otherAccount.token);
+    assertNoGraphQLErrors(otherViewer);
+    assert.deepEqual(otherViewer.data?.node?.content?.media, [{ aiProhibitFilterApplied: null }]);
+
+    const anonymousViewer = await requestPostMediaFilter(postId);
+    assertNoGraphQLErrors(anonymousViewer);
+    assert.deepEqual(anonymousViewer.data?.node?.content?.media, [
+      { aiProhibitFilterApplied: null },
+    ]);
+
+    await db.update(Media).set({ aiProhibitFilterApplied: false }).where(eq(Media.id, media.id));
+    const unfilteredOwner = await requestPostMediaFilter(postId, owner.token);
+    assertNoGraphQLErrors(unfilteredOwner);
+    assert.deepEqual(unfilteredOwner.data?.node?.content?.media, [
+      { aiProhibitFilterApplied: false },
+    ]);
+
+    await db.update(Media).set({ aiProhibitFilterApplied: null }).where(eq(Media.id, media.id));
+    const legacyOwner = await requestPostMediaFilter(postId, owner.token);
+    assertNoGraphQLErrors(legacyOwner);
+    assert.deepEqual(legacyOwner.data?.node?.content?.media, [{ aiProhibitFilterApplied: null }]);
+
+    const remoteProfile = await createRemoteActorProfile(`remote-filter-${crypto.randomUUID()}`);
+    const remoteMedia = await db
+      .insert(Media)
+      .values({
+        aiProhibitFilterApplied: true,
+        profileId: remoteProfile.id,
+        source: MediaSource.REMOTE,
+        state: MediaState.READY,
+        url: 'https://remote.example/filter.png',
+      })
+      .returning()
+      .then(firstOrThrow);
+    const remotePost = await createContentfulPost(remoteProfile.id, { mediaIds: [remoteMedia.id] });
+    const remoteViewer = await requestPostMediaFilter(encodeGlobalId('Post', remotePost.id));
+    assertNoGraphQLErrors(remoteViewer);
+    assert.deepEqual(remoteViewer.data?.node?.content?.media, [{ aiProhibitFilterApplied: null }]);
+  });
+
   test('Post를 조회할 수 없는 viewer에게 Media 표시 정보를 노출하지 않는다', async () => {
     const auth = await createAuthenticatedSession();
     const media = await createReadyMedia(auth.account.id, auth.profile.id);
@@ -1344,15 +1768,6 @@ describe('Post Reply GraphQL 경계', () => {
         options: Parameters<typeof temporalClient.workflow.execute>[1],
       ) => {
         if (workflow !== MEDIA_UPLOAD_WORKFLOW_TYPE) {
-          if (workflow === POST_CREATE_WORKFLOW_TYPE) {
-            const workflowInput = (
-              options.args?.[0] as {
-                input: { accountId?: string; media?: { mediaId: string }[] };
-              }
-            ).input;
-            assert.equal(workflowInput.accountId, auth.account.id);
-            assert.equal(workflowInput.media?.[0]?.mediaId, storedMedia.id);
-          }
           return originalExecute(workflow, options);
         }
 
@@ -1395,6 +1810,12 @@ describe('Post Reply GraphQL 경계', () => {
     assert.equal(selectedMedia.accountId, auth.account.id);
     assert.equal(selectedMedia.source, MediaSource.LOCAL);
     assert.equal(selectedMedia.state, MediaState.READY);
+    const originalStart = temporalClient.workflow.start.bind(temporalClient.workflow);
+    const start = t.mock.method(
+      temporalClient.workflow,
+      'start',
+      (...args: Parameters<typeof temporalClient.workflow.start>) => originalStart(...args),
+    );
 
     const created = await requestCreatePost(
       {
@@ -1406,6 +1827,10 @@ describe('Post Reply GraphQL 경계', () => {
       auth.token,
     );
     assertNoGraphQLErrors(created);
+    assert.equal(
+      start.mock.calls.filter((call) => call.arguments[0] === POST_REQUEST_WORKFLOW_TYPE).length,
+      0,
+    );
     const postId = created.data?.createPost.post.id;
     assert.ok(postId);
 
@@ -1481,7 +1906,7 @@ describe('Post Reply GraphQL 경계', () => {
       auth.token,
     );
     assert.equal(unavailable.errors?.[0]?.extensions?.code, 'VALIDATION');
-    assert.equal(unavailable.errors?.[0]?.extensions?.field, 'media');
+    assert.equal(unavailable.errors?.[0]?.extensions?.field, 'media.0');
     assert.deepEqual(
       { contents: await db.$count(PostContents), posts: await db.$count(Posts) },
       before,
@@ -2476,6 +2901,69 @@ const requestPostContent = (postId: string, token?: string) =>
     token,
   );
 
+const requestPostMediaFilter = (postId: string, token?: string) =>
+  requestGraphQL<{
+    node: {
+      content: {
+        media: Array<{ aiProhibitFilterApplied: boolean | null }> | null;
+      } | null;
+    } | null;
+  }>(
+    `query PostMediaFilter($postId: ID!) {
+      node(id: $postId) {
+        ... on Post { content { media { aiProhibitFilterApplied } } }
+      }
+    }`,
+    { postId },
+    token,
+  );
+
+const requestPostContentLinkPreview = (postId: string, token?: string) =>
+  requestGraphQL<{
+    node: {
+      content: {
+        linkPreview: {
+          description: string | null;
+          imageUrl: string | null;
+          imageWidth: number | null;
+          imageHeight: number | null;
+          title: string;
+          url: string;
+        } | null;
+      } | null;
+    } | null;
+  }>(
+    `query PostContentLinkPreview($postId: ID!) {
+      node(id: $postId) {
+        ... on Post {
+          content { linkPreview { description imageHeight imageUrl imageWidth title url } }
+        }
+      }
+    }`,
+    { postId },
+    token,
+  );
+
+const postContentDocumentWithLinks = (urls: readonly string[], mediaId?: string) =>
+  canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: urls.map((url, index) => ({
+            type: 'text',
+            text: `link ${index}`,
+            marks: [{ type: 'link', attrs: { href: url } }],
+          })),
+        },
+        ...(mediaId ? [{ type: 'media', attrs: { mediaId } }] : []),
+      ],
+    },
+  });
+
 const requestPostContents = (postIds: string[]) =>
   requestGraphQL<{ nodes: Array<PostContentNode | null> }>(
     `query PostMediaContents($postIds: [ID!]!) {
@@ -2600,12 +3088,13 @@ const requestGraphQL = async <TData>(
   query: string,
   variables: Record<string, unknown>,
   token?: string,
+  requestApp: Hono<Env> = app,
 ): Promise<GraphQLResult<TData>> => {
   const headers = new Headers({ 'content-type': 'application/json' });
   if (token) {
     headers.set('authorization', `Bearer ${token}`);
   }
-  const response = await app.request('/graphql', {
+  const response = await requestApp.request('/graphql', {
     body: JSON.stringify({ query, variables }),
     headers,
     method: 'POST',

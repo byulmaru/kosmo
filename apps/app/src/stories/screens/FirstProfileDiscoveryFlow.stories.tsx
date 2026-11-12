@@ -171,7 +171,9 @@ function FirstProfileDiscoveryFlow() {
           delayMs: 500,
         }),
         FollowButtonUnfollowProfileMutation: () => ({
-          data: { unfollowProfile: relation() },
+          data: {
+            unfollowProfile: { ...relation(), profileFollowId: `follow-${target.id}` },
+          },
           delayMs: 500,
         }),
         FollowButtonCancelProfileFollowRequestMutation: () => ({

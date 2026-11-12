@@ -1,20 +1,18 @@
 import { ArrowLeft, Check, ChevronRight } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { graphql, useFragment } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, iconSizes, radius, space, textStyles } from '@/theme/tokens';
-import { ProfileListItemContent } from '../profile/ProfileListItemContent';
+import { ProfileListItemRow } from '../profile/ProfileListItemRow';
 import type { ReactNode, Ref } from 'react';
-
-type ProfileSettingsProfile = {
-  id: string;
-  displayName: string;
-  relativeHandle: string;
-  avatarUri?: string | null;
-};
+import type {
+  ProfileSettingsScreen_profile$data,
+  ProfileSettingsScreen_profile$key,
+} from './__generated__/ProfileSettingsScreen_profile.graphql';
 
 type ProfileSettingsDeletion = {
   phase: 'entry' | 'idle' | 'pending' | 'error';
@@ -25,16 +23,26 @@ type ProfileSettingsDeletion = {
 
 type Props = {
   embedded?: boolean;
-  profile: ProfileSettingsProfile;
+  profile: ProfileSettingsScreen_profile$key;
   children: ReactNode;
   identityAction?: ReactNode;
   deletion?: ProfileSettingsDeletion;
 };
 
-/** Controlled presentation only: the caller owns request results, authentication and navigation. */
+const profileSettingsScreenFragment = graphql`
+  fragment ProfileSettingsScreen_profile on Profile {
+    id
+    ...ProfileListItemRow_profile
+  }
+`;
+
+/** Reads Profile identity from Relay; the caller owns actions, authentication and navigation. */
 export function ProfileSettingsScreen(props: Props) {
-  return <ProfileSettingsSurface key={props.profile.id} {...props} />;
+  const profile = useFragment(profileSettingsScreenFragment, props.profile);
+  return <ProfileSettingsSurface key={profile.id} {...props} profile={profile} />;
 }
+
+type SurfaceProps = Omit<Props, 'profile'> & { profile: ProfileSettingsScreen_profile$data };
 
 function ProfileSettingsSurface({
   embedded = false,
@@ -42,7 +50,7 @@ function ProfileSettingsSurface({
   profile,
   children,
   deletion,
-}: Props) {
+}: SurfaceProps) {
   const theme = useTheme();
   const phase = deletion?.phase ?? 'entry';
   const confirming = deletion !== undefined && phase !== 'entry';
@@ -86,15 +94,12 @@ function ProfileSettingsSurface({
     />
   ) : (
     <>
-      <ProfileListItemContent
-        avatarLabel={profile.displayName}
-        avatarUri={profile.avatarUri}
-        displayName={profile.displayName}
-        relativeHandle={profile.relativeHandle}
+      <ProfileListItemRow
+        profile={profile}
         style={{ borderColor: theme.borderSubtle, minHeight: 72 }}
       >
         {identityAction}
-      </ProfileListItemContent>
+      </ProfileListItemRow>
       {children}
       {deletion ? (
         <>
@@ -164,7 +169,7 @@ function ProfileDeleteConfirmation({
   phase,
   onConfirm,
   onCancel,
-}: Pick<Props, 'profile'> & {
+}: Pick<SurfaceProps, 'profile'> & {
   embedded: boolean;
   headingRef?: Ref<View>;
   phase: ProfileSettingsDeletion['phase'];
@@ -188,11 +193,8 @@ function ProfileDeleteConfirmation({
       ) : (
         heading
       )}
-      <ProfileListItemContent
-        avatarLabel={profile.displayName}
-        avatarUri={profile.avatarUri}
-        displayName={profile.displayName}
-        relativeHandle={profile.relativeHandle}
+      <ProfileListItemRow
+        profile={profile}
         style={{ borderColor: theme.borderSubtle, minHeight: 72 }}
       />
       <Text style={[textStyles.uiCopyM, { color: theme.foregroundSecondary }]}>

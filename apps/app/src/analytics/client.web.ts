@@ -89,6 +89,10 @@ export function trackAnalytics<Name extends AnalyticsEventName>(
   }
 }
 
+export function trackAnalyticsScreen(screenName: string): void {
+  void screenName;
+}
+
 function getPostHogAccountId(analyticsClient: PostHog): string | null {
   const userId = analyticsClient.get_property(POSTHOG_USER_ID);
   return typeof userId === 'string' && userId ? userId : null;

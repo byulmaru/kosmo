@@ -30,6 +30,7 @@ mockModule('expo-router', {
     replace: (href: string) => routerReplacements.push(href),
     setParams: () => undefined,
   }),
+  useIsFocused: () => true,
 });
 mockModule('react-relay', {
   graphql: () => 'ReactionPeopleRouteQuery',

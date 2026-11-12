@@ -135,9 +135,16 @@ function InteractiveMediaItems({ updateArgs, ...props }: InteractiveMediaItemsPr
         {editorOpen ? (
           <ComposerMediaEditor
             media={media.filter((item) => item.state === 'ready')}
-            onApplyNightshadeChange={(key, value) => {
+            onApplyAiProhibitFilterChange={(key, value) => {
               const nextMedia = media.map((item) =>
-                item.key === key ? { ...item, applyNightshade: value } : item,
+                item.key === key ? { ...item, applyAiProhibitFilter: value } : item,
+              );
+              setMedia(nextMedia);
+              updateArgs?.({ media: nextMedia });
+            }}
+            onRightsChange={(key, rights) => {
+              const nextMedia = media.map((item) =>
+                item.key === key ? { ...item, rights: rights ? { ...rights } : undefined } : item,
               );
               setMedia(nextMedia);
               updateArgs?.({ media: nextMedia });

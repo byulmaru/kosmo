@@ -7,10 +7,12 @@ import baseMeta, {
   MobileDefaultGeometryContract as mobileDefaultGeometryContract,
   MobileFeatureFlagOffContract as mobileFeatureFlagOffContract,
   MobileNightshadeGeometryContract as mobileNightshadeGeometryContract,
+  MobileRightsInteractionContract as mobileRightsInteractionContract,
   MobileSensitiveGeometryContract as mobileSensitiveGeometryContract,
   MobileStaleFeatureFlagDropContract as mobileStaleFeatureFlagDropContract,
   MobileToolInteractionContract as mobileToolInteractionContract,
   PlaygroundMobileViewportContract as playgroundMobileViewportContract,
+  RightsInteractionContract as rightsInteractionContract,
   StaleFeatureFlagDropContract as staleFeatureFlagDropContract,
   WideImagePreviewContract as wideImagePreviewContract,
 } from './ComposerMediaEditor.stories';
@@ -33,6 +35,8 @@ export const MobileAltKeyboardGeometryContract: Story = mobileAltKeyboardGeometr
 export const MobileDefaultGeometryContract: Story = mobileDefaultGeometryContract;
 export const MobileFeatureFlagOffContract: Story = mobileFeatureFlagOffContract;
 export const MobileNightshadeGeometryContract: Story = mobileNightshadeGeometryContract;
+export const RightsInteractionContract: Story = rightsInteractionContract;
+export const MobileRightsInteractionContract: Story = mobileRightsInteractionContract;
 export const MobileStaleFeatureFlagDropContract: Story = mobileStaleFeatureFlagDropContract;
 export const MobileSensitiveGeometryContract: Story = mobileSensitiveGeometryContract;
 export const MobileToolInteractionContract: Story = mobileToolInteractionContract;

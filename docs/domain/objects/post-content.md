@@ -6,6 +6,9 @@ Post Content는 Post의 작성 내용을 한 시점에 보존하는 immutable re
 Sensitive Media, 저장된 Profile과 일치하는 typed Local Mention·선택된 Local Mention과 검증된 inbound typed Mention, 순서가 있는 Media 참조와 Hashtag 관계를 소유한다. Post는
 현재 Post Content를 가리키며, 작성 내용을 수정하면 기존 revision을 바꾸지 않고 새 Post Content를 만든다.
 
+Link Preview는 작성 내용이 아닌 현재 Post Content의 표시용 derived metadata다. 현재 revision의 본문에서 파생하지만
+immutable content document와 분리해 저장·갱신하며, metadata를 갱신해도 revision이나 원문 본문을 바꾸지 않는다.
+
 ## 속성
 
 | 속성             | 타입/nullability | 검증 정책                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | 존재 조건 | 조회 조건           | 조회 권한 |
@@ -159,7 +162,7 @@ rollback해 partial relation을 남기지 않는다.
 바뀌면 새 Post Content를 만든다. 이미지 교체는 먼저 새 Local Media를 Ready로 만든 다음 그 Media를 참조하는 새
 revision을 만드는 행동이다. 이전 revision은 이전 Media 참조를 그대로 보존한다.
 
-Nightshade 선택은 Content Document의 속성이 아니며 새 Local Media에 적용된다. 처리 정책은 [Media 객체](./media.md)에
+AI 학습 방지 필터 선택은 Content Document의 속성이 아니며 새 Local Media에 적용된다. 처리 정책은 [Media 객체](./media.md)에
 두며, Post Content는 처리 결과가 반영된 Media ID만 참조한다.
 
 ActivityPub `tag`의 typed `Mention`은 앞서 정의한 `Mention.href` identity 확인으로 알려진 Local/Remote Profile을 Mentioned Profile
@@ -198,6 +201,8 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 - V1 읽기에서는 알 수 없는 block·inline node와 그 자손을 생략하고, 아는 형제 node의 순서와 내용을 유지한다. 알 수 없는 node 내용은 표시하지 않는다. 이 projection에서도 Content Warning, 알려진 순서의 Media 참조와 Sensitive Media 표시는 유지한다.
 - Post의 Hashtag 집합은 Current Post Content의 revision-owned 관계에서만 투영한다.
 - 현재 Post Content의 Referenced Media는 body의 Media node 순서로 제공한다.
+- 현재 발행 Post Content는 nullable Link Preview metadata를 함께 제공할 수 있다. Link Preview는 소유 Post의 조회 정책과
+  Content Warning 경계를 따르며, 값이 없거나 조회에 실패해도 Post Content·본문·Referenced Media의 조회를 실패시키지 않는다.
 - Current Post의 Mentioned Profile은 현재 Post Content의 revision-owned 관계에서 투영한다. 구 reader가 지원하지
   않는 Mention을 받아도 본문 text를 보존해 읽을 수 있는 호환 경계를 먼저 검증하며, Mention 저장 활성화는 그
   검증 뒤에 수행한다. 구 reader에서는 일시적으로 link 클릭 동작과 문단 구조가 저하된 plain text 표시를 허용하고,
@@ -222,6 +227,33 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 - Local ActivityPub Note 역참조는 현재 Post Content를 사용한다. Post Content 수정 후 `Update(Note)`를 실제
   수신자에게 전달하는 lifecycle은 별도 계약이 확정될 때까지 제공하지 않는다.
 
+## Link Preview
+
+발행된 Local·Remote Post 본문의 첫 HTTP(S) 링크를 Link Preview 후보로 사용한다. 뒤의 링크로 fallback하지 않는다. 표시 가능한 metadata가 있으면 본문 뒤에 카드 하나를 표시한다. Open Graph title을
+우선 사용하고 없으면 HTML `<title>`을 사용하며, 어느 쪽에서도 제목을 얻지 못하면 카드를 표시하지 않는다. Description과
+HTTP(S) image는 선택 값이며 원문 body와 링크는 유지한다.
+
+Local 게시물 생성, Federated Post 수신, 게시물 가져오기는 모두 Post 생성 완료 뒤 공통 비동기 처리로 metadata를 가져온다.
+PostContent 조회는 해당 URL에 이미 저장된 metadata만 읽으며 새 조회나 갱신을 시작하지 않는다. 이전 게시물을 대상으로 일괄
+backfill하지 않는다. 따라서 기존 게시물도 같은 정규화 URL의 metadata가 이미 저장되어 있거나, 다른 게시물의 정상적인 생성 후 처리로 그 URL의 metadata가
+저장되면 카드를 표시할 수 있다.
+
+KOSMO Worker는 인증된 Embed metadata service에 후보 URL의 metadata를 요청한다. 원문 페이지의 HTML을 KOSMO에서 직접
+가져오지 않으며, metadata를 가져오지 못하거나 응답을 사용할 수 없으면 기존 Post 조회·표시를 유지한다.
+
+Post에 Media가 하나라도 있으면 Link Preview 카드를 표시하지 않는다. Content Warning으로 본문이 숨겨진 동안 카드도
+함께 숨겨 기존 reveal 경계를 따른다. Metadata를 읽거나 갱신하지 못해도 원문 Post와 본문은 계속 조회·표시할 수 있고,
+첫 조회에 성공 값이 없으면 카드만 생략한다. 이 규칙은 Local·Remote Post에 동일하게 적용한다.
+
+성공한 metadata는 정규화 URL을 기준으로 KOSMO 데이터베이스에 보관한다. 생성 후 metadata 처리에서 성공 값은 7일 동안
+fresh로 보며, 이후 갱신 대상이 될 수 있다. 최근 실패 뒤에는 10분 동안 재조회를 억제한다. 기존 성공 값은 freshness 만료나
+갱신 실패만으로 삭제하지 않으며, 다음 성공한 갱신으로 대체될 때까지 표시할 수 있다.
+
+Metadata 대상은 공개 HTTP(S) URL이다. 인증정보(user:password)가 포함된 URL, 비기본 포트와 사설·예약·loopback
+주소는 허용하지 않으며, redirect를 따라갈 때도 같은 제한을 적용한다. 이 검증과 DNS rebinding 방지는 Embed service가
+보장해야 하며, DNS·redirect 및 처리 자원·응답 크기 경계가 검증되기 전에는 운영 요청을 연결하지 않는다. KOSMO는
+Embed service가 반환한 metadata를 사용하며, iframe이나 embed 문서를 렌더링하지 않는다.
+
 ## 확정 용어
 
 - 게시 내용: Post Content
@@ -234,10 +266,11 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 
 - Post Visibility 수정은 Post Content 수정에 포함하지 않는다.
 - 현재 Post Composer 이미지 업로드는 새 Post의 첫 Post Content만 만들며 기존 Post 수정은 포함하지 않는다.
+- 미발행 Composer draft의 Link Preview와 사용자가 Link Preview 표시를 숨기는 설정은 현재 범위에 포함하지 않는다.
 - Hashtag 본문 작성·보존은 새 Local Post·Reply·Quote 및 새 Remote Note 수신에 적용한다. 기존 Local Post 콘텐츠는
   위의 저장 document 처리 규칙으로 재처리할 수 있다. 이 재처리는 사용자용 Post 수정, Remote revision backfill 또는
   inbound `Update(Note)`를 포함하지 않는다.
 - 기존 Media의 crop, filter 등 이미지 byte나 파생 표현을 편집하는 기능은 포함하지 않는다. 새 Post에 첨부할
-  이미지의 선택적 Nightshade 처리는 새 Local Media 업로드에만 적용하며, 새 이미지를 업로드해 Media 참조를 교체하는
+  이미지의 선택적 AI 학습 방지 필터 처리는 새 Local Media 업로드에만 적용하며, 새 이미지를 업로드해 Media 참조를 교체하는
   기능은 포함한다.
 - revision 번호, 과거 revision 목록·복원, 동시 편집 충돌 UX와 Media 물리 삭제 정책은 후속 계약에서 정한다.

@@ -14,11 +14,10 @@ import {
 } from '@kosmo/core/enums';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ActivityFailure, ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { eq } from 'drizzle-orm';
 import { RemoteDocumentLoaderTypeError } from './activities/remote-document';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type { DocumentLoader } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -125,9 +124,7 @@ test(
   'Oversized prepare results fail the lookup without retrying the Activity',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-payload-${process.pid}`;
     let prepareAttempts = 0;
@@ -147,7 +144,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -275,9 +272,7 @@ test(
       },
     );
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-lookup-${process.pid}`;
     const activityInputs: Array<Parameters<typeof lookupRemotePostActivity>[0]> = [];
@@ -292,6 +287,7 @@ test(
     let effectActivityCalls = 0;
     const worker = await Worker.create({
       activities: {
+        collectPostLinkPreviewActivity: async () => {},
         lookupRemotePostActivity: async (input: Parameters<typeof lookupRemotePostActivity>[0]) => {
           activityInputs.push(input);
           return lookupRemotePostActivity(input);
@@ -332,11 +328,14 @@ test(
           }
           return createNotificationActivity(input);
         },
+        fanoutHomeTimelinePostActivity: async () => {},
+        loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+        insertHomeTimelinePostActivity: async () => undefined,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     const run = (input: unknown, id: string) =>
       environment.client.workflow.execute(remotePostLookupWorkflow.workflow, {
@@ -827,9 +826,7 @@ test(
   'Remote Post Lookup replays the legacy remote-create child trace',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-remote-post-lookup-legacy-child-' + process.pid;
@@ -865,6 +862,9 @@ test(
           };
         },
         createNotificationActivity: async () => {},
+        fanoutHomeTimelinePostActivity: async () => {},
+        loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+        insertHomeTimelinePostActivity: async () => undefined,
         sendLocalPostCreateActivity: async () => {},
       },
       connection: environment.nativeConnection,

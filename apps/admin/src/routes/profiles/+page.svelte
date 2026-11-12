@@ -91,7 +91,7 @@
           <Table.Head class="w-32">State</Table.Head>
           <Table.Head class="w-28 text-right">Followers</Table.Head>
           <Table.Head class="w-28 text-right">Following</Table.Head>
-          <Table.Head class="w-44 text-right">Posts (PUBLIC + UNLISTED)</Table.Head>
+          <Table.Head class="w-44 text-right">Posts</Table.Head>
           <Table.Head class="w-56">Last post</Table.Head>
         </Table.Row>
       </Table.Header>
@@ -140,7 +140,7 @@
             <Table.Cell class="text-right tabular-nums">
               <a
                 href={resolve('/profiles/[id]/posts', { id: profile.id })}
-                aria-label={`${profile.postCount} PUBLIC and UNLISTED posts for ${profile.relativeHandle}`}
+                aria-label={`${profile.postCount} active posts for ${profile.relativeHandle}`}
                 class="rounded-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {profile.postCount}

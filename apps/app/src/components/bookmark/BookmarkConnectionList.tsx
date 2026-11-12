@@ -32,12 +32,14 @@ export function BookmarkConnectionList({ profile }: BookmarkConnectionListProps)
     BookmarkConnectionListNextPageQuery,
     BookmarkConnectionList_profile$key
   >(bookmarkConnectionFragment, profile);
-  const items = pagination.data.bookmarks.edges.flatMap(({ node }) =>
-    node.post?.listItem ? [{ id: node.id, post: node.post.listItem }] : [],
-  );
+  const bookmarks = pagination.data.bookmarks;
+  const items =
+    bookmarks?.edges.flatMap(({ node }) =>
+      node.post?.listItem ? [{ id: node.id, post: node.post.listItem }] : [],
+    ) ?? [];
   const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
-    hasNext: pagination.hasNext,
-    isLoadingNext: pagination.isLoadingNext,
+    hasNext: bookmarks != null && pagination.hasNext,
+    isLoadingNext: bookmarks != null && pagination.isLoadingNext,
     itemCount: items.length,
     loadNext: pagination.loadNext,
     pageSize: 20,
@@ -47,8 +49,8 @@ export function BookmarkConnectionList({ profile }: BookmarkConnectionListProps)
     <BookmarkList
       error={loadError}
       endRef={endRef}
-      hasNext={pagination.hasNext}
-      isLoadingMore={pagination.isLoadingNext}
+      hasNext={bookmarks != null && pagination.hasNext}
+      isLoadingMore={bookmarks != null && pagination.isLoadingNext}
       items={items}
       onRetry={loadNextPage}
       replyProfile={pagination.data}

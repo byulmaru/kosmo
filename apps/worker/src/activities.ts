@@ -12,18 +12,37 @@ export {
   resolveImportedLocalProfileActivity,
 } from './activities/following-accounts-import';
 export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
+export { collectPostLinkPreviewActivity } from './activities/link-preview';
 export {
   createLocalPostActivity,
   generateLocalPostIdActivity,
 } from './activities/local-post-create';
 export { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
-export { createNotificationActivity } from './activities/notification';
+export { executeNaturalLanguageMuteRuleActivity } from './activities/natural-language-mute-rule';
+export {
+  createFollowNotificationActivity,
+  createFollowRequestNotificationActivity,
+  createMentionNotificationActivity,
+  createNotificationActivity,
+  createQuoteNotificationActivity,
+  createReactionNotificationActivity,
+  createReplyNotificationActivity,
+  createRepostNotificationActivity,
+} from './activities/notification';
 export {
   captureOperationalNotificationAudienceActivity,
   dispatchOperationalNotificationPageActivity,
 } from './activities/operational-notification';
 export { reprocessLocalPostContentActivity } from './activities/post-content-reprocessing';
 export { createPostActivity, generatePostIdActivity } from './activities/post-create';
+export { createPostActivity as createPostActivityV2 } from './activities/post-create';
+export { capturePostCreatedActivity } from './activities/post-created';
+export {
+  checkPostRequestMediaUploadActivity,
+  getPostRequestMediaStateActivity,
+  reconcilePostRequestActivity,
+  waitForPostRequestMediaUploadActivity,
+} from './activities/post-request';
 export {
   executeProfileBlockTransitionActivity,
   executeProfileUnblockTransitionActivity,
@@ -60,28 +79,25 @@ export {
   prepareProfileMigrationMoveActivity,
 } from './profile-migration-activities';
 export {
+  fanoutHomeTimelinePost as fanoutHomeTimelinePostActivity,
+  insertHomeTimelinePost as insertHomeTimelinePostActivity,
+  invalidateHomeTimelines as invalidateHomeTimelinesActivity,
+  listHomeTimelineRecipientPage as loadHomeTimelineRecipientPageActivity,
+  reconcileHomeTimelineFollow as reconcileHomeTimelineFollowActivity,
+  removeHomeTimelinePost as removeHomeTimelinePostActivity,
+} from '@kosmo/core/home-timeline/cache';
+export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,
   executeProfileFollowRemoval as executeProfileFollowRemovalActivity,
   loadPendingFollowRequestId as loadPendingFollowRequestIdActivity,
   verifyProfileFollowRemoval as verifyProfileFollowRemovalActivity,
 } from '@kosmo/core/services';
 export {
-  createFollowNotification as createFollowNotificationActivity,
-  createFollowRequestNotification as createFollowRequestNotificationActivity,
   deleteFollowNotification as deleteFollowNotificationActivity,
   deleteFollowRequestNotification as deleteFollowRequestNotificationActivity,
 } from '@kosmo/core/services';
-export { createReplyNotification as createReplyNotificationActivity } from '@kosmo/core/services';
-export { createQuoteNotification as createQuoteNotificationActivity } from '@kosmo/core/services';
-export { createMentionNotification as createMentionNotificationActivity } from '@kosmo/core/services';
-export {
-  createReactionNotification as createReactionNotificationActivity,
-  deleteReactionNotification as deleteReactionNotificationActivity,
-} from '@kosmo/core/services';
-export {
-  createRepostNotification as createRepostNotificationActivity,
-  deleteRepostNotification as deleteRepostNotificationActivity,
-} from '@kosmo/core/services';
+export { deleteReactionNotification as deleteReactionNotificationActivity } from '@kosmo/core/services';
+export { deleteRepostNotification as deleteRepostNotificationActivity } from '@kosmo/core/services';
 export { replaceRemoteFeaturedSnapshot as replaceRemoteFeaturedActivity } from '@kosmo/fedify';
 export {
   sendLocalPostCreate as sendLocalPostCreateActivity,

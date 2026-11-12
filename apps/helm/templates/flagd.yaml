@@ -24,17 +24,6 @@ spec:
             - {$ref: isDeveloper}
             - 'on'
             - 'off'
-      profile-migration:
-        state: ENABLED
-        variants:
-          'on': true
-          'off': false
-        defaultVariant: 'off'
-        targeting:
-          if:
-            - {$ref: isDeveloper}
-            - 'on'
-            - 'off'
       profile-tag-mute:
         state: ENABLED
         variants:
@@ -62,12 +51,7 @@ spec:
         variants:
           'on': true
           'off': false
-        defaultVariant: 'off'
-        targeting:
-          if:
-            - {$ref: isDeveloper}
-            - 'on'
-            - 'off'
+        defaultVariant: 'on'
     $evaluators:
       isDeveloper:
         in:

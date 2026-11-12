@@ -45,7 +45,9 @@ import type { yoga as YogaRouter } from '../../../src/graphql';
 const publicOrigin = 'http://127.0.0.1:4173';
 const localDomain = '127.0.0.1:4173';
 const remoteDomain = 'remote.example';
+const configuredLocalTimelineInstanceId = crypto.randomUUID();
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
+const originalRedisUrl = process.env.REDIS_URL;
 
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
@@ -91,7 +93,10 @@ const profilePinOrderKeys = (count: number) => {
 describe('GraphQL remote profile boundary', () => {
   before(async () => {
     process.env.DATABASE_URL = databaseUrl;
+    // These assertions cover live DB policy; cache behavior is covered separately.
+    process.env.REDIS_URL = '';
     process.env.NODE_ENV = 'production';
+    process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = configuredLocalTimelineInstanceId;
     process.env.PUBLIC_ORIGIN = publicOrigin;
     process.env.EXPO_PUBLIC_SENTRY_DSN = 'https://public@example.invalid/1';
     process.env.ENVIRONMENT = 'test';
@@ -154,6 +159,11 @@ describe('GraphQL remote profile boundary', () => {
     await pg.end();
     await Sentry.close(0);
     restoreSentryTransport?.();
+    if (originalRedisUrl === undefined) {
+      delete process.env.REDIS_URL;
+    } else {
+      process.env.REDIS_URL = originalRedisUrl;
+    }
   });
 
   test('does not treat a malformed profile without an instance as local', () => {
@@ -1051,6 +1061,190 @@ describe('GraphQL remote profile boundary', () => {
       instance: { kind: 'ACTIVITYPUB' },
       relativeHandle: `@alice@${remoteDomain}`,
     });
+  });
+
+  test('returns identity-only fields for inactive Profile Nodes without checking Instance state', async () => {
+    const owner = await createAuthenticatedSession();
+    const suffix = crypto.randomUUID().replaceAll('-', '').slice(0, 10);
+    const disabled = await createProfile({
+      handle: `disabled-${suffix}`,
+      instanceId: localInstanceId,
+      state: ProfileState.DISABLED,
+    });
+    const suspended = await createProfile({
+      handle: `suspended-${suffix}`,
+      instanceId: localInstanceId,
+      state: ProfileState.SUSPENDED,
+    });
+    const suspendedInstance = await createLocalInstance({
+      domain: `node-suspended-${suffix}.example`,
+      state: InstanceState.SUSPENDED,
+    });
+    const activeOnSuspendedInstance = await createProfile({
+      handle: `active-${suffix}`,
+      instanceId: suspendedInstance.id,
+    });
+
+    await db.insert(AccountProfiles).values([
+      { accountId: owner.account.id, profileId: disabled.id, role: AccountProfileRole.OWNER },
+      { accountId: owner.account.id, profileId: suspended.id, role: AccountProfileRole.OWNER },
+    ]);
+
+    const result = await requestGraphQL<{
+      disabled: Record<string, unknown> | null;
+      suspended: Record<string, unknown> | null;
+    }>(
+      `query InactiveProfileNodes($disabledId: ID!, $suspendedId: ID!) {
+        disabled: node(id: $disabledId) { ...InactiveProfileProjection }
+        suspended: node(id: $suspendedId) { ...InactiveProfileProjection }
+      }
+
+      fragment InactiveProfileProjection on Node {
+        __typename
+        ... on Profile {
+          id
+          handle
+          relativeHandle
+          displayName
+          bio
+          bookmarks(first: 1) { __typename }
+          createdAt
+          followPolicy
+          followers(first: 1) { __typename }
+          followersCount
+          following(first: 1) { __typename }
+          followingCount
+          hashtagMuteRules(first: 1) { __typename }
+          avatar { __typename }
+          header { __typename }
+          incomingProfileFollowRequests(first: 1) { __typename }
+          instance { __typename }
+          migrationSource { __typename }
+          notifications(first: 1) { __typename }
+          outgoingProfileFollowRequests(first: 1) { __typename }
+          pinnedPosts { __typename }
+          posts(first: 1) { __typename }
+          postRequests { __typename }
+          private { __typename }
+          profileBlocks(first: 1) { __typename }
+          profileMutes(first: 1) { __typename }
+          tags { __typename }
+          unreadNotificationCount
+          viewerState { __typename }
+        }
+      }`,
+      {
+        disabledId: globalId('Profile', disabled.id),
+        suspendedId: globalId('Profile', suspended.id),
+      },
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(result);
+    const expectedProjection = (profile: typeof disabled) => ({
+      __typename: 'Profile',
+      id: globalId('Profile', profile.id),
+      handle: profile.handle,
+      relativeHandle: `@${profile.handle}`,
+      displayName: null,
+      bio: null,
+      bookmarks: null,
+      createdAt: null,
+      followPolicy: null,
+      followers: null,
+      followersCount: null,
+      following: null,
+      followingCount: null,
+      hashtagMuteRules: null,
+      avatar: null,
+      header: null,
+      incomingProfileFollowRequests: null,
+      instance: null,
+      migrationSource: null,
+      notifications: null,
+      outgoingProfileFollowRequests: null,
+      pinnedPosts: null,
+      posts: null,
+      postRequests: null,
+      private: null,
+      profileBlocks: null,
+      profileMutes: null,
+      tags: null,
+      unreadNotificationCount: null,
+      viewerState: null,
+    });
+
+    assert.deepEqual(result.data?.disabled, expectedProjection(disabled));
+    assert.deepEqual(result.data?.suspended, expectedProjection(suspended));
+
+    const controls = await requestGraphQL<{
+      active: {
+        id: string;
+        displayName: string;
+        private: { __typename: string } | null;
+        profileBlocks: { __typename: string } | null;
+      } | null;
+      activeOnSuspendedInstance: {
+        id: string;
+        handle: string;
+        relativeHandle: string;
+        displayName: string;
+        instance: { kind: string } | null;
+      } | null;
+      missing: { id: string } | null;
+    }>(
+      `query ProfileNodeControls($activeId: ID!, $suspendedInstanceId: ID!, $missingId: ID!) {
+        active: node(id: $activeId) {
+          ... on Profile {
+            id
+            displayName
+            private { __typename }
+            profileBlocks(first: 1) { __typename }
+          }
+        }
+        activeOnSuspendedInstance: node(id: $suspendedInstanceId) {
+          ... on Profile {
+            id
+            handle
+            relativeHandle
+            displayName
+            instance { kind }
+          }
+        }
+        missing: node(id: $missingId) { id }
+      }`,
+      {
+        activeId: globalId('Profile', owner.profile.id),
+        suspendedInstanceId: globalId('Profile', activeOnSuspendedInstance.id),
+        missingId: globalId('Profile', crypto.randomUUID()),
+      },
+      owner.token,
+    );
+
+    assertNoGraphQLErrors(controls);
+    assert.equal(controls.data?.active?.id, globalId('Profile', owner.profile.id));
+    assert.ok(controls.data?.active?.displayName);
+    assert.deepEqual(controls.data?.active?.private, { __typename: 'ProfilePrivate' });
+    assert.deepEqual(controls.data?.active?.profileBlocks, {
+      __typename: 'ProfileBlockConnection',
+    });
+    assert.deepEqual(controls.data?.activeOnSuspendedInstance, {
+      id: globalId('Profile', activeOnSuspendedInstance.id),
+      handle: activeOnSuspendedInstance.handle,
+      relativeHandle: `@${activeOnSuspendedInstance.handle}@${suspendedInstance.domain}`,
+      displayName: activeOnSuspendedInstance.displayName,
+      instance: { kind: InstanceKind.LOCAL },
+    });
+    assert.equal(controls.data?.missing, null);
+
+    const deniedMemberField = await requestGraphQL(
+      `query ActiveProfilePermission($id: ID!) {
+        node(id: $id) { ... on Profile { postRequests { __typename } } }
+      }`,
+      { id: globalId('Profile', owner.profile.id) },
+    );
+    assert.equal(deniedMemberField.errors?.[0]?.extensions?.code, 'PERMISSION_DENIED');
+    assert.deepEqual(deniedMemberField.data, { node: { postRequests: null } });
   });
 
   test('keeps mixed Node batch order and does not retry a mismatched typename', async () => {
@@ -4514,7 +4708,7 @@ describe('GraphQL remote profile boundary', () => {
       .update(Instances)
       .set({ state: InstanceState.SUSPENDED })
       .where(eq(Instances.id, author.instance.id));
-    assertRemotePostReadDenied(await read(), nodeIds.length, false);
+    assertRemotePostReadDenied(await read(), nodeIds.length, 'empty');
 
     await db
       .update(Instances)
@@ -4524,7 +4718,7 @@ describe('GraphQL remote profile boundary', () => {
       .update(Profiles)
       .set({ state: ProfileState.DISABLED })
       .where(eq(Profiles.id, author.profile.id));
-    assertRemotePostReadDenied(await read(), nodeIds.length, false);
+    assertRemotePostReadDenied(await read(), nodeIds.length, 'null');
 
     await db
       .update(Profiles)
@@ -4534,7 +4728,7 @@ describe('GraphQL remote profile boundary', () => {
       .update(Posts)
       .set({ state: PostState.DELETED })
       .where(eq(Posts.profileId, author.profile.id));
-    assertRemotePostReadDenied(await read(), nodeIds.length, true);
+    assertRemotePostReadDenied(await read(), nodeIds.length, 'empty');
   });
 
   test('enforces Followers Only access for Node, Profile posts, and Home timeline', async () => {
@@ -4648,7 +4842,7 @@ describe('GraphQL remote profile boundary', () => {
       suspended.data?.nodes.map((node) => node?.id ?? null),
       [null, null],
     );
-    assert.equal(suspended.data?.profile, null);
+    assert.deepEqual(suspended.data?.profile, { posts: null });
     assert.deepEqual(connectionIds(suspended.data?.homeTimeline), []);
   });
 
@@ -4695,16 +4889,12 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(firstPage);
     assert.deepEqual(connectionIds(firstPage.data?.profile?.posts), expectedIds.slice(0, 2));
     assert.deepEqual(connectionIds(firstPage.data?.homeTimeline), expectedIds.slice(0, 2));
-    assert.equal(firstPage.data?.profile?.posts.pageInfo.hasNextPage, true);
+    assert.equal(firstPage.data?.profile?.posts!.pageInfo.hasNextPage, true);
     assert.equal(firstPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
-    assert.ok(firstPage.data?.profile?.posts.pageInfo.endCursor);
-    assert.equal(
-      firstPage.data?.profile?.posts.pageInfo.endCursor,
-      firstPage.data?.homeTimeline?.pageInfo.endCursor,
-    );
+    assert.ok(firstPage.data?.profile?.posts!.pageInfo.endCursor);
 
     const secondPage = await requestRemotePostRead({
-      after: firstPage.data?.profile?.posts.pageInfo.endCursor,
+      after: firstPage.data?.profile?.posts!.pageInfo.endCursor,
       first: 2,
       nodeIds: [],
       profileId: globalId('Profile', followee.profile.id),
@@ -4713,7 +4903,7 @@ describe('GraphQL remote profile boundary', () => {
     assertNoGraphQLErrors(secondPage);
     assert.deepEqual(connectionIds(secondPage.data?.profile?.posts), expectedIds.slice(2));
     assert.deepEqual(connectionIds(secondPage.data?.homeTimeline), expectedIds.slice(2));
-    assert.equal(secondPage.data?.profile?.posts.pageInfo.hasNextPage, false);
+    assert.equal(secondPage.data?.profile?.posts!.pageInfo.hasNextPage, false);
     assert.equal(secondPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
     assert.equal(
       [
@@ -4918,6 +5108,43 @@ describe('GraphQL remote profile boundary', () => {
         globalId('Post', quote.id),
       ]);
       assert.equal(backward.data?.localTimeline.pageInfo.hasPreviousPage, false);
+    }
+  });
+
+  test('uses configured Local sources from the initialized environment after raw environment changes', async () => {
+    const localAuthor = await createProfile({
+      handle: 'configured-local-author',
+      instanceId: localInstanceId,
+    });
+    const localPost = await createContentfulPost({ profileId: localAuthor.id });
+    const configuredAuthor = await createStoredActivityPubAuthor({
+      domain: 'configured-remote.example',
+      handle: 'configured-remote-author',
+      instanceId: configuredLocalTimelineInstanceId,
+    });
+    const configuredPost = await createContentfulPost({ profileId: configuredAuthor.profile.id });
+    const unconfiguredAuthor = await createStoredActivityPubAuthor({
+      domain: 'unconfigured-remote.example',
+      handle: 'unconfigured-author',
+    });
+    await createContentfulPost({ profileId: unconfiguredAuthor.profile.id });
+
+    try {
+      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = 'not-a-uuid';
+      const result = await requestGraphQL<{ localTimeline: RemotePostConnection }>(
+        `query ConfiguredLocalTimeline {
+          localTimeline(first: 10) { edges { node { id } } }
+        }`,
+        {},
+      );
+
+      assertNoGraphQLErrors(result);
+      assert.deepEqual(
+        new Set(connectionIds(result.data?.localTimeline)),
+        new Set([localPost, configuredPost].map(({ id }) => globalId('Post', id))),
+      );
+    } finally {
+      process.env.KOSMO_LOCAL_TIMELINE_INSTANCE_IDS = configuredLocalTimelineInstanceId;
     }
   });
 
@@ -5516,10 +5743,10 @@ describe('GraphQL remote profile boundary', () => {
       connectionIds(profileFirstPage.data?.profile?.posts),
       profileExpectedIds.slice(0, 2),
     );
-    assert.equal(profileFirstPage.data?.profile?.posts.pageInfo.hasNextPage, true);
+    assert.equal(profileFirstPage.data?.profile?.posts!.pageInfo.hasNextPage, true);
 
     const profileSecondPage = await requestRemotePostRead({
-      after: profileFirstPage.data?.profile?.posts.pageInfo.endCursor,
+      after: profileFirstPage.data?.profile?.posts!.pageInfo.endCursor,
       first: 2,
       nodeIds: [],
       profileId: globalId('Profile', profileAuthor.profile.id),
@@ -5531,7 +5758,7 @@ describe('GraphQL remote profile boundary', () => {
       connectionIds(profileSecondPage.data?.profile?.posts),
       profileExpectedIds.slice(2),
     );
-    assert.equal(profileSecondPage.data?.profile?.posts.pageInfo.hasNextPage, false);
+    assert.equal(profileSecondPage.data?.profile?.posts!.pageInfo.hasNextPage, false);
     assert.equal(
       connectionIds(profileSecondPage.data?.profile?.posts).includes(
         globalId('Post', unavailableRepost.id),
@@ -5560,7 +5787,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.ok(homeFirstPage.data?.homeTimeline?.pageInfo.endCursor);
 
     const homeSecondPage = await requestRemotePostRead({
-      after: homeFirstPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeAfter: homeFirstPage.data?.homeTimeline?.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', homeAuthor.profile.id),
@@ -5593,9 +5820,7 @@ describe('GraphQL remote profile boundary', () => {
     });
 
     assertNoGraphQLErrors(disabledSourceHome);
-    assert.deepEqual(connectionIds(disabledSourceHome.data?.homeTimeline), [
-      globalId('Post', homeRetainedQuote.id),
-    ]);
+    assert.deepEqual(connectionIds(disabledSourceHome.data?.homeTimeline), []);
     assert.deepEqual(
       disabledSourceHome.data?.nodes.map((node) => node?.id ?? null),
       [null, globalId('Post', homeRetainedQuote.id)],
@@ -5772,13 +5997,13 @@ describe('GraphQL remote profile boundary', () => {
       globalId('Post', visiblePost.id),
     ]);
 
-    assert.equal(sourceMutedProfile.data?.profile?.posts.pageInfo.hasNextPage, true);
+    assert.equal(sourceMutedProfile.data?.profile?.posts!.pageInfo.hasNextPage, true);
     assert.deepEqual(
       sourceMutedProfile.data?.nodes.map((node) => node?.id),
       [globalId('Post', sourceMutedQuote.id), globalId('Post', sourceMutedRepost.id)],
     );
     const profileTail = await requestRemotePostRead({
-      after: sourceMutedProfile.data?.profile?.posts.pageInfo.endCursor,
+      after: sourceMutedProfile.data?.profile?.posts!.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', homeAuthor.profile.id),
@@ -5788,9 +6013,9 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(connectionIds(profileTail.data?.profile?.posts), [
       globalId('Post', olderPost.id),
     ]);
-    assert.equal(profileTail.data?.profile?.posts.pageInfo.hasNextPage, false);
+    assert.equal(profileTail.data?.profile?.posts!.pageInfo.hasNextPage, false);
     const profileBackward = await requestRemotePostRead({
-      before: profileTail.data?.profile?.posts.pageInfo.endCursor,
+      before: profileTail.data?.profile?.posts!.pageInfo.endCursor,
       last: 1,
       nodeIds: [],
       profileId: globalId('Profile', homeAuthor.profile.id),
@@ -5800,7 +6025,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.deepEqual(connectionIds(profileBackward.data?.profile?.posts), [
       globalId('Post', visiblePost.id),
     ]);
-    assert.equal(profileBackward.data?.profile?.posts.pageInfo.hasPreviousPage, false);
+    assert.equal(profileBackward.data?.profile?.posts!.pageInfo.hasPreviousPage, false);
     const visitedMutedProfile = await requestRemotePostRead({
       first: 10,
       nodeIds: [],
@@ -5830,7 +6055,7 @@ describe('GraphQL remote profile boundary', () => {
     ]);
 
     const secondPage = await requestRemotePostRead({
-      after: firstPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeAfter: firstPage.data?.homeTimeline?.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
@@ -5844,7 +6069,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(secondPage.data?.homeTimeline?.pageInfo.hasNextPage, true);
 
     const thirdPage = await requestRemotePostRead({
-      after: secondPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeAfter: secondPage.data?.homeTimeline?.pageInfo.endCursor,
       first: 1,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
@@ -5856,7 +6081,7 @@ describe('GraphQL remote profile boundary', () => {
     assert.equal(thirdPage.data?.homeTimeline?.pageInfo.hasNextPage, false);
 
     const homeBackward = await requestRemotePostRead({
-      before: thirdPage.data?.homeTimeline?.pageInfo.endCursor,
+      homeBefore: thirdPage.data?.homeTimeline?.pageInfo.endCursor,
       last: 2,
       nodeIds: [],
       profileId: globalId('Profile', mutedOuterAuthor.profile.id),
@@ -6173,7 +6398,7 @@ type RemotePostConnection = {
 
 type RemotePostReadData = {
   nodes: RemotePostNode[];
-  profile: { posts: RemotePostConnection } | null;
+  profile: { posts: RemotePostConnection | null } | null;
   homeTimeline: RemotePostConnection | null;
 };
 
@@ -6201,6 +6426,8 @@ const requestRemotePostRead = ({
   after,
   before,
   first,
+  homeAfter,
+  homeBefore,
   last,
   nodeIds,
   profileId,
@@ -6209,6 +6436,8 @@ const requestRemotePostRead = ({
   after?: string | null;
   before?: string | null;
   first?: number;
+  homeAfter?: string | null;
+  homeBefore?: string | null;
   last?: number;
   nodeIds: string[];
   profileId: string;
@@ -6220,6 +6449,8 @@ const requestRemotePostRead = ({
       $before: String
       $first: Int
       $last: Int
+      $homeAfter: String
+      $homeBefore: String
       $nodeIds: [ID!]!
       $profileId: ID!
     ) {
@@ -6253,12 +6484,21 @@ const requestRemotePostRead = ({
           }
         }
       }
-      homeTimeline(first: $first, after: $after, last: $last, before: $before) {
+      homeTimeline(first: $first, after: $homeAfter, last: $last, before: $homeBefore) {
         edges { cursor node { id } }
         pageInfo { endCursor hasNextPage hasPreviousPage }
       }
     }`,
-    { after: after ?? null, before: before ?? null, first, last, nodeIds, profileId },
+    {
+      after: after ?? null,
+      before: before ?? null,
+      first,
+      homeAfter: homeAfter === undefined ? (after ?? null) : homeAfter,
+      homeBefore: homeBefore === undefined ? (before ?? null) : homeBefore,
+      last,
+      nodeIds,
+      profileId,
+    },
     token,
   );
 
@@ -6277,27 +6517,29 @@ const connectionIds = (connection: RemotePostConnection | null | undefined) =>
 const assertRemotePostReadDenied = (
   result: GraphQLResult<RemotePostReadData>,
   nodeCount: number,
-  profileVisible: boolean,
+  profilePosts: 'empty' | 'null',
 ) => {
   assertNoGraphQLErrors(result);
   assert.deepEqual(
     result.data?.nodes,
     Array.from({ length: nodeCount }, () => null),
   );
-  if (profileVisible) {
+  if (profilePosts === 'empty') {
     assert.ok(result.data?.profile);
     assert.deepEqual(connectionIds(result.data.profile.posts), []);
   } else {
-    assert.equal(result.data?.profile, null);
+    assert.deepEqual(result.data?.profile, { posts: null });
   }
   assert.deepEqual(connectionIds(result.data?.homeTimeline), []);
 };
 
 const createRemoteInstance = async ({
   domain = remoteDomain,
+  id,
   state = InstanceState.ACTIVE,
 }: {
   domain?: string;
+  id?: string;
   state?: InstanceState;
 } = {}) =>
   db
@@ -6307,6 +6549,7 @@ const createRemoteInstance = async ({
       domain,
       kind: InstanceKind.ACTIVITYPUB,
       state,
+      ...(id === undefined ? {} : { id }),
     })
     .returning()
     .then(firstOrThrow);
@@ -6365,11 +6608,16 @@ const createProfile = async ({
 const createStoredActivityPubAuthor = async ({
   domain,
   handle,
+  instanceId,
 }: {
   domain: string;
   handle: string;
+  instanceId?: string;
 }) => {
-  const instance = await createRemoteInstance({ domain });
+  const instance = await createRemoteInstance({
+    domain,
+    ...(instanceId === undefined ? {} : { id: instanceId }),
+  });
   const profile = await createProfile({ handle, instanceId: instance.id });
   const actorUri = `https://${domain}/users/${handle}`;
   await db.insert(ActivityPubActors).values({

@@ -1,17 +1,23 @@
 import { profileHandlePolicyErrorMessage } from '@kosmo/core/validation';
-import { Slot } from 'expo-router';
+import { Slot, usePathname, useRouter } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery, useRelayEnvironment } from 'react-relay';
 import { commitLocalUpdate } from 'relay-runtime';
 import { expect, fireEvent, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
+import { NotificationRouteFrame } from '@/components/notification/NotificationRouteFrame';
+import { PageHeader } from '@/components/PageHeader';
 import { FollowButton } from '@/components/profile/FollowButton';
 import { ProfileEditDiscardDialog } from '@/components/profile/ProfileEditDiscardDialog';
 import { ProfileEditScreen } from '@/components/profile/ProfileEditScreen';
 import { ProfileHero } from '@/components/profile/ProfileHero';
 import { BottomTabBar } from '@/components/shell/BottomTabBar';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
+import { MobileWebRouteMenu } from '@/components/shell/MobileWebRouteMenu';
+import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import {
   NavigationGuardProvider,
   useNavigationGuard,
@@ -20,6 +26,7 @@ import { ProfileSwitcher } from '@/components/shell/ProfileSwitcher';
 import { RightRail, RightRailFooter } from '@/components/shell/RightRail';
 import { SidebarNavigation } from '@/components/shell/SidebarNavigation';
 import { UniversalShell } from '@/components/shell/UniversalShell';
+import { IconButton } from '@/components/ui/IconButton';
 import { SessionProvider } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, elevations, semanticColors, spacing } from '@/theme/tokens';
@@ -366,6 +373,7 @@ function GuardedProfileSwitcherStory() {
   return (
     <NavigationGuardProvider>
       <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
+      <MobileWebRouteMenu />
       <ProfileSwitcherStory />
       <ProfileEditDiscardDialog
         onContinue={() => setPending(null)}
@@ -414,6 +422,7 @@ const meta = {
   excludeStories: [
     'UniversalCompactComposerLifecycle',
     'UniversalCompactComposerMediaEditorGeometry',
+    'UniversalCompactComposerMediaEditorViewportFocusRace',
     'UniversalFullComposerLifecycle',
     'UniversalFullComposerMediaEditorLifecycle',
     'UniversalMobileComposerLifecycle',
@@ -1938,10 +1947,61 @@ function expectElementInsideBounds(element: HTMLElement, bounds: DOMRect) {
   expect(elementBounds.bottom).toBeLessThanOrEqual(bounds.bottom);
 }
 
+// Shell stories supply route chrome just as the application routes do.
+function ShellStoryRoute() {
+  const { width } = useWindowDimensions();
+  const pathname = usePathname();
+  const router = useRouter();
+  const theme = useTheme();
+  const back = (
+    <IconButton accessibilityLabel="뒤로 가기" onPress={() => router.back()} targetSize={44}>
+      <ArrowLeft color={theme.foregroundPrimary} size={24} />
+    </IconButton>
+  );
+  if (width >= 768) {
+    return <Slot />;
+  }
+  let header: ReactNode = null;
+  if (pathname === '/home' || pathname === '/local') {
+    header = (
+      <PageHeader
+        leading={<NavigationDrawerTrigger />}
+        accessibilityLabel={pathname === '/home' ? '홈' : '로컬'}
+        variant="brand"
+      />
+    );
+  } else if (pathname === '/settings') {
+    header = <PageHeader leading={<NavigationDrawerTrigger />} title="설정" />;
+  } else if (pathname === '/settings/profile') {
+    header = <PageHeader leading={back} title="프로필 설정" />;
+  } else if (pathname === '/@writer/post-id') {
+    header = <PageHeader leading={back} title="게시글" />;
+  } else if (pathname === '/notifications') {
+    return (
+      <NotificationRouteFrame>
+        <Slot />
+      </NotificationRouteFrame>
+    );
+  } else if (pathname === '/feedback') {
+    return (
+      <>
+        <MobileWebRouteMenu />
+        <Slot />
+      </>
+    );
+  }
+  return (
+    <View style={{ minHeight: 844 }}>
+      <MobileWebRouteChrome>{header}</MobileWebRouteChrome>
+      <Slot />
+    </View>
+  );
+}
+
 function UniversalShellStory({ children }: { children?: ReactNode } = {}) {
   return (
     <SessionProvider>
-      <UniversalShell>{children ?? <Slot />}</UniversalShell>
+      <UniversalShell>{children ?? <ShellStoryRoute />}</UniversalShell>
     </SessionProvider>
   );
 }
@@ -1953,6 +2013,7 @@ function GuardedUniversalShellStory() {
     <SessionProvider>
       <UniversalShell>
         <NavigationGuardRegistrar onPending={(action) => setPending(() => action)} />
+        <MobileWebRouteMenu />
         <Text accessibilityRole="header" ref={profileEditHeadingRef} {...{ tabIndex: -1 }}>
           프로필 수정
         </Text>
@@ -2655,7 +2716,9 @@ export const UniversalCompactComposerMediaEditorGeometry: Story = {
 
       const editor = within(dialog).getByTestId('web-composer-media-editor');
       expect(page.getAllByRole('dialog')).toHaveLength(1);
-      const dialogBounds = dialog.getBoundingClientRect();
+      const dialogBounds = within(dialog)
+        .getByTestId('post-composer-dialog')
+        .getBoundingClientRect();
       const closeButton = within(editor).getByRole('button', { name: '미디어 편집 닫기' });
       const toolPanel = within(editor).getByTestId('composer-media-editor-tool-panel');
       const altTextInput = within(editor).getByRole('textbox', { name: '이미지 설명' });
@@ -2676,6 +2739,112 @@ export const UniversalCompactComposerMediaEditorGeometry: Story = {
       const reopenedDialog = await page.findByRole('dialog', { name: '글쓰기' });
       expect(within(reopenedDialog).queryByTestId('web-composer-media-editor')).toBeNull();
     } finally {
+      restoreFetch();
+      resetImagePickerMock();
+    }
+  },
+};
+
+export const UniversalCompactComposerMediaEditorViewportFocusRace: Story = {
+  ...UniversalCompactComposerMediaEditorGeometry,
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    const visualViewport = storyWindow?.visualViewport;
+    if (!storyWindow || !visualViewport) {
+      throw new Error('Media editor focus story requires a browser visual viewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
+    const restoreFetch = installComposerMediaUploadFetch();
+    let intersectionObserver: IntersectionObserver | null = null;
+
+    try {
+      expect(storyWindow.innerWidth).toBe(390);
+      expect(storyWindow.innerHeight).toBe(844);
+      expect(visualViewport.height).toBe(844);
+      setNextImagePickerResult({
+        assets: [createComposerPickerAsset('focus-resize-race.svg')],
+        canceled: false,
+      });
+
+      await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
+      const dialog = await page.findByRole('dialog', { name: '글쓰기' });
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
+      );
+      await expect(
+        within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
+      ).resolves.toBeVisible();
+      await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
+
+      const editor = within(dialog).getByTestId('mobile-composer-media-editor');
+      const mediaDialog = within(dialog).getByTestId('post-composer-dialog');
+      const altTextInput = within(editor).getByRole('textbox', {
+        name: '이미지 설명',
+      }) as HTMLTextAreaElement;
+      const doneButton = within(editor).getByRole('button', { name: '완료' });
+      const backButton = within(editor).getByRole('button', { name: '미디어 편집에서 뒤로' });
+      await userEvent.type(altTextInput, '보존할 이미지 설명');
+      altTextInput.blur();
+      expect(altTextInput).not.toHaveFocus();
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 320 });
+      altTextInput.focus();
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+
+      await waitFor(() => expect(editor.getBoundingClientRect().height).toBeCloseTo(320, 0));
+      expect(altTextInput).toHaveValue('보존할 이미지 설명');
+      expect(altTextInput).toHaveFocus();
+      const mediaDialogBounds = mediaDialog.getBoundingClientRect();
+      expect(mediaDialogBounds.top).toBeGreaterThanOrEqual(0);
+      expect(mediaDialogBounds.bottom).toBeLessThanOrEqual(320);
+      expectElementInsideBounds(doneButton, mediaDialogBounds);
+      expectElementInsideBounds(backButton, mediaDialogBounds);
+
+      let intersectionRatio = 0;
+      intersectionObserver = new storyWindow.IntersectionObserver(([entry]) => {
+        intersectionRatio = entry?.intersectionRatio ?? 0;
+      });
+      intersectionObserver.observe(altTextInput);
+      await waitFor(() => expect(intersectionRatio).toBeGreaterThan(0));
+
+      let scrollView = altTextInput.parentElement;
+      while (scrollView) {
+        const overflowY = storyWindow.getComputedStyle(scrollView).overflowY;
+        if (
+          scrollView.scrollHeight > scrollView.clientHeight &&
+          (overflowY === 'auto' || overflowY === 'scroll')
+        ) {
+          break;
+        }
+        scrollView = scrollView.parentElement;
+      }
+      if (!scrollView) {
+        throw new Error('Media editor did not render a scrollable viewport.');
+      }
+
+      scrollView.scrollTop = 0;
+      scrollView.dispatchEvent(new storyWindow.Event('scroll'));
+      expect(scrollView.scrollTop).toBe(0);
+      expect(altTextInput).toHaveFocus();
+
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 400 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => expect(editor.getBoundingClientRect().height).toBeCloseTo(400, 0));
+      await new Promise<void>((resolve) => storyWindow.requestAnimationFrame(() => resolve()));
+      expect(scrollView.scrollTop).toBe(0);
+      expect(altTextInput).toHaveValue('보존할 이미지 설명');
+      expect(altTextInput).toHaveFocus();
+    } finally {
+      intersectionObserver?.disconnect();
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
       restoreFetch();
       resetImagePickerMock();
     }
@@ -2705,7 +2874,8 @@ function universalMediaEditorResponsiveStory(
       try {
         await userEvent.click(canvas.getByRole('button', { name: '글쓰기' }));
         const dialog = await page.findByRole('dialog', { name: '글쓰기' });
-        expect(dialog.getBoundingClientRect().width).toBe(640);
+        const surface = within(dialog).getByTestId('post-composer-dialog');
+        expect(surface.getBoundingClientRect().width).toBe(640);
         await userEvent.click(
           within(dialog).getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }),
         );
@@ -2713,22 +2883,26 @@ function universalMediaEditorResponsiveStory(
           within(dialog).findByLabelText('첨부 이미지 1, 업로드 완료'),
         ).resolves.toBeVisible();
         await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(expectedEditorWidth));
+        await waitFor(() =>
+          expect(surface.getBoundingClientRect().width).toBe(expectedEditorWidth),
+        );
         const editor = within(dialog).getByTestId('web-composer-media-editor');
         const toolPanel = within(editor).getByTestId('composer-media-editor-tool-panel');
         const altTextInput = within(editor).getByRole('textbox', { name: '이미지 설명' });
         const doneButton = within(editor).getByRole('button', { name: '완료' });
-        const dialogBounds = dialog.getBoundingClientRect();
+        const dialogBounds = surface.getBoundingClientRect();
         expect(toolPanel.getBoundingClientRect().width).toBe(280);
         expectElementInsideBounds(altTextInput, dialogBounds);
         expectElementInsideBounds(doneButton, dialogBounds);
 
         await userEvent.click(within(dialog).getByRole('button', { name: '미디어 편집에서 뒤로' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(640));
+        await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(640));
         await userEvent.click(within(dialog).getByRole('button', { name: '첨부 이미지 1 편집' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(expectedEditorWidth));
+        await waitFor(() =>
+          expect(surface.getBoundingClientRect().width).toBe(expectedEditorWidth),
+        );
         await userEvent.click(within(dialog).getByRole('button', { name: '완료' }));
-        await waitFor(() => expect(dialog.getBoundingClientRect().width).toBe(640));
+        await waitFor(() => expect(surface.getBoundingClientRect().width).toBe(640));
       } finally {
         restoreFetch();
         resetImagePickerMock();
@@ -3095,8 +3269,8 @@ export const UniversalFullComposerMediaEditorLifecycle: Story = {
       const body = canvas.getByRole('textbox', { name: '게시글 본문' });
       await userEvent.type(body, 'overlay rail reopen draft');
       await userEvent.click(canvas.getByRole('button', { name: '이미지 추가, 4개 더 선택 가능' }));
-      await expect(canvas.findByLabelText('첨부 이미지 1, 업로드 완료')).resolves.toBeVisible();
-      await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 편집' }));
+      await expect(page.findByLabelText('첨부 이미지 1, 업로드 완료')).resolves.toBeVisible();
+      await userEvent.click(page.getByRole('button', { name: '첨부 이미지 1 편집' }));
 
       let dialog = await page.findByRole('dialog', { name: '글쓰기' });
       await userEvent.type(
@@ -3108,11 +3282,11 @@ export const UniversalFullComposerMediaEditorLifecycle: Story = {
 
       await userEvent.click(within(dialog).getByRole('button', { name: '글쓰기 닫기' }));
       await waitFor(() => expect(page.queryByRole('dialog', { name: '글쓰기' })).toBeNull());
-      expect(canvas.queryByTestId('web-composer-media-editor')).toBeNull();
+      expect(page.queryByTestId('web-composer-media-editor')).toBeNull();
       expect(canvas.getByRole('textbox', { name: '게시글 본문' })).toHaveValue(
         'overlay rail reopen draft',
       );
-      expect(canvas.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
+      expect(page.getByLabelText('첨부 이미지 1, 업로드 완료')).toBeVisible();
 
       await userEvent.click(canvas.getByRole('button', { name: 'Composer 확장' }));
       dialog = await page.findByRole('dialog', { name: '글쓰기' });

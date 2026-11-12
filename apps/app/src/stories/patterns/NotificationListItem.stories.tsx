@@ -20,6 +20,7 @@ import type { NotificationListItemNullableReactionQuery as NullableReactionQuery
 import type { NotificationListItemStoriesQuery as Query } from './__generated__/NotificationListItemStoriesQuery.graphql';
 
 const thumbnail = {
+  aiProhibitFilterApplied: true,
   id: 'notification-thumbnail',
   altText: '보라색 하늘',
   url:
@@ -184,7 +185,7 @@ export function NotificationExample(args: Args) {
   const actor = {
     id: 'notification-actor',
     name: args.name,
-    profileHref: '/@notification-actor',
+    profileHref: '/@notification-actor' as const,
   };
   const shared = {
     disabled: args.disabled,
@@ -264,6 +265,7 @@ async function clickAtBottomOfTarget(target: HTMLElement) {
 }
 
 const meta = {
+  component: NotificationExample,
   title: 'KOSMO/Patterns/Notification List Item',
   args: {
     kind: 'follow',
@@ -518,7 +520,7 @@ export const ReactionRepostProfileTargetsContract: Story = {
             preview={{
               bodyText: '프로필과 분리된 대상 게시글 내용입니다.',
               contentWarning: null,
-              media: null,
+              media: [thumbnail],
               sensitiveMedia: false,
             }}
             timestamp="5분 전"
@@ -550,6 +552,7 @@ export const ReactionRepostProfileTargetsContract: Story = {
       }
 
       const kindRail = group.getByTestId('notification-kind-target');
+      await expect(kindRail).toHaveAccessibleName(/학습방지 필터 적용됨/);
       const kindIcon = group.getByTestId(`${kind}-notification-kind`);
       const railBounds = kindRail.getBoundingClientRect();
       const iconBounds = kindIcon.getBoundingClientRect();

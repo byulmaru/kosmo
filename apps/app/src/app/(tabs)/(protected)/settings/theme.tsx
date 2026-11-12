@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { RadioGroup, RadioOption } from '@/components/ui/RadioGroup';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
@@ -38,7 +39,9 @@ export default function SettingsThemeRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? <PageHeader leading={backButton} title="테마" /> : null}
+      <MobileWebRouteChrome>
+        <PageHeader leading={backButton} title="테마" />
+      </MobileWebRouteChrome>
       <View style={[layoutRecipes.formStack, styles.root]}>
         <Text
           accessibilityRole="header"

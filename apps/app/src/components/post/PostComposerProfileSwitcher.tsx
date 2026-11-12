@@ -185,15 +185,15 @@ export function PostComposerProfileSwitcher({
         >
           <Avatar
             imageUri={selectedProfile?.avatar?.url}
-            label={selectedProfile?.displayName ?? '프로필'}
+            label={selectedProfile?.displayName ?? selectedProfile?.relativeHandle ?? '프로필'}
             size={40}
           />
         </Pressable>
         <View style={styles.triggerCopy}>
           <Text numberOfLines={1} style={[styles.triggerName, { color: theme.text }]}>
-            {selectedProfile?.displayName ?? '프로필 선택'}
+            {selectedProfile?.displayName ?? selectedProfile?.relativeHandle ?? '프로필 선택'}
           </Text>
-          {selectedProfile ? (
+          {selectedProfile?.displayName != null ? (
             <Text numberOfLines={1} style={[styles.triggerHandle, { color: theme.textSecondary }]}>
               {selectedProfile.relativeHandle}
             </Text>

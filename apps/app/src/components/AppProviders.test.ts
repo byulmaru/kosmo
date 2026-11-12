@@ -244,6 +244,9 @@ mockModule(require.resolve('lucide-react-native'), {
 mockModule('react-native-safe-area-context', {
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
 });
+mockModule('@/observability/sentry', {
+  captureHandledError: () => undefined,
+});
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const operation = parts.join('').match(/(?:query|mutation) (\w+)/)?.[1];
@@ -286,6 +289,7 @@ mockModule(new URL('../analytics/client.ts', import.meta.url), {
     identifiedAnalyticsAccountId = accountId;
   },
   setAnalyticsSelectedProfile: () => undefined,
+  trackAnalyticsScreen: () => undefined,
   trackAnalytics,
 });
 mockModule(new URL('../components/post/PostContentWarningRevealContext.tsx', import.meta.url), {
@@ -303,6 +307,9 @@ mockModule('@/components/coachmark/CoachmarkProvider', {
 mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllAction: () => null,
   NotificationReadAllProvider: ({ children }: PropsWithChildren) => children,
+});
+mockModule('@/components/notification/NotificationStreamUpdates', {
+  NotificationStreamUpdates: () => null,
 });
 mockModule('@/components/PageHeader', {
   PageHeader: () => null,
@@ -365,11 +372,8 @@ mockModule(new URL('./shell/shellLayout.ts', import.meta.url), {
     settingsWorkspace: false,
     showRightRail: false,
   }),
-  getWebMobileShellHeader: () => null,
   isSettingsRoute: () => false,
   isTimelineRoute: () => true,
-  isWebMobileRouteOwnedHeader: () => false,
-  webMobileShellHeaderHeight: 0,
 });
 mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   RelayActorBoundary: MockRelayActorBoundary,

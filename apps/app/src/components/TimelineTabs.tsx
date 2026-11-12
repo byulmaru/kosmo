@@ -23,6 +23,7 @@ export function TimelineTabs({ value }: { value: TimelineTab }) {
         } else {
           shellChrome?.reselectTab?.('home');
         }
+        shellChrome?.reselectHome();
       }}
       param="timeline"
       value={value}

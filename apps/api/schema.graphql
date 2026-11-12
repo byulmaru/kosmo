@@ -74,6 +74,14 @@ type BookmarkConnectionEdge {
   node: Bookmark!
 }
 
+input CancelPostRequestInput {
+  requestId: String!
+}
+
+type CancelPostRequestPayload {
+  request: PostRequest!
+}
+
 input CancelProfileFollowRequestInput {
   id: ID!
 }
@@ -84,7 +92,7 @@ type CancelProfileFollowRequestPayload {
 }
 
 input CompleteMediaUploadInput {
-  applyNightshade: Boolean = false
+  applyAiProhibitFilter: Boolean = false
   id: ID!
 }
 
@@ -130,6 +138,14 @@ type CreateHashtagMuteRulePayload {
   hashtagMuteRule: HashtagMuteRule!
 }
 
+input CreateNaturalLanguageMuteRuleInput {
+  condition: String!
+}
+
+type CreateNaturalLanguageMuteRulePayload {
+  profile: Profile!
+}
+
 input CreatePostInput {
   actorProfileId: ID
   bodyText: String!
@@ -144,7 +160,15 @@ input CreatePostInput {
 
 input CreatePostMediaInput {
   altText: String
+  applyAiProhibitFilter: Boolean = false
   mediaId: ID!
+  rights: CreatePostMediaRightsInput
+}
+
+input CreatePostMediaRightsInput {
+  commercial: MediaUsePermission!
+  noncommercial: MediaUsePermission!
+  personal: MediaUsePermission!
 }
 
 input CreatePostMentionInput {
@@ -154,7 +178,8 @@ input CreatePostMentionInput {
 }
 
 type CreatePostPayload {
-  post: Post!
+  post: Post
+  request: PostRequest
 }
 
 input CreateProfileInput {
@@ -189,6 +214,15 @@ input DeleteHashtagMuteRuleInput {
 
 type DeleteHashtagMuteRulePayload {
   hashtagMuteRuleId: ID!
+}
+
+input DeleteNaturalLanguageMuteRuleInput {
+  naturalLanguageMuteRuleId: ID!
+}
+
+type DeleteNaturalLanguageMuteRulePayload {
+  naturalLanguageMuteRuleId: ID!
+  profile: Profile!
 }
 
 input DeletePostInput {
@@ -324,17 +358,35 @@ type MarkNotificationReadPayload {
 }
 
 type Media implements Node {
+  aiProhibitFilterApplied: Boolean
   altText: String
   id: ID!
   mediaType: String
   readyAt: DateTime
+  rights: MediaRights
   state: MediaState!
+  thumbhash: String
   url: String
+}
+
+type MediaRights {
+  commercial: MediaUsePermission!
+  holderName: String!
+  holderUrl: String!
+  licenseUrl: String!
+  noncommercial: MediaUsePermission!
+  personal: MediaUsePermission!
 }
 
 enum MediaState {
   READY
   UPLOADING
+}
+
+enum MediaUsePermission {
+  DENY
+  EDIT
+  ORIGINAL
 }
 
 type MentionNotification implements Node & Notification {
@@ -349,15 +401,18 @@ type Mutation {
   addReaction(input: AddReactionInput!): AddReactionPayload!
   approveProfileFollowRequest(input: ApproveProfileFollowRequestInput!): ApproveProfileFollowRequestPayload!
   blockProfile(input: BlockProfileInput!): BlockProfilePayload!
+  cancelPostRequest(input: CancelPostRequestInput!): CancelPostRequestPayload!
   cancelProfileFollowRequest(input: CancelProfileFollowRequestInput!): CancelProfileFollowRequestPayload!
   completeMediaUpload(input: CompleteMediaUploadInput!): CompleteMediaUploadPayload!
   createBookmark(input: CreateBookmarkInput!): CreateBookmarkPayload!
   createHashtagMuteRule(input: CreateHashtagMuteRuleInput!): CreateHashtagMuteRulePayload!
+  createNaturalLanguageMuteRule(input: CreateNaturalLanguageMuteRuleInput!): CreateNaturalLanguageMuteRulePayload!
   createPost(input: CreatePostInput!): CreatePostPayload!
   createProfile(input: CreateProfileInput!): CreateProfilePayload!
   deleteAccount: DeleteAccountPayload!
   deleteBookmark(input: DeleteBookmarkInput!): DeleteBookmarkPayload!
   deleteHashtagMuteRule(input: DeleteHashtagMuteRuleInput!): DeleteHashtagMuteRulePayload!
+  deleteNaturalLanguageMuteRule(input: DeleteNaturalLanguageMuteRuleInput!): DeleteNaturalLanguageMuteRulePayload!
   deletePost(input: DeletePostInput!): DeletePostPayload!
   deleteProfile(input: DeleteProfileInput!): DeleteProfilePayload!
   deleteReaction(input: DeleteReactionInput!): DeleteReactionPayload!
@@ -384,6 +439,7 @@ type Mutation {
   unregisterProfileMigrationSource: UnregisterProfileMigrationSourcePayload!
   unregisterPushInstallation(input: UnregisterPushInstallationInput!): UnregisterPushInstallationPayload!
   updateHashtagMuteRule(input: UpdateHashtagMuteRuleInput!): UpdateHashtagMuteRulePayload!
+  updateNaturalLanguageMuteRule(input: UpdateNaturalLanguageMuteRuleInput!): UpdateNaturalLanguageMuteRulePayload!
   updateProfile(input: UpdateProfileInput!): UpdateProfilePayload!
   updatePushInstallation(input: UpdatePushInstallationInput!): UpdatePushInstallationPayload!
 }
@@ -396,6 +452,11 @@ type MuteProfilePayload {
   profileMute: ProfileMute!
 }
 
+type NaturalLanguageMuteRule implements Node {
+  condition: String!
+  id: ID!
+}
+
 interface Node {
   id: ID!
 }
@@ -404,6 +465,11 @@ interface Notification implements Node {
   createdAt: DateTime!
   id: ID!
   readAt: DateTime
+}
+
+type NotificationAdded {
+  notification: Notification
+  profile: Profile
 }
 
 type NotificationConnection {
@@ -415,6 +481,8 @@ type NotificationConnectionEdge {
   cursor: String!
   node: Notification!
 }
+
+union NotificationEvent = NotificationAdded
 
 type OperationalNotification implements Node & Notification {
   body: String
@@ -456,6 +524,7 @@ type Post implements Node {
   replyParent: Post
   repostCount: Int!
   repostSource: Post
+  smartFilterProbability: Float
   state: PostState!
   viewerBookmark: Bookmark
   viewerReactions: [Reaction!]!
@@ -479,12 +548,44 @@ type PostContent implements Node {
   createdAt: DateTime!
   document: PostContentDocument!
   id: ID!
+  linkPreview: PostContentLinkPreview
   media: [Media!]
   mentionedProfiles: [Profile!]!
 }
 
 """Kosmo versioned PostContent document JSON"""
 scalar PostContentDocument
+
+type PostContentLinkPreview {
+  description: String
+  imageHeight: Int
+  imageUrl: String
+  imageWidth: Int
+  title: String!
+  url: String!
+}
+
+type PostRequest implements Node {
+  authorProfile: Profile
+  bodyText: String!
+  contentWarning: String
+  id: ID!
+  media: [Media]!
+  post: Post
+  requestId: String!
+  sensitiveMedia: Boolean!
+  status: PostRequestStatus!
+}
+
+enum PostRequestStatus {
+  CANCELLED
+  CONFIRMING
+  FAILED
+  PROCESSING
+  PUBLISHED
+  PUBLISHING
+  QUEUED
+}
 
 enum PostState {
   ACTIVE
@@ -501,30 +602,33 @@ enum PostVisibility {
 type Profile implements Node {
   avatar: Media
   bio: String
-  bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection!
-  createdAt: DateTime!
-  displayName: String!
-  followPolicy: ProfileFollowPolicy!
-  followers(after: String, before: String, first: Int, last: Int): ProfileFollowersConnection!
-  followersCount: Int!
-  following(after: String, before: String, first: Int, last: Int): ProfileFollowingConnection!
-  followingCount: Int!
+  bookmarks(after: String, before: String, first: Int, last: Int): BookmarkConnection
+  createdAt: DateTime
+  displayName: String
+  followPolicy: ProfileFollowPolicy
+  followers(after: String, before: String, first: Int, last: Int): ProfileFollowersConnection
+  followersCount: Int
+  following(after: String, before: String, first: Int, last: Int): ProfileFollowingConnection
+  followingCount: Int
   handle: String!
-  hashtagMuteRules(after: String, before: String, first: Int, last: Int): ProfileHashtagMuteRulesConnection!
+  hasMigrationSource: Boolean
+  hashtagMuteRules(after: String, before: String, first: Int, last: Int): ProfileHashtagMuteRulesConnection
   header: Media
   id: ID!
   incomingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileIncomingProfileFollowRequestsConnection
-  instance: ProfileInstance!
+  instance: ProfileInstance
   migrationSource: Profile
-  notifications(after: String, before: String, first: Int, last: Int): NotificationConnection!
+  naturalLanguageMuteRules: [NaturalLanguageMuteRule!]
+  notifications(after: String, before: String, first: Int, last: Int): NotificationConnection
   outgoingProfileFollowRequests(after: String, before: String, first: Int, last: Int): ProfileOutgoingProfileFollowRequestsConnection
-  pinnedPosts: [Post!]!
-  posts(after: String, before: String, first: Int, last: Int): PostConnection!
+  pinnedPosts: [Post!]
+  postRequests: [PostRequest!]
+  posts(after: String, before: String, first: Int, last: Int): PostConnection
   private: ProfilePrivate
   profileBlocks(after: String, before: String, first: Int, last: Int): ProfileBlockConnection
-  profileMutes(after: String, before: String, first: Int, last: Int): ProfileMuteConnection!
+  profileMutes(after: String, before: String, first: Int, last: Int): ProfileMuteConnection
   relativeHandle: String!
-  tags: [Hashtag!]!
+  tags: [Hashtag!]
   unreadNotificationCount: Int
   viewerState: ProfileViewerState
 }
@@ -682,6 +786,12 @@ type Query {
   nodes(ids: [ID!]!): [Node]!
   profileByHandle(handle: String!): Profile
   searchProfiles(actorProfileId: ID, after: String, before: String, first: Int, last: Int, query: String!, resolveRemote: Boolean): ProfileConnection!
+  smartFilterResults(
+    after: String
+
+    """Page-size hint; the number of returned posts may be higher or lower."""
+    first: Int = 20
+  ): PostConnection!
 }
 
 type QuoteNotification implements Node & Notification {
@@ -813,6 +923,17 @@ type SubmitContentReportPayload {
   status: ContentReportDeliveryStatus!
 }
 
+type Subscription {
+  notifications: NotificationEvent
+  timeline: TimelineEvent
+}
+
+union TimelineEvent = TimelinePostAdded
+
+type TimelinePostAdded {
+  post: Post
+}
+
 input UnblockProfileInput {
   id: ID!
 }
@@ -873,6 +994,15 @@ input UpdateHashtagMuteRuleInput {
 
 type UpdateHashtagMuteRulePayload {
   hashtagMuteRule: HashtagMuteRule!
+}
+
+input UpdateNaturalLanguageMuteRuleInput {
+  condition: String!
+  naturalLanguageMuteRuleId: ID!
+}
+
+type UpdateNaturalLanguageMuteRulePayload {
+  profile: Profile!
 }
 
 input UpdateProfileInput {

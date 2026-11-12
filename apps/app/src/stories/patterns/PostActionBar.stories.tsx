@@ -1303,6 +1303,7 @@ export const ActionSemanticColorsDarkInteraction: Story = {
 };
 
 export const AuthorPostDeletion: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     deletionMutationRequest.mockClear();
@@ -1318,6 +1319,68 @@ export const AuthorPostDeletion: Story = {
     expect(dialog).toHaveAttribute('closedby', 'closerequest');
     expect(dialog).toHaveTextContent('게시글을 삭제할까요?');
     expect(dialog).toHaveTextContent('삭제한 게시글은 복구할 수 없습니다.');
+    const surface = within(dialog).getByLabelText('게시글을 삭제할까요?');
+    expect(surface.getBoundingClientRect().width).toBeCloseTo(420, 0);
+
+    const storyWindow = canvasElement.ownerDocument.defaultView;
+    const visualViewport = storyWindow?.visualViewport;
+    if (!storyWindow || !visualViewport) {
+      throw new Error('Post deletion dialog story requires visualViewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
+    const originalOffsetTopDescriptor = Object.getOwnPropertyDescriptor(
+      visualViewport,
+      'offsetTop',
+    );
+    const originalHeight = visualViewport.height;
+    const originalOffsetTop = visualViewport.offsetTop;
+
+    try {
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 360 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = dialog.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(360, 0);
+      });
+
+      Object.defineProperty(visualViewport, 'offsetTop', { configurable: true, value: 40 });
+      visualViewport.dispatchEvent(new storyWindow.Event('scroll'));
+      await waitFor(() => {
+        const bounds = dialog.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(40, 0);
+        expect(bounds.height).toBeCloseTo(360, 0);
+      });
+      expect(surface.getBoundingClientRect().width).toBeCloseTo(420, 0);
+
+      Object.defineProperty(visualViewport, 'height', {
+        configurable: true,
+        value: originalHeight,
+      });
+      Object.defineProperty(visualViewport, 'offsetTop', {
+        configurable: true,
+        value: originalOffsetTop,
+      });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = dialog.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(originalHeight, 0);
+      });
+    } finally {
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      if (originalOffsetTopDescriptor) {
+        Object.defineProperty(visualViewport, 'offsetTop', originalOffsetTopDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'offsetTop');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+    }
+
     await waitFor(() =>
       expect(canvasElement.ownerDocument.activeElement).toHaveTextContent('취소'),
     );

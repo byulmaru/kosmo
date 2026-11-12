@@ -7,11 +7,13 @@ import {
   createOperationDescriptor,
   Environment,
   Network,
+  Observable,
   RecordSource,
   Store,
 } from 'relay-runtime';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { GraphQLResponse } from 'relay-runtime';
 import type { executeGraphQLRequest } from '../../relay/network';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -19,17 +21,31 @@ const require = createRequire(import.meta.url);
 const relay = require('react-relay');
 const query =
   require('../../app/(tabs)/(protected)/hashtags/[hashtagId]/__generated__/HashtagRelatedProfilesPageQuery.graphql').default;
-const fragment = require('./__generated__/HashtagRelatedProfileList_hashtag.graphql').default;
 
 const events: Array<[string, Record<string, unknown>]> = [];
+type CapturedRequest = {
+  name: string;
+  variables: unknown;
+  sink: {
+    next(value: GraphQLResponse): void;
+    complete(): void;
+    error(error: Error): void;
+  };
+};
+const requests: CapturedRequest[] = [];
 let renderer: ReactTestRenderer | undefined;
 let accountId: string | null = 'account-a';
+let selectedProfileId: string | null = 'owner-a';
 let routeId: string | string[] | undefined = 'tag-a';
+let profileTagMuteEnabled = false;
 let canGoBack = true;
 let backCount = 0;
 const replacements: string[] = [];
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+mockModule(new URL('../shell/MobileWebRouteMenu.tsx', import.meta.url), {
+  MobileWebRouteMenu: () => null,
+});
 mockModule('expo-router', {
   usePathname: () => '/hashtags/tag-a/profiles',
   useLocalSearchParams: () => ({ hashtagId: routeId }),
@@ -41,38 +57,91 @@ mockModule('expo-router', {
 });
 mockModule('react-relay', {
   ...relay,
-  graphql: (parts: TemplateStringsArray) =>
-    parts.join('').includes('query HashtagRelatedProfilesPageQuery') ? query : fragment,
+  graphql: (parts: TemplateStringsArray) => {
+    const document = parts.join('');
+    if (document.includes('query HashtagRelatedProfilesPageQuery')) {
+      return query;
+    }
+    const name = document.match(/(?:query|mutation|fragment)\s+(\w+)/)?.[1];
+    assert.ok(name, 'GraphQL document must be named');
+    return require(`./__generated__/${name}.graphql`).default;
+  },
 });
 mockModule('react-native', {
   ScrollView: 'div',
   View: 'div',
   StyleSheet: { create: <T>(styles: T) => styles },
 });
-mockModule('lucide-react-native', { ArrowLeftIcon: 'span' });
-mockModule(require.resolve('lucide-react-native'), { ArrowLeftIcon: 'span' });
+const icons = { ArrowLeftIcon: 'span', RefreshCw: 'span', Volume2: 'span', VolumeOff: 'span' };
+mockModule('lucide-react-native', icons);
+mockModule(require.resolve('lucide-react-native'), icons);
 mockModule(new URL('../../analytics/client.ts', import.meta.url), {
   trackAnalytics: (event: string, properties: Record<string, unknown>) =>
     events.push([event, properties]),
 });
 mockModule(new URL('../../session/SessionProvider.tsx', import.meta.url), {
-  useSession: () => ({ accountId }),
+  useSession: () => ({ accountId, selectedProfileId }),
+});
+mockModule(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
+  useFeatureFlag: (key: string) => key === 'profile-tag-mute' && profileTagMuteEnabled,
 });
 mockModule(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
-  useTheme: () => ({ foregroundPrimary: '#111', border: '#ddd' }),
+  useTheme: () => ({ foregroundPrimary: '#111', foregroundSecondary: '#666', border: '#ddd' }),
 });
 mockModule(new URL('../ui/IconButton.tsx', import.meta.url), {
   IconButton: (props: object) => createElement('button', props),
 });
 mockModule(new URL('../PageHeader.tsx', import.meta.url), {
-  PageHeader: ({ leading, ...props }: { leading?: ReactNode }) =>
-    createElement('h1', props, leading),
+  PageHeader: ({ leading, trailing, ...props }: { leading?: ReactNode; trailing?: ReactNode }) =>
+    createElement('h1', props, leading, trailing),
 });
 mockModule(new URL('../ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('p', props),
 });
-mockModule(new URL('./ProfileTagMuteAction.tsx', import.meta.url), {
-  ProfileTagMuteAction: () => null,
+mockModule('@/components/ui/ConfirmationContent', {
+  ConfirmationContent: ({
+    cancelLabel,
+    confirmDisabled,
+    confirmLabel,
+    onCancel,
+    onConfirm,
+    pending,
+  }: {
+    cancelLabel: string;
+    confirmDisabled?: boolean;
+    confirmLabel: string;
+    onCancel: () => void;
+    onConfirm: () => void;
+    pending?: boolean;
+  }) =>
+    createElement(
+      'div',
+      null,
+      createElement(
+        'button',
+        { accessibilityLabel: cancelLabel, disabled: pending, onPress: onCancel },
+        cancelLabel,
+      ),
+      createElement(
+        'button',
+        {
+          accessibilityLabel: confirmLabel,
+          disabled: pending || confirmDisabled,
+          onPress: onConfirm,
+        },
+        confirmLabel,
+      ),
+    ),
+});
+mockModule('@/components/ui/ModalSheet', {
+  ModalSheet: ({ children, visible, ...props }: { children?: ReactNode; visible: boolean }) =>
+    createElement('ModalSheet', { ...props, visible }, visible ? children : null),
+});
+mockModule('@/components/ui/LoadingIndicator', {
+  LoadingIndicator: (props: object) => createElement('span', props),
+});
+mockModule('@/components/ui/ToastProvider', {
+  useToast: () => ({ showToast: () => undefined }),
 });
 mockModule(new URL('./ProfileListItem.tsx', import.meta.url), {
   ProfileListItem: (props: object) => createElement('a', props),
@@ -96,9 +165,12 @@ afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
   events.length = 0;
+  requests.length = 0;
   mock.timers.reset();
   routeId = 'tag-a';
   accountId = 'account-a';
+  selectedProfileId = 'owner-a';
+  profileTagMuteEnabled = false;
   canGoBack = true;
   backCount = 0;
   replacements.length = 0;
@@ -168,6 +240,12 @@ for (const [cache, network] of [
     });
     if (cache !== null) {
       assert.equal(renderer!.root.findAllByType('a').length, cache);
+      if (cache === 1 && network === 1) {
+        assert.equal(
+          renderer!.root.findAllByProps({ accessibilityLabel: '#Topic 뮤트' }).length,
+          0,
+        );
+      }
       assert.equal(
         events.find(([name]) => name === 'profile_hashtag_list_viewed')?.[1].result_count,
         Math.min(cache, 20),
@@ -272,3 +350,84 @@ test('같은 결과의 Account loading은 중복하지 않고 Account·Hashtag �
   );
   assert.ok(events.every(([, properties]) => properties.result_count === 2));
 });
+
+test('실제 route의 태그 mute action은 create 결과를 Relay 정규화해 접근성 action을 갱신한다', async () => {
+  profileTagMuteEnabled = true;
+  const environment = new Environment({
+    store: new Store(new RecordSource()),
+    network: Network.create((request, variables) =>
+      Observable.create<GraphQLResponse>((sink) => {
+        requests.push({ name: request.name, variables, sink });
+      }),
+    ),
+  });
+  const operation = createOperationDescriptor(query, { id: 'tag-a' });
+  environment.commitPayload(operation, payload(1).data);
+  assert.equal(environment.check(operation).status, 'available');
+
+  await act(async () => {
+    renderer = create(
+      createElement(relay.RelayEnvironmentProvider, { environment }, createElement(Screen)),
+    );
+  });
+  assert.equal(renderer!.root.findAllByType('a').length, 1);
+  const queryRequest = latestRequest('HashtagRelatedProfilesPageQuery');
+  await respond(queryRequest, { data: payload(1).data });
+
+  const muteButton = () => renderer!.root.findByProps({ accessibilityLabel: '#Topic 뮤트' });
+  await act(async () => muteButton().props.onPress());
+  const confirmButton = renderer!.root.findByProps({ accessibilityLabel: '뮤트' });
+  await act(async () => confirmButton.props.onPress());
+
+  const createRequest = latestRequest('ProfileTagMuteActionCreateMutation');
+  assert.deepEqual(createRequest.variables, {
+    input: {
+      hashtagId: 'tag-a',
+      scopes: ['NOTIFICATION'],
+      decision: 'EXCLUDE',
+      expiresAt: null,
+    },
+  });
+  await respond(createRequest, {
+    data: {
+      createHashtagMuteRule: {
+        hashtagMuteRule: {
+          __typename: 'HashtagMuteRule',
+          id: 'rule-a',
+          targetHashtag: {
+            __typename: 'Hashtag',
+            id: 'tag-a',
+            name: 'Topic',
+            viewerMuteRule: {
+              __typename: 'HashtagMuteRule',
+              id: 'rule-a',
+              scopes: ['NOTIFICATION'],
+              expiresAt: null,
+              isActive: true,
+              appliesTo: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(
+    renderer!.root.findByProps({ accessibilityLabel: '#Topic 뮤트 해제' }).props.disabled,
+    false,
+  );
+  assert.equal(renderer!.root.findAllByProps({ accessibilityLabel: '#Topic 뮤트' }).length, 0);
+});
+
+function latestRequest(name: string) {
+  const request = requests.filter((captured) => captured.name === name).at(-1);
+  assert.ok(request, name);
+  return request;
+}
+
+async function respond(request: CapturedRequest, response: GraphQLResponse) {
+  await act(async () => {
+    request.sink.next(response);
+    request.sink.complete();
+  });
+}

@@ -1,8 +1,8 @@
-# Expo Router Web URL patch
+# Expo Router Web URL and nested-route state patch
 
 This is maintenance context for the temporary `expo-router@56.2.13` patch in
 [`pnpm-workspace.yaml`](../pnpm-workspace.yaml) and
-[`expo-router@56.2.13.patch`](expo-router@56.2.13.patch). The app-level issue is
+[`expo-router@56.2.13.patch`](expo-router@56.2.13.patch). The Web URL issue is
 tracked by [PROD-1103](https://linear.app/byulmaru/issue/PROD-1103) and
 [PR #1132](https://github.com/byulmaru/kosmo/pull/1132). The upstream fix is
 tracked in [Expo issue #48439](https://github.com/expo/expo/issues/48439) and
@@ -40,6 +40,83 @@ while this patch owns deferring an unsafe URL write.
 A compatible upstream release may use a different helper or source layout;
 removal depends on equivalent Web URL behavior, not an identical implementation path.
 
+## Dynamic route state boundary
+
+On Web, a profile layout renders a `Slot` containing its index, followers, and
+following routes. Navigating from a nested profile route such as
+`/@betas/following` to another value of the same `[profileHandle]` route, such as
+`/@sasha`, reaches Expo Router's `StackClient` `NAVIGATE` handler. This screen
+has no configured `getId`, so the handler first matches the current route by
+name. When the dynamic path identity differs, it creates a new route key but
+clones the matched route, including its child `state`. The new route's params
+can identify Sasha's `index` screen while that child state still points to
+Beta's `following` route. The parent profile query then renders Sasha's hero
+above Beta's following rows.
+
+The patch drops child `state` only when that clone receives a new key. The old
+route keeps its state, and same-key or preloaded route reuse keeps its state.
+The new child navigator can then initialize from the destination's nested
+route params. This fixes the route-identity boundary for links that reach this
+dynamic profile screen without changing link mode or app route behavior.
+
+On 2026-11-02, an isolated Playwright response override changed only this
+`StackClient` clone behavior in the deployed bundle. The baseline reproduced
+Sasha's heading with Beta's eight following rows; the override showed Sasha's
+index content, browser Back restored Beta's following rows, and Forward restored
+Sasha's index. The override was a diagnostic and did not change the deployed
+application.
+
+## Default Web Stack document flow boundary
+
+The default Web `Stack` renders through React Navigation's `NativeStackView`.
+Its outer `Screen` wrapper uses absolute fill, which removes the active route
+from normal layout flow inside `UniversalShell`. The active route no longer
+sizes the shell route container in normal flow. In this content-sized Web
+shell, document scroll extents and pointer hit areas can then diverge from the
+visible content.
+
+For Web screens whose `presentation` is not `transparentModal` or
+`containedTransparentModal`, this patch uses `{ position: 'relative' }` on the
+outer screen wrapper so the active route participates in normal document
+flow. The existing focus, preload, and transparent-presentation `display`
+logic remains unchanged: inactive screens stay mounted with `display: none`
+and retain their navigation state. Native platforms and transparent
+presentations continue using absolute fill so their existing layout and
+overlay behavior remain intact. This change does not add a scroll container,
+history state, or measurement registry.
+
+## Browser Back and Forward memory state
+
+`createMemoryHistory` keeps a closed-over cursor for writes and branch
+truncation. Its `index` getter already resolves the current record from the
+browser history ID, and its programmatic `go()` pop handler updates the closed
+cursor. The external `listen()` pop handler did not. After browser Back,
+`useLinking` could read the correct record through the getter, then `replace()`
+would overwrite the stale Forward record because it updates `items[index]`.
+Forward then lost the post route's saved navigation and protected-route state,
+so linking rebuilt state from the URL.
+
+The patch synchronizes the closed cursor from `history.index` for external
+`popstate` events, after filtering programmatic `go()` events and before calling
+listeners. This preserves each browser entry's in-memory route state and lets a
+new push after Back truncate the obsolete Forward branch. The change is in
+Expo Router's Web memory-history implementation; native navigation and history
+behavior are unchanged.
+
+[`WebMemoryHistory.test.ts`](../apps/app/src/components/shell/WebMemoryHistory.test.ts)
+loads the patched Expo Router module and covers browser Back, Forward,
+route-state restoration, and branch truncation after Back. Existing Web E2E
+cases cover document scroll, link/click navigation, and route headers including
+bookmarks:
+
+[`reaction-people.e2e.ts`](../apps/web/e2e/reaction-people.e2e.ts) covers post
+and reaction navigation, app Back, browser Back/Forward, and Local list position
+restoration.
+
+[`navigation-scroll.e2e.ts`](../apps/web/e2e/navigation-scroll.e2e.ts),
+[`search.e2e.ts`](../apps/web/e2e/search.e2e.ts), and
+[`mobile-route-headers.e2e.ts`](../apps/web/e2e/mobile-route-headers.e2e.ts).
+
 ## Invariants and current caveat
 
 When a partial layout state is deferred, the linking listener must still be
@@ -67,11 +144,12 @@ behavior passed every removal check.
 
 An upstream merge or issue closure is not enough. Remove this patch only after
 a compatible Expo Router release is published and its Web linking/history
-behavior has the equivalent protection. Upstream may refactor the helper or
-source path; compare behavior at the Web history boundary, then run the
-regression checks below against the unpatched package. Keep the behavioral
-tests after removal so they protect the upstream fix from later dependency
-upgrades.
+behavior has the equivalent protection and the default Web Stack preserves
+document flow for non-transparent screens. Upstream may refactor helpers or
+source paths; compare behavior at both the Web history and Stack layout
+boundaries, then run the regression checks below against the unpatched package.
+Keep the behavioral tests after removal so they protect the upstream fix from
+later dependency upgrades.
 
 Before removal is considered complete, verify:
 
@@ -79,8 +157,17 @@ Before removal is considered complete, verify:
   through every `pushState` and `replaceState` for static routes, profile home
   and following, post detail, and post reactions. Exercise normal and delayed
   shell/profile Relay responses, and include routes with query and hash values.
+- Default Web Stack screens participate in normal document flow for regular
+  presentations, while transparent presentations retain overlay positioning,
+  native screens retain their existing layout, and inactive route screens stay
+  mounted but hidden. Verify scroll and route content interaction at the Web
+  runtime boundary.
 - Internal `push` and `replace`, query/hash-only changes, and browser
   back/forward still produce the expected URL and route state.
+- From a nested following or followers route, navigate to a different profile
+  through a linked row. The destination must show its own profile content, and
+  browser Back/Forward must restore each route's own child state. Cover links
+  from profile post lists that target the same dynamic profile route as well.
 - Authentication redirects, blocked-profile behavior, actor selection/loading,
   and not-found routes retain their existing behavior.
 - The incomplete initial state does not skip listener registration or cleanup,
@@ -89,12 +176,15 @@ Before removal is considered complete, verify:
 
 Relevant existing suites include
 [`route-refresh.e2e.ts`](../apps/web/e2e/route-refresh.e2e.ts),
+[`profile-connections.e2e.ts`](../apps/web/e2e/profile-connections.e2e.ts),
 [`reaction-people.e2e.ts`](../apps/web/e2e/reaction-people.e2e.ts),
 [`search.e2e.ts`](../apps/web/e2e/search.e2e.ts),
 [`navigation-scroll.e2e.ts`](../apps/web/e2e/navigation-scroll.e2e.ts), and
-[`auth-routes.e2e.ts`](../apps/web/e2e/auth-routes.e2e.ts). Review their exact
-assertions and run the cases that cover each removal check; their presence
-alone does not prove that every invariant above is tested.
+[`auth-routes.e2e.ts`](../apps/web/e2e/auth-routes.e2e.ts). Keep the focused
+[`ProfileStackClientRouter.test.ts`](../apps/app/src/components/profile/ProfileStackClientRouter.test.ts)
+reducer test with the patch. Review the exact assertions and run the cases that
+cover each removal check; their presence alone does not prove that every
+invariant above is tested.
 
 From the repository root, this focused command uses the same disposable
 database wrapper as `pnpm test:e2e` while selecting the relevant Playwright
@@ -102,7 +192,13 @@ files:
 
 ```sh
 node scripts/test-db.mjs run -- sh -c 'pnpm db:test:push &&
-  pnpm --dir apps/web exec playwright test e2e/route-refresh.e2e.ts e2e/reaction-people.e2e.ts e2e/search.e2e.ts e2e/navigation-scroll.e2e.ts e2e/auth-routes.e2e.ts'
+  pnpm --dir apps/web exec playwright test e2e/route-refresh.e2e.ts e2e/profile-connections.e2e.ts e2e/reaction-people.e2e.ts e2e/search.e2e.ts e2e/navigation-scroll.e2e.ts e2e/auth-routes.e2e.ts'
+```
+
+Run the router reducer regression directly with:
+
+```sh
+pnpm --dir apps/app exec node --experimental-test-module-mocks --import tsx --test src/components/profile/ProfileStackClientRouter.test.ts
 ```
 
 The wrapper starts the `postgres` service from `docker-compose.test.yml`,
@@ -117,7 +213,8 @@ documentation change.
 
 1. Confirm a compatible Expo Router release is published and inspect its
    implementation and regression evidence for equivalent Web linking/history
-   behavior. An upstream refactor may use a different helper or source path.
+   and new-key nested-state behavior. An upstream refactor may use different
+   helpers or source paths.
 2. Before changing the dependency, run `pnpm patch-remove expo-router@56.2.13`.
    The current workspace pnpm CLI supports this command; it removes the
    `patchedDependencies` entry, patch file, and lockfile patch metadata. Remove

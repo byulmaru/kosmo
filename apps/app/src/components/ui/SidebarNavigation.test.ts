@@ -165,6 +165,28 @@ describe('guest public-content sidebar', () => {
     assert.ok(!labels.includes('로그아웃'));
   });
 
+  it('omits post requests while keeping the existing primary navigation', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(SidebarNavigation, {
+          onLogout: () => undefined,
+          onNavigate: () => undefined,
+          presentation: 'full',
+        }),
+      );
+    });
+    assert.ok(renderer);
+    const labels = renderer.root
+      .findAllByType('Pressable' as never)
+      .map((node) => node.props.accessibilityLabel);
+
+    assert.ok(labels.includes('홈'));
+    assert.ok(labels.includes('검색'));
+    assert.ok(labels.includes('팔로워 요청'));
+    assert.ok(labels.includes('북마크'));
+    assert.ok(!labels.includes('작성 요청'));
+  });
+
   it('keeps both compact actions discoverable by their accessible names', async () => {
     const view = await renderGuestSidebar('compact');
     const labels = view.root
