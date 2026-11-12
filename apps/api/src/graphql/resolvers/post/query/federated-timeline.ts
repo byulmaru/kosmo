@@ -4,8 +4,8 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNotNull, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
-import { filterNaturalLanguageMuteExcludes } from './filter-natural-language-mute-excludes';
 import { Post, PostConnection } from '../ref';
+import { filterNaturalLanguageMuteExcludes } from './filter-natural-language-mute-excludes';
 
 type PostRow = typeof Posts.$inferSelect;
 

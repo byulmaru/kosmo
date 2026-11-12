@@ -24,8 +24,8 @@ import {
 import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
-import { filterNaturalLanguageMuteExcludes } from './filter-natural-language-mute-excludes';
 import { Post, PostConnection } from '../ref';
+import { filterNaturalLanguageMuteExcludes } from './filter-natural-language-mute-excludes';
 
 type PostRow = typeof Posts.$inferSelect;
 

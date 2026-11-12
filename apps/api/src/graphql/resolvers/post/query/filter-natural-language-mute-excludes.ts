@@ -1,6 +1,7 @@
-import { db, first, NaturalLanguageMuteRules, Posts } from '@kosmo/core/db';
+import { db, first, NaturalLanguageMuteRules } from '@kosmo/core/db';
 import { getNaturalLanguageMuteDecision } from '@kosmo/core/home-timeline/natural-language-mute-cache';
 import { eq } from 'drizzle-orm';
+import type { Posts } from '@kosmo/core/db';
 
 type PostRow = typeof Posts.$inferSelect;
 
