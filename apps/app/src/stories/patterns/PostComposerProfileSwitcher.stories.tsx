@@ -607,8 +607,8 @@ function HostProfileFixture({ mode }: { mode: 'rail' | 'overlay' | 'mobile' }) {
 }
 
 const hostLongListPlay: NonNullable<Story['play']> = async ({ canvasElement }) => {
-  const canvas = within(canvasElement);
-  const trigger = canvas.getByRole('button', { name: '작성 프로필' });
+  const canvas = within(canvasElement.ownerDocument.body);
+  const trigger = await canvas.findByRole('button', { name: '작성 프로필' });
   const body = canvas.getByRole('textbox', { name: '게시글 본문' });
   await userEvent.type(body, '전환 뒤에도 남는 초안');
   await userEvent.click(trigger);
