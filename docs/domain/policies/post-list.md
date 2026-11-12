@@ -7,12 +7,13 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 ## Post List Type
 
-| 값      | 의미                                                                       |
-| ------- | -------------------------------------------------------------------------- |
-| Home    | viewer Profile의 기본 Post List                                            |
-| Local   | configured Local Instance와 운영자가 추가 설정한 Instance의 공개 Post List |
-| Profile | Target Profile이 작성한 Post List                                          |
-| Hashtag | Target Hashtag가 포함된 Post List                                          |
+| 값        | 의미                                                                       |
+| --------- | -------------------------------------------------------------------------- |
+| Home      | viewer Profile의 기본 Post List                                            |
+| Local     | configured Local Instance와 운영자가 추가 설정한 Instance의 공개 Post List |
+| Federated | Kosmo가 이미 저장한 전체 Instance의 공개 Post List                         |
+| Profile   | Target Profile이 작성한 Post List                                          |
+| Hashtag   | Target Hashtag가 포함된 Post List                                          |
 
 ## Control Decision
 
@@ -114,6 +115,14 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 - Content와 Repost Source를 함께 가진 Quote는 포함한다.
 - Reply Parent가 있는 Post와 Content 없는 Repost는 포함하지 않는다.
 
+### Federated Post List
+
+- Kosmo의 Local Profile과 이미 수신·저장된 Remote Profile이 작성한 Public Post를 함께 조회한다. 조회는 새로운 Post를 수집하거나 기존 Post를 소급해 저장하지 않는다.
+- 목록은 기존 Local Post List와 같은 정렬·페이지 탐색 규칙을 따른다. 저장된 Natural Language Mute Exclude 판정으로 숨긴 Post가 있으면 한 페이지에 표시되는 Post 수가 줄거나 비어 있을 수 있다.
+- Active Instance의 Active/Normal Profile이 작성하고 Content가 있으며 Reply Parent가 없는 eligible Post를 포함한다. Reply Parent가 있는 Post와 Content 없는 Repost는 포함하지 않으며, Content와 Repost Source를 함께 가진 Quote는 포함한다.
+- 현재 Post Visibility, Post Eligibility, Profile Block, Profile Mute와 Repost Source 접근 정책을 적용한다. 이 목록은 기존 Post 접근 범위를 넓히지 않는다.
+- 현재 선택한 viewer Profile에 Natural Language Mute Rule이 있으면 Local Post List와 동일하게 해당 Post 자체의 저장된 유효 Exclude 판정을 적용한다. 새 판정은 만들지 않으며 viewer가 작성한 Post는 기존 정책에 따라 표시한다.
+
 ### Hashtag Post List
 
 - Content가 있고 Reply Parent가 없으며 Target Hashtag가 포함되고 Post Eligibility를 통과한 Post를 후보로 삼는다.
@@ -168,4 +177,4 @@ Post 후보와 Control Decision을 계산하는 조회 정책이다.
 
 - Cursor는 조회 입력 값이며 durable 객체 속성이 아니다.
 - viewer별 읽기 위치는 독립 생명주기와 제품 요구가 확정될 때 별도 durable 객체로 추가한다.
-- Custom, Federated, List 기반, 키워드 수집형 Post List는 현재 범위에서 제외한다.
+- Custom, List 기반, 키워드 수집형 Post List는 현재 범위에서 제외한다.

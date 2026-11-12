@@ -17,11 +17,13 @@ import { useProfilePinOrder } from './ProfilePinOrder';
 import { ProfilePinOrderContext } from './ProfilePinOrderContext';
 import type { ReactElement } from 'react';
 import type { TabReselectionDestination } from '@/components/shell/ShellChromeContext';
+import type { PostList_federated$key } from './__generated__/PostList_federated.graphql';
 import type { PostList_hashtag$key } from './__generated__/PostList_hashtag.graphql';
 import type { PostList_home$key } from './__generated__/PostList_home.graphql';
 import type { PostList_local$key } from './__generated__/PostList_local.graphql';
 import type { PostList_profile$key } from './__generated__/PostList_profile.graphql';
 import type { PostList_profile_pinned$key } from './__generated__/PostList_profile_pinned.graphql';
+import type { PostListFederatedNextPageQuery } from './__generated__/PostListFederatedNextPageQuery.graphql';
 import type { PostListHashtagNextPageQuery } from './__generated__/PostListHashtagNextPageQuery.graphql';
 import type { PostListHomeNextPageQuery } from './__generated__/PostListHomeNextPageQuery.graphql';
 import type { PostListLocalNextPageQuery } from './__generated__/PostListLocalNextPageQuery.graphql';
@@ -165,6 +167,42 @@ const PostListLocalFragment = graphql`
   }
 `;
 
+const PostListFederatedFragment = graphql`
+  fragment PostList_federated on Query
+  @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
+  @refetchable(queryName: "PostListFederatedNextPageQuery") {
+    federatedTimeline(first: $count, after: $cursor)
+      @connection(key: "PostList_federatedTimeline") {
+      edges {
+        cursor
+        node {
+          id
+          content {
+            id
+          }
+          profile {
+            viewerState {
+              profileBlock {
+                id
+              }
+            }
+          }
+          repostSource {
+            profile {
+              viewerState {
+                profileBlock {
+                  id
+                }
+              }
+            }
+          }
+          ...PostListItem_post
+        }
+      }
+    }
+  }
+`;
+
 const PostListHashtagFragment = graphql`
   fragment PostList_hashtag on Hashtag
   @argumentDefinitions(count: { type: "Int", defaultValue: 20 }, cursor: { type: "String" })
@@ -204,6 +242,7 @@ const PostListHashtagFragment = graphql`
 type Props = {
   active?: boolean;
   error?: boolean;
+  federated?: PostList_federated$key | null;
   header?: ReactElement | null;
   hashtag?: PostList_hashtag$key | null;
   home?: PostList_home$key | null;
@@ -223,6 +262,7 @@ type Props = {
 export const PostList = memo(function PostList({
   active = true,
   error = false,
+  federated: federatedKey,
   header,
   hashtag: hashtagKey,
   home: homeKey,
@@ -259,15 +299,21 @@ export const PostList = memo(function PostList({
     PostListLocalFragment,
     localKey ?? null,
   );
+  const federatedPagination = usePaginationFragment<
+    PostListFederatedNextPageQuery,
+    PostList_federated$key
+  >(PostListFederatedFragment, federatedKey ?? null);
   const hashtagPagination = usePaginationFragment<
     PostListHashtagNextPageQuery,
     PostList_hashtag$key
   >(PostListHashtagFragment, hashtagKey ?? null);
   const isHome = homeKey != null;
   const isLocal = localKey != null;
+  const isFederated = federatedKey != null;
   const isHashtag = hashtagKey != null;
   const home = homePagination.data;
   const local = localPagination.data;
+  const federated = federatedPagination.data;
   const hashtag = hashtagPagination.data;
   const profile = profilePagination.data;
   const pinOrderMenu = useProfilePinOrder(pinnedProfile ?? null);
@@ -283,9 +329,11 @@ export const PostList = memo(function PostList({
     ? home?.homeTimeline
     : isLocal
       ? local?.localTimeline
-      : isHashtag
-        ? hashtag?.posts
-        : profile?.posts;
+      : isFederated
+        ? federated?.federatedTimeline
+        : isHashtag
+          ? hashtag?.posts
+          : profile?.posts;
   const edges = connection?.edges ?? [];
   // A successful delete can remove the node record before Relay prunes an
   // unhandled connection edge. Treat that stale edge as empty until the next
@@ -299,14 +347,16 @@ export const PostList = memo(function PostList({
           (edge.node.content != null ||
             !edge.node.repostSource?.profile.viewerState?.profileBlock)),
     );
-  const hasData = Boolean(home || local || hashtag || profile);
+  const hasData = Boolean(home || local || federated || hashtag || profile);
   const pagination = isHome
     ? homePagination
     : isLocal
       ? localPagination
-      : isHashtag
-        ? hashtagPagination
-        : profilePagination;
+      : isFederated
+        ? federatedPagination
+        : isHashtag
+          ? hashtagPagination
+          : profilePagination;
   const hasNext = pagination.hasNext;
   const isLoadingNext = pagination.isLoadingNext;
   const loadNext = pagination.loadNext;
@@ -335,7 +385,16 @@ export const PostList = memo(function PostList({
   );
 
   const listIdentityKey =
-    identityKey ?? (isHome ? 'home' : isLocal ? 'local' : isHashtag ? 'hashtag' : 'profile');
+    identityKey ??
+    (isHome
+      ? 'home'
+      : isLocal
+        ? 'local'
+        : isFederated
+          ? 'federated'
+          : isHashtag
+            ? 'hashtag'
+            : 'profile');
   const listContainerStyle =
     Platform.OS === 'web' || hasPaginationScrollContext ? styles.root : styles.flexRoot;
 
@@ -412,9 +471,11 @@ export const PostList = memo(function PostList({
               renderItem={({ item }) => (
                 <PostListItem post={item.node} presentation={postListPresentation} />
               )}
-              reselectDestination={reselectDestination ?? (isHome || isLocal ? 'home' : undefined)}
+              reselectDestination={
+                reselectDestination ?? (isHome || isLocal || isFederated ? 'home' : undefined)
+              }
               refreshing={refreshing}
-              showLoadMoreButton={isLocal}
+              showLoadMoreButton={isLocal || isFederated}
               style={listContainerStyle}
             />
           </View>

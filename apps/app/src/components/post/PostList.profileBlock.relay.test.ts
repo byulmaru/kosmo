@@ -13,6 +13,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import federatedQuery from './__generated__/PostListFederatedNextPageQuery.graphql';
 import hashtagQuery from './__generated__/PostListHashtagNextPageQuery.graphql';
 import homeQuery from './__generated__/PostListHomeNextPageQuery.graphql';
 import localQuery from './__generated__/PostListLocalNextPageQuery.graphql';
@@ -232,7 +233,12 @@ afterEach(async () => {
 const targetId = 'target-a';
 const blockId = 'block-a';
 const hashtagId = 'hashtag-a';
-const queryBySurface = { hashtag: hashtagQuery, home: homeQuery, local: localQuery } as const;
+const queryBySurface = {
+  federated: federatedQuery,
+  hashtag: hashtagQuery,
+  home: homeQuery,
+  local: localQuery,
+} as const;
 type Surface = keyof typeof queryBySurface;
 
 function FeedSurface({
@@ -308,7 +314,11 @@ async function start(surface: Surface, rows = feedRows(), hasNextPage = false) {
           node: { __typename: 'Hashtag', id: hashtagId, name: 'Topic', posts: connection },
         }
       : {
-          [surface === 'home' ? 'homeTimeline' : 'localTimeline']: connection,
+          [surface === 'home'
+            ? 'homeTimeline'
+            : surface === 'local'
+              ? 'localTimeline'
+              : 'federatedTimeline']: connection,
         };
   environment.commitPayload(operation, payload);
   await act(async () => {
@@ -467,7 +477,7 @@ async function blockTarget() {
   });
 }
 
-for (const surface of ['home', 'local'] as const) {
+for (const surface of ['home', 'local', 'federated'] as const) {
   test(`${surface} block mutation filters blocked authors and pure reposts while retaining Quotes and unrelated rows`, async () => {
     const { environment, queryOwner } = await start(surface);
     assert.deepEqual(visibleBodies(), [

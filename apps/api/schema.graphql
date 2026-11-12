@@ -779,6 +779,7 @@ enum PushInstallationPlatform {
 
 type Query {
   currentSession: Session
+  federatedTimeline(after: String, before: String, first: Int, last: Int): PostConnection
   homeTimeline(after: String, before: String, first: Int, last: Int): PostConnection
   localTimeline(after: String, before: String, first: Int, last: Int): PostConnection
   me: Account

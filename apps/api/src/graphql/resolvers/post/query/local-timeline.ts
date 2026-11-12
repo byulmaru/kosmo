@@ -1,14 +1,11 @@
 import {
   db,
-  first,
   Instances,
-  NaturalLanguageMuteRules,
   Posts,
   ProfilePinnedPosts,
   Profiles,
 } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
-import { getNaturalLanguageMuteDecision } from '@kosmo/core/home-timeline/natural-language-mute-cache';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import {
@@ -27,6 +24,7 @@ import {
 import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
+import { filterNaturalLanguageMuteExcludes } from './filter-natural-language-mute-excludes';
 import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;
@@ -81,39 +79,11 @@ builder.queryField('localTimeline', (t) =>
               .limit(limit),
         );
 
-        const profileId = ctx.session?.profile?.id;
-        if (!profileId || connection.edges.length === 0) {
-          return connection;
-        }
-
-        const activeRule = await db
-          .select({ id: NaturalLanguageMuteRules.id })
-          .from(NaturalLanguageMuteRules)
-          .where(eq(NaturalLanguageMuteRules.ownerProfileId, profileId))
-          .limit(1)
-          .then(first);
-        if (!activeRule) {
-          return connection;
-        }
-
-        const excludedPostIds = new Set<string>();
-        await Promise.all(
-          connection.edges.map(async ({ node }) => {
-            if (node.profileId === profileId) {
-              return;
-            }
-
-            const decision = await getNaturalLanguageMuteDecision(profileId, node.id);
-            if (decision?.decision === 'exclude') {
-              excludedPostIds.add(node.id);
-            }
-          }),
+        const edges = await filterNaturalLanguageMuteExcludes(
+          connection.edges,
+          ctx.session?.profile?.id,
         );
-
-        return {
-          ...connection,
-          edges: connection.edges.filter(({ node }) => !excludedPostIds.has(node.id)),
-        };
+        return edges === connection.edges ? connection : { ...connection, edges };
       },
     },
     PostConnection as never,

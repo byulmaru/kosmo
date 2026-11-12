@@ -48,15 +48,17 @@ describe('getShellLayout', () => {
     assert.equal(isSettingsRoute('/profile/settings'), false);
   });
 
-  it('treats Home and Local as one primary timeline route family', () => {
+  it('treats Home, Local, and Federated as one primary timeline route family', () => {
     assert.equal(isTimelineRoute('/home'), true);
     assert.equal(isTimelineRoute('/local'), true);
+    assert.equal(isTimelineRoute('/federated'), true);
+    assert.equal(isTimelineRoute('/federated/post'), false);
     assert.equal(isTimelineRoute('/local/post'), false);
     assert.equal(isTimelineRoute('/search'), false);
   });
 
   it('enables Native drawer edge swipe only on approved top-level routes', () => {
-    for (const pathname of ['/home', '/local', '/search', '/notifications']) {
+    for (const pathname of ['/home', '/local', '/federated', '/search', '/notifications']) {
       assert.equal(isNativeDrawerSwipeEnabled(pathname), true, pathname);
     }
 

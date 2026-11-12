@@ -29,8 +29,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 let renderer: ReactTestRenderer | null = null;
 let HomeTimelineScreen: ComponentType;
-let TimelineTabs: ComponentType<{ value: 'home' | 'local' }>;
+let TimelineTabs: ComponentType<{ value: 'home' | 'local' | 'federated' }>;
 let LocalTimelineScreen: ComponentType<{ publicEntry?: boolean }>;
+let FederatedTimelineScreen: ComponentType;
 const platform = { OS: 'ios' };
 let sessionStatus: 'error' | 'guest' | 'valid' = 'valid';
 let postRequestSummaryMode: 'empty' | 'pending' | 'error' | 'ready' = 'empty';
@@ -111,8 +112,14 @@ const shellChrome = {
   reselectHome: () => homeReselectionHandler?.(),
 };
 
-function timelineScreenWithPushContext(timeline: 'Home' | 'Local') {
-  const screen = createElement(timeline === 'Home' ? HomeTimelineScreen : LocalTimelineScreen);
+function timelineScreenWithPushContext(timeline: 'Home' | 'Local' | 'Federated') {
+  const screen = createElement(
+    timeline === 'Home'
+      ? HomeTimelineScreen
+      : timeline === 'Local'
+        ? LocalTimelineScreen
+        : FederatedTimelineScreen,
+  );
   return timeline === 'Home'
     ? createElement(
         WebPushPermissionContext.Provider,
@@ -319,6 +326,7 @@ before(async () => {
   ({ TimelineTabs } = await import('../TimelineTabs'));
   ({ default: HomeTimelineScreen } = await import('./HomeTimelineScreen'));
   ({ default: LocalTimelineScreen } = await import('./LocalTimelineScreen'));
+  ({ default: FederatedTimelineScreen } = await import('./FederatedTimelineScreen'));
 });
 beforeEach(() => {
   mock.timers.enable({ apis: ['setTimeout'] });
@@ -681,6 +689,41 @@ describe('Timeline refresh and pagination with real Relay', () => {
     assertConnection(environment, 'homeTimeline', ['fresh']);
   });
 
+  it('Federated: refresh failure preserves rows and a successful retry replaces them', async () => {
+    const environment = new Environment({
+      network: createTimelineNetwork(),
+      store: new Store(new RecordSource()),
+    });
+    await act(async () => {
+      renderer = create(
+        createElement(ReactRelay.RelayEnvironmentProvider, {
+          environment,
+          children: timelineScreenWithPushContext('Federated'),
+        }),
+      );
+    });
+    await respond(latest('FederatedPageQuery'), payload('federatedTimeline', ['a', 'b']));
+    assertConnection(environment, 'federatedTimeline', ['a', 'b']);
+
+    await act(async () => list().props.onRefresh());
+    const failedRefresh = latest('FederatedContentRefetchQuery');
+    assert.equal(list().props.refreshing, true);
+    assertConnection(environment, 'federatedTimeline', ['a', 'b']);
+    await act(async () => failedRefresh.sink.error(new Error('refresh failed')));
+    assert.equal(list().props.refreshing, false);
+    assertConnection(environment, 'federatedTimeline', ['a', 'b']);
+
+    const toast = visibleToast();
+    await act(async () => toast.options.action!.onPress());
+    const retry = latest('FederatedContentRefetchQuery');
+    assert.notEqual(retry, failedRefresh);
+    assert.equal(list().props.refreshing, true);
+    await respond(retry, payload('federatedTimeline', ['fresh']));
+    assert.equal(list().props.refreshing, false);
+    assertConnection(environment, 'federatedTimeline', ['fresh']);
+    assert.equal(toast.visible, false);
+  });
+
   it('Home: cached re-entry keeps rows visible during a quiet latest refresh', async () => {
     const environment = new Environment({
       network: createTimelineNetwork(),
@@ -943,49 +986,54 @@ describe('Timeline refresh and pagination with real Relay', () => {
     assert.equal(requests.length, 3, 'pagination stops when the visible page has no successor');
   });
 
-  it('Local: load-more continues from the Relay cursor after a page adds no visible posts', async () => {
-    const environment = new Environment({
-      network: createTimelineNetwork(),
-      store: new Store(new RecordSource()),
+  for (const timeline of ['Local', 'Federated'] as const) {
+    it(`${timeline}: load-more continues from the Relay cursor after a page adds no visible posts`, async () => {
+      const environment = new Environment({
+        network: createTimelineNetwork(),
+        store: new Store(new RecordSource()),
+      });
+      const cursorA = 'db:00000000-0000-4000-8000-000000000001';
+      const cursorB = 'db:00000000-0000-4000-8000-000000000002';
+      const cursorC = 'db:00000000-0000-4000-8000-000000000003';
+      const field = timeline === 'Local' ? 'localTimeline' : 'federatedTimeline';
+      const pageQuery = `${timeline}PageQuery`;
+      const nextPageQuery = `PostList${timeline}NextPageQuery`;
+
+      await act(async () => {
+        renderer = create(
+          createElement(ReactRelay.RelayEnvironmentProvider, {
+            environment,
+            children: timelineScreenWithPushContext(timeline),
+          }),
+        );
+      });
+      await respond(latest(pageQuery), payload(field, [], true, cursorA));
+      assertConnection(environment, field, [], true, cursorA);
+
+      const initialButton = loadMoreButton();
+      await act(async () => initialButton.props.onPress());
+      const firstNextPage = latest(nextPageQuery);
+      assert.equal(firstNextPage.variables.cursor, cursorA);
+      await respond(firstNextPage, payload(field, ['visible'], true, cursorB));
+      assertConnection(environment, field, ['visible'], true, cursorB);
+
+      await act(async () => list().props.onEndReached());
+      const noGrowthPage = latest(nextPageQuery);
+      assert.notEqual(noGrowthPage, firstNextPage);
+      assert.equal(noGrowthPage.variables.cursor, cursorB);
+      await respond(noGrowthPage, payload(field, [], true, cursorC));
+      assertConnection(environment, field, ['visible'], true, cursorC);
+
+      const moreButton = loadMoreButton();
+      await act(async () => moreButton.props.onPress());
+      const finalPage = latest(nextPageQuery);
+      assert.equal(finalPage.variables.cursor, cursorC);
+      await respond(finalPage, payload(field, ['next-visible'], false));
+      assertConnection(environment, field, ['visible', 'next-visible'], false);
+
+      assert.throws(loadMoreButton, 'terminal pagination removes the More action');
     });
-    const cursorA = 'db:00000000-0000-4000-8000-000000000001';
-    const cursorB = 'db:00000000-0000-4000-8000-000000000002';
-    const cursorC = 'db:00000000-0000-4000-8000-000000000003';
-
-    await act(async () => {
-      renderer = create(
-        createElement(ReactRelay.RelayEnvironmentProvider, {
-          environment,
-          children: timelineScreenWithPushContext('Local'),
-        }),
-      );
-    });
-    await respond(latest('LocalPageQuery'), payload('localTimeline', [], true, cursorA));
-    assertConnection(environment, 'localTimeline', [], true, cursorA);
-
-    const initialButton = loadMoreButton();
-    await act(async () => initialButton.props.onPress());
-    const firstNextPage = latest('PostListLocalNextPageQuery');
-    assert.equal(firstNextPage.variables.cursor, cursorA);
-    await respond(firstNextPage, payload('localTimeline', ['visible'], true, cursorB));
-    assertConnection(environment, 'localTimeline', ['visible'], true, cursorB);
-
-    await act(async () => list().props.onEndReached());
-    const noGrowthPage = latest('PostListLocalNextPageQuery');
-    assert.notEqual(noGrowthPage, firstNextPage);
-    assert.equal(noGrowthPage.variables.cursor, cursorB);
-    await respond(noGrowthPage, payload('localTimeline', [], true, cursorC));
-    assertConnection(environment, 'localTimeline', ['visible'], true, cursorC);
-
-    const moreButton = loadMoreButton();
-    await act(async () => moreButton.props.onPress());
-    const finalPage = latest('PostListLocalNextPageQuery');
-    assert.equal(finalPage.variables.cursor, cursorC);
-    await respond(finalPage, payload('localTimeline', ['next-visible'], false));
-    assertConnection(environment, 'localTimeline', ['visible', 'next-visible'], false);
-
-    assert.throws(loadMoreButton, 'terminal pagination removes the More action');
-  });
+  }
 
   for (const timeline of ['Home', 'Local'] as const) {
     for (const first of ['pagination', 'refresh'] as const) {
