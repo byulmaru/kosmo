@@ -1,4 +1,5 @@
 import baseMeta, {
+  CenteredContract as centeredContract,
   CompactContentContract as compactContentContract,
   CompactViewportContract as compactViewportContract,
   InteractionContract as interactionContract,
@@ -30,6 +31,8 @@ export const StepsInteraction: Story = stepsInteraction;
 export const ViewportContract: Story = viewportContract;
 export const CompactViewportContract: Story = compactViewportContract;
 export const Tests: Story = tests;
+
+export const CenteredContract: Story = centeredContract;
 
 export const CompactContentContract: Story = compactContentContract;
 
