@@ -4,6 +4,7 @@ import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { trackAnalytics } from '@/analytics/client';
 import ProfileLayout from '@/app/(tabs)/(profile)/[profileHandle]/_layout';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
+import { CoachmarkProvider } from '@/components/coachmark/CoachmarkProvider';
 import { useProfileRoute } from '@/components/profile/ProfileRouteShell';
 import { PrimaryNavigationScrollProvider } from '@/components/shell/PrimaryNavigationScrollContext';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
@@ -12,16 +13,38 @@ import { SessionProvider } from '@/session/SessionProvider';
 import { RouterMockProvider, usePathname, useRouter } from '../../../.storybook/mocks/expo-router';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactNode } from 'react';
 
 const target = profile({
   id: 'conversion-target',
   displayName: '탐색 대상',
   handle: 'conversion',
   relativeHandle: '@conversion',
+  viewerState: {
+    blockedBy: false,
+    follow: null,
+    followRequest: null,
+    isSelf: false,
+    membership: null,
+    profileBlock: null,
+    profileMute: null,
+  },
 });
 const data = {
   currentSession: { id: 'conversion-session', selectedProfile: { id: 'conversion-viewer' } },
-  me: { id: 'conversion-account', name: '테스트 계정' },
+  me: {
+    id: 'conversion-account',
+    name: '테스트 계정',
+    profiles: [{ id: 'conversion-viewer' }],
+    metadata: [
+      {
+        id: 'conversion-search-coachmark-metadata',
+        key: 'coachmark.search.shown',
+        value: 'true',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ],
+  },
   searchProfiles: {
     edges: [{ cursor: 'one', node: target }],
     pageInfo: { endCursor: 'one', hasNextPage: false },
@@ -99,12 +122,18 @@ function SearchConversionFixture({ startPath = '/search' }: { startPath?: string
       >
         <PrimaryNavigationScrollProvider>
           <SessionProvider>
-            <Routes />
+            <SearchCoachmarkBoundary>
+              <Routes />
+            </SearchCoachmarkBoundary>
           </SessionProvider>
         </PrimaryNavigationScrollProvider>
       </ShellChromeProvider>
     </RouterMockProvider>
   );
+}
+
+function SearchCoachmarkBoundary({ children }: { children: ReactNode }) {
+  return <CoachmarkProvider accountId="conversion-account">{children}</CoachmarkProvider>;
 }
 
 const events = () =>

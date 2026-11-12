@@ -1,31 +1,19 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, mock, test } from 'node:test';
-import {
-  createElement,
-  Fragment,
-  memo,
-  useImperativeHandle,
-  useLayoutEffect,
-  useState,
-} from 'react';
+import { createElement, useEffect, useImperativeHandle, useLayoutEffect, useState } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, Dispatch, ElementType, ReactNode, Ref, SetStateAction } from 'react';
-import type { PageHeaderProps } from '../PageHeaderView';
+import type { ComponentType, ElementType, ReactNode, Ref } from 'react';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
 const routerActions: unknown[] = [];
 let changeTab: ((value: string) => void) | undefined;
+let leaveRoute: (() => void) | undefined;
 const searchParams: { q?: string; tab: string } = { q: 'kosmo', tab: 'popular' };
+let searchEdges: Array<{ cursor: string; node: { id: string } }> = [];
 const host = (name: string) => name as ElementType;
-type HeaderOptions = { header?: () => ReactNode; headerShown?: boolean };
-let setHeaderOptions: Dispatch<SetStateAction<HeaderOptions>>;
-const navigation = {
-  setOptions: (options: HeaderOptions) =>
-    setHeaderOptions((current) => ({ ...current, ...options })),
-};
 const nativeTextWrites: string[] = [];
 let inputFocusCount = 0;
 let renderer: ReturnType<typeof create>;
@@ -67,8 +55,13 @@ const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
+  useFocusEffect: (effect: () => void | (() => void)) =>
+    useEffect(() => {
+      const cleanup = effect();
+      leaveRoute = cleanup || undefined;
+      return cleanup;
+    }, [effect]),
   useLocalSearchParams: () => searchParams,
-  useNavigation: () => navigation,
   useRouter: () => ({
     push: (href: string) => routerActions.push({ href, mode: 'push' }),
     setParams: (params: object) => routerActions.push({ mode: 'setParams', params }),
@@ -76,6 +69,7 @@ mockModule('expo-router', {
 });
 const icons = {
   ArrowLeft: 'ArrowLeft',
+  CircleQuestionMark: 'CircleQuestionMark',
   History: 'History',
   Menu: 'Menu',
   Search: 'Search',
@@ -93,16 +87,34 @@ mockModule('react-native', {
   useWindowDimensions: () => ({ height: 844, width: 390 }),
   View: 'View',
 });
-mockModule('react-relay', { graphql: () => ({}), useFragment: () => ({}) });
+mockModule('react-relay', {
+  graphql: () => ({}),
+  useFragment: (_fragment: unknown, key: unknown) => key ?? null,
+  useLazyLoadQuery: () => ({
+    me: { id: 'account-1', profiles: [{ id: 'profile-1' }], metadata: [] },
+    searchProfiles: { edges: searchEdges },
+  }),
+  usePaginationFragment: () => ({
+    data: { searchProfiles: { edges: searchEdges } },
+    hasNext: false,
+    isLoadingNext: false,
+    loadNext: () => undefined,
+  }),
+  useMutation: () => [() => undefined],
+});
 mockModule('@/analytics/client', {
   trackAnalytics: () => undefined,
 });
 mockModule('@/session/SessionProvider', {
-  useSession: () => ({ accountId: null, selectedProfileId: null, status: 'guest' }),
+  useSession: () => ({
+    accountId: 'account-1',
+    selectedProfileId: 'profile-1',
+    status: 'valid',
+  }),
 });
-let NativePageHeader: ComponentType<PageHeaderProps>;
 mockModule('@/components/PageHeader', {
-  PageHeader: (props: PageHeaderProps) => createElement(NativePageHeader, props),
+  PageHeader: ({ children }: { children: ReactNode }) =>
+    createElement('NativeStackHeader', null, children),
 });
 mockModule('@/components/PageHeaderView', {
   PageHeaderView: (props: object) => createElement('NativeStackHeader', props),
@@ -111,7 +123,12 @@ mockModule('@/components/shell/NavigationDrawerTrigger', { NavigationDrawerTrigg
 mockModule('react-native-safe-area-context', {
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 54 }),
 });
-mockModule('@/components/profile/ProfileListItem', { ProfileListItem: () => null });
+mockModule('@/components/ui/Coachmark', {
+  Coachmark: (props: object) => createElement('Coachmark', props),
+});
+mockModule('@/components/profile/ProfileListItem', {
+  ProfileListItem: (props: object) => createElement('ProfileListItem', props),
+});
 mockModule('@/components/pagination/PaginationSurface', { PaginationSurface: () => null });
 mockModule('@/components/RouteBoundary', {
   RouteBoundary: ({ children }: { children: ReactNode }) => children,
@@ -167,25 +184,35 @@ mockModule('@/theme/ThemeProvider', {
     textSecondary: '#777',
   }),
 });
+mockModule('@/observability/UnexpectedErrorContext', {
+  useUnexpectedErrorReporter: () => undefined,
+});
 
 let SearchScreen: ComponentType;
-let StackScreen: ComponentType<{ query?: string; tab: string }>;
+let CoachmarkProvider: ComponentType<{ accountId?: string | null; children: ReactNode }>;
+
+const searchScreen = (children: ReactNode = createElement(SearchScreen)) =>
+  createElement(CoachmarkProvider, {
+    accountId: 'account-1',
+    children,
+  });
 
 before(async () => {
-  ({ PageHeader: NativePageHeader } = await import('../PageHeader.native'));
   ({ default: SearchScreen } = await import('../../app/(tabs)/(protected)/search'));
-  StackScreen = memo(SearchScreen);
+  ({ CoachmarkProvider } = await import('../coachmark/CoachmarkProvider'));
+});
+
+beforeEach(() => {
+  routerActions.length = 0;
+  changeTab = undefined;
+  leaveRoute = undefined;
+  searchEdges = [];
+  searchParams.q = 'kosmo';
+  searchParams.tab = 'popular';
 });
 
 function NativeStackHarness() {
-  const [options, setOptions] = useState<HeaderOptions>({});
-  setHeaderOptions = setOptions;
-  return createElement(
-    Fragment,
-    null,
-    options.headerShown ? options.header?.() : null,
-    createElement(StackScreen, { query: searchParams.q, tab: searchParams.tab }),
-  );
+  return searchScreen();
 }
 
 beforeEach(() => {
@@ -392,4 +419,161 @@ test('Native 검색에서 현재 최근 검색어를 다시 선택하면 초안�
   assert.equal(prevented, true);
   assert.equal(input().props.value, 'kosmo');
   assert.deepEqual(routerActions, []);
+});
+
+test('검색 도움말은 draft를 유지하고 검색 제출이나 이동을 실행하지 않는다', async () => {
+  searchParams.q = undefined;
+  let renderer: ReturnType<typeof create> | undefined;
+  await act(async () => {
+    renderer = create(searchScreen());
+  });
+
+  const input = renderer!.root.findByProps({ accessibilityLabel: '검색어' });
+  const searchRegion = renderer!.root
+    .findAllByType(host('View'))
+    .find(({ props }) => props.onFocus && props.onBlur && !props.accessibilityLabel);
+  assert.ok(searchRegion);
+  await act(async () => searchRegion.props.onFocus());
+  await act(async () => input.props.onChangeText('draft'));
+  const inputAnchor = renderer!.root.findByProps({ testID: 'search-input-shell' });
+  await act(async () => inputAnchor.props.onLayout?.());
+  const help = renderer!.root.findByProps({ accessibilityLabel: '검색 도움말' });
+
+  await act(async () => help.props.onPress());
+  let coachmark = renderer!.root.findByType(host('Coachmark'));
+  assert.equal(input.props.value, 'draft');
+  assert.deepEqual(coachmark.props.progress, { current: 1, total: 3 });
+  assert.ok(coachmark.props.anchorRef);
+
+  await act(async () => coachmark.props.onNext());
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  assert.deepEqual(coachmark.props.progress, { current: 2, total: 3 });
+
+  await act(async () => coachmark.props.onNext());
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  assert.deepEqual(coachmark.props.progress, { current: 3, total: 3 });
+  assert.equal(coachmark.props.anchorRef, undefined);
+
+  await act(async () => coachmark.props.onPrevious());
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  assert.deepEqual(coachmark.props.progress, { current: 2, total: 3 });
+  await act(async () => coachmark.props.onPrevious());
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  assert.deepEqual(coachmark.props.progress, { current: 1, total: 3 });
+  await act(async () => coachmark.props.onNext());
+  await act(async () => renderer!.root.findByType(host('Coachmark')).props.onNext());
+  await act(async () => renderer!.root.findByType(host('Coachmark')).props.onComplete());
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  await act(async () => coachmark.props.onExited?.());
+  await act(async () => help.props.onPress());
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  assert.equal(input.props.value, 'draft');
+  assert.deepEqual(coachmark.props.progress, { current: 1, total: 3 });
+  assert.deepEqual(routerActions, []);
+
+  await act(async () => renderer?.unmount());
+});
+
+test('검색 화면을 떠나면 진행 중인 도움말을 취소한다', async () => {
+  searchParams.q = undefined;
+  let renderer: ReturnType<typeof create> | undefined;
+  await act(async () => {
+    renderer = create(searchScreen());
+  });
+
+  const searchRegion = renderer!.root
+    .findAllByType(host('View'))
+    .find(({ props }) => props.onFocus && props.onBlur && !props.accessibilityLabel);
+  assert.ok(searchRegion);
+  await act(async () => searchRegion.props.onFocus());
+  const inputAnchor = renderer!.root.findByProps({ testID: 'search-input-shell' });
+  await act(async () => inputAnchor.props.onLayout?.());
+  const help = renderer!.root.findByProps({ accessibilityLabel: '검색 도움말' });
+  await act(async () => help.props.onPress());
+  assert.equal(renderer!.root.findAllByType(host('Coachmark')).length, 1);
+
+  await act(async () => {
+    searchRegion.props.onBlur();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  });
+  assert.equal(renderer!.root.findAllByType(host('Coachmark')).length, 1);
+  assert.ok(leaveRoute);
+  await act(async () => leaveRoute?.());
+  assert.equal(renderer!.root.findAllByType(host('Coachmark')).length, 0);
+
+  await act(async () => renderer?.unmount());
+});
+
+test('결과가 늦게 준비되어도 시작한 안내를 유지하고 다시 열면 현재 결과를 가리킨다', async () => {
+  searchParams.q = 'remote';
+  searchParams.tab = 'people';
+  let renderer: ReturnType<typeof create> | undefined;
+  await act(async () => {
+    renderer = create(searchScreen(), { createNodeMock: () => ({}) });
+  });
+
+  const inputAnchor = renderer!.root.findByProps({ testID: 'search-input-shell' });
+  await act(async () => inputAnchor.props.onLayout?.());
+  let coachmark = renderer!.root.findByType(host('Coachmark'));
+  await act(async () => coachmark.props.onNext());
+  assert.deepEqual(renderer!.root.findByType(host('Coachmark')).props.progress, {
+    current: 2,
+    total: 3,
+  });
+
+  searchEdges = [{ cursor: 'remote', node: { id: 'profile-remote' } }];
+  await act(async () => renderer?.update(searchScreen()));
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  await act(async () => coachmark.props.onNext());
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  assert.equal(coachmark.props.anchorRef, undefined);
+
+  await act(async () => coachmark.props.onComplete());
+  await act(async () => renderer!.root.findByType(host('Coachmark')).props.onExited?.());
+  const help = renderer!.root.findByProps({ accessibilityLabel: '검색 도움말' });
+  await act(async () => help.props.onPress());
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  await act(async () => coachmark.props.onNext());
+  await act(async () => coachmark.props.onNext());
+  assert.ok(renderer!.root.findByType(host('Coachmark')).props.anchorRef);
+
+  searchEdges = [];
+  await act(async () => renderer?.update(searchScreen()));
+  assert.equal(renderer!.root.findAllByType(host('Coachmark')).length, 0);
+
+  await act(async () => renderer?.unmount());
+});
+
+test('입력 중 수동으로 시작한 안내도 늦은 결과 mount 뒤 중앙 단계를 유지한다', async () => {
+  searchParams.q = 'remote';
+  searchParams.tab = 'people';
+  let renderer: ReturnType<typeof create> | undefined;
+  await act(async () => {
+    renderer = create(searchScreen(), { createNodeMock: () => ({}) });
+  });
+
+  const searchRegion = renderer!.root
+    .findAllByType(host('View'))
+    .find(({ props }) => props.onFocus && props.onBlur && !props.accessibilityLabel);
+  assert.ok(searchRegion);
+  await act(async () => searchRegion.props.onFocus());
+  const inputAnchor = renderer!.root.findByProps({ testID: 'search-input-shell' });
+  await act(async () => inputAnchor.props.onLayout?.());
+  const help = renderer!.root.findByProps({ accessibilityLabel: '검색 도움말' });
+  await act(async () => help.props.onPress());
+  await act(async () => {
+    searchRegion.props.onBlur();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  });
+
+  searchEdges = [{ cursor: 'remote', node: { id: 'profile-remote' } }];
+  await act(async () => renderer?.update(searchScreen()));
+  assert.equal(renderer!.root.findAllByType(host('ProfileListItem')).length, 1);
+  let coachmark = renderer!.root.findByType(host('Coachmark'));
+  await act(async () => coachmark.props.onNext());
+  await act(async () => coachmark.props.onNext());
+  coachmark = renderer!.root.findByType(host('Coachmark'));
+  assert.equal(coachmark.props.anchorRef, undefined);
+
+  await act(async () => renderer?.unmount());
 });
