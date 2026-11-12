@@ -305,6 +305,95 @@ describe('WebFinger local profile handle mapping', () => {
     assert.deepEqual(keysAfterSecondRequest, keysAfterFirstRequest);
   });
 
+  test('serves alternate avatar formats only for the matching local profile image', async () => {
+    const avatarUrl =
+      'https://media.byulma.run/original/u_14abb012-6fd7-4b1f-9acb-1571997643c9.jpg';
+    const profile = await createProfile({
+      handle: 'alice',
+      id: '019fb763-35f7-717b-937f-7b0f6d90eb3c',
+      instanceId: localInstanceId,
+    });
+    await createLocalMedia({
+      kind: ProfileMediaKind.AVATAR,
+      mediaType: 'image/jpeg',
+      profileId: profile.id,
+      url: avatarUrl,
+    });
+    const header = await createLocalMedia({
+      kind: ProfileMediaKind.HEADER,
+      mediaType: 'image/png',
+      profileId: profile.id,
+      url: 'https://media.byulma.run/original/alice-header.png',
+    });
+    const requestActor = async (profileId: string) => {
+      const response = await federation.fetch(
+        new Request(`${publicOrigin}/ap/actor/${profileId}`, {
+          headers: { accept: 'application/activity+json' },
+        }),
+        { contextData: undefined },
+      );
+
+      assert.equal(response.status, 200);
+      return (await response.json()) as {
+        icon?: {
+          mediaType?: string;
+          type?: string;
+          url?: string | Array<{ href?: string; mediaType?: string; type?: string }>;
+        };
+        image?: { mediaType?: string; type?: string; url?: string };
+      };
+    };
+
+    const targetActor = await requestActor(profile.id);
+    assert.deepEqual(targetActor.icon, {
+      type: 'Image',
+      url: [
+        {
+          href: 'https://media.byulma.run/original/u_14abb012-6fd7-4b1f-9acb-1571997643c9.webp',
+          mediaType: 'image/webp',
+          type: 'Link',
+        },
+        { href: avatarUrl, mediaType: 'image/jpeg', type: 'Link' },
+      ],
+    });
+    assert.deepEqual(targetActor.image, {
+      mediaType: header.mediaType,
+      type: 'Image',
+      url: header.url,
+    });
+
+    const otherProfile = await createProfile({ handle: 'other', instanceId: localInstanceId });
+    await createLocalMedia({
+      kind: ProfileMediaKind.AVATAR,
+      mediaType: 'image/jpeg',
+      profileId: otherProfile.id,
+      url: avatarUrl,
+    });
+    assert.deepEqual((await requestActor(otherProfile.id)).icon, {
+      mediaType: 'image/jpeg',
+      type: 'Image',
+      url: avatarUrl,
+    });
+
+    const changedAvatar = await createLocalMedia({
+      link: false,
+      mediaType: 'image/jpeg',
+      profileId: profile.id,
+      url: avatarUrl.replace(/\.jpg$/, '.png'),
+    });
+    await db
+      .update(ProfileMedia)
+      .set({ mediaId: changedAvatar.id })
+      .where(
+        and(eq(ProfileMedia.profileId, profile.id), eq(ProfileMedia.kind, ProfileMediaKind.AVATAR)),
+      );
+    assert.deepEqual((await requestActor(profile.id)).icon, {
+      mediaType: 'image/jpeg',
+      type: 'Image',
+      url: changedAvatar.url,
+    });
+  });
+
   test('reflects optional media replacement and removal while omitting ineligible media', async () => {
     const profile = await createProfile({ handle: 'alice', instanceId: localInstanceId });
     const requestActor = async () => {
