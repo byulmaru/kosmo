@@ -1,4 +1,4 @@
-import { db, Notifications } from '@kosmo/core/db';
+import { db, Notifications, withPrimaryDatabase } from '@kosmo/core/db';
 import { AccountState, NotificationKind } from '@kosmo/core/enums';
 import { publishNotificationAdded } from '@kosmo/core/notification/events';
 import { ApplicationFailure } from '@temporalio/activity';
@@ -89,16 +89,19 @@ export const captureOperationalNotificationAudienceActivity = async ({
       throw error;
     }
 
-    const existing = await db
-      .select({ data: Notifications.data })
-      .from(Notifications)
-      .where(
-        and(
-          eq(Notifications.kind, NotificationKind.OPERATIONAL),
-          eq(Notifications.sourceId, sendId),
-        ),
-      )
-      .limit(1);
+    const existing = await withPrimaryDatabase(() =>
+      db
+        .select({ data: Notifications.data })
+        .from(Notifications)
+        .where(
+          and(
+            eq(Notifications.kind, NotificationKind.OPERATIONAL),
+            eq(Notifications.sourceId, sendId),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows),
+    );
     if (existing.length > 0) {
       if (!existing.every(({ data: stored }) => sameOperationalData(stored, data))) {
         throw ApplicationFailure.nonRetryable(
@@ -121,18 +124,21 @@ export const dispatchOperationalNotificationPageActivity = async ({
   readonly sendId: string;
   readonly afterNotificationId?: string;
 }): Promise<{ readonly afterNotificationId: string | null; readonly hasMore: boolean }> => {
-  const notifications = await db
-    .select({ id: Notifications.id })
-    .from(Notifications)
-    .where(
-      and(
-        eq(Notifications.kind, NotificationKind.OPERATIONAL),
-        eq(Notifications.sourceId, sendId),
-        afterNotificationId ? gt(Notifications.id, afterNotificationId) : undefined,
-      ),
-    )
-    .orderBy(Notifications.id)
-    .limit(OPERATIONAL_PAGE_SIZE + 1);
+  const notifications = await withPrimaryDatabase(() =>
+    db
+      .select({ id: Notifications.id })
+      .from(Notifications)
+      .where(
+        and(
+          eq(Notifications.kind, NotificationKind.OPERATIONAL),
+          eq(Notifications.sourceId, sendId),
+          afterNotificationId ? gt(Notifications.id, afterNotificationId) : undefined,
+        ),
+      )
+      .orderBy(Notifications.id)
+      .limit(OPERATIONAL_PAGE_SIZE + 1)
+      .then((rows) => rows),
+  );
 
   const page = notifications.slice(0, OPERATIONAL_PAGE_SIZE);
 

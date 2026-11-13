@@ -35,6 +35,10 @@ process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
 process.env.TEMPORAL_NAMESPACE ??= 'test';
 
 const admissionCalls: AdmissionCall[] = [];
+const unexpectedHomeTimelineCacheInvocation = async (): Promise<never> => {
+  throw new Error('Unexpected home timeline cache invocation');
+};
+
 mock.module(new URL('../../../../packages/core/temporal/client.ts', import.meta.url).href, {
   exports: {
     runWorkflow: async (
@@ -48,7 +52,11 @@ mock.module(new URL('../../../../packages/core/temporal/client.ts', import.meta.
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../../../../packages/core/home-timeline/cache.ts', import.meta.url).href, {
   exports: {
-    reconcileHomeTimelineFollow: async () => undefined,
+    fanoutHomeTimelinePost: unexpectedHomeTimelineCacheInvocation,
+    insertHomeTimelinePost: unexpectedHomeTimelineCacheInvocation,
+    listHomeTimelineRecipientPage: unexpectedHomeTimelineCacheInvocation,
+    reconcileHomeTimelineFollow: unexpectedHomeTimelineCacheInvocation,
+    removeHomeTimelinePost: unexpectedHomeTimelineCacheInvocation,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 

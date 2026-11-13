@@ -1,4 +1,11 @@
-import { reconcileHomeTimelineFollow as reconcileHomeTimelineFollowChangesActivity } from '@kosmo/core/home-timeline/cache';
+import { withPrimaryDatabase } from '@kosmo/core/db';
+import {
+  fanoutHomeTimelinePost,
+  insertHomeTimelinePost,
+  listHomeTimelineRecipientPage,
+  reconcileHomeTimelineFollow,
+  removeHomeTimelinePost,
+} from '@kosmo/core/home-timeline/cache';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import {
   PROFILE_FOLLOW_PAIR_WORKFLOW_ID_PREFIX,
@@ -114,4 +121,27 @@ export const reconcileHomeTimelineFollowActivity = async (input: {
   });
 };
 
-export { reconcileHomeTimelineFollowChangesActivity };
+export const fanoutHomeTimelinePostActivity = (
+  ...args: Parameters<typeof fanoutHomeTimelinePost>
+): ReturnType<typeof fanoutHomeTimelinePost> =>
+  withPrimaryDatabase(() => fanoutHomeTimelinePost(...args));
+
+export const insertHomeTimelinePostActivity = (
+  ...args: Parameters<typeof insertHomeTimelinePost>
+): ReturnType<typeof insertHomeTimelinePost> =>
+  withPrimaryDatabase(() => insertHomeTimelinePost(...args));
+
+export const loadHomeTimelineRecipientPageActivity = (
+  ...args: Parameters<typeof listHomeTimelineRecipientPage>
+): ReturnType<typeof listHomeTimelineRecipientPage> =>
+  withPrimaryDatabase(() => listHomeTimelineRecipientPage(...args));
+
+export const removeHomeTimelinePostActivity = (
+  ...args: Parameters<typeof removeHomeTimelinePost>
+): ReturnType<typeof removeHomeTimelinePost> =>
+  withPrimaryDatabase(() => removeHomeTimelinePost(...args));
+
+export const reconcileHomeTimelineFollowChangesActivity = (
+  ...args: Parameters<typeof reconcileHomeTimelineFollow>
+): ReturnType<typeof reconcileHomeTimelineFollow> =>
+  withPrimaryDatabase(() => reconcileHomeTimelineFollow(...args));

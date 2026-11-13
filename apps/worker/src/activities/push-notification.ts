@@ -9,6 +9,7 @@ import {
   ProfileFollows,
   Profiles,
   Reactions,
+  withPrimaryDatabase,
 } from '@kosmo/core/db';
 import { InstanceKind, NotificationKind, PushInstallationPlatform } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
@@ -216,7 +217,9 @@ export const listPushNotificationInstallations = async (
     return [];
   }
 
-  const installations = await findEligiblePushInstallations({ notificationId });
+  const installations = await withPrimaryDatabase(() =>
+    findEligiblePushInstallations({ notificationId }),
+  );
   return installations.map(({ id }) => id);
 };
 
@@ -230,31 +233,35 @@ export const sendPushNotification = async (
     return;
   }
 
-  const installation = (await findEligiblePushInstallations({ notificationId })).find(
-    ({ id }) => id === installationId,
+  const installation = await withPrimaryDatabase(async () =>
+    (await findEligiblePushInstallations({ notificationId })).find(
+      ({ id }) => id === installationId,
+    ),
   );
   if (!installation) {
     return;
   }
 
-  const notification = await db
-    .select({
-      createdAt: Notifications.createdAt,
-      data: Notifications.data,
-      kind: Notifications.kind,
-      recipientAccountId: Notifications.recipientAccountId,
-      recipientProfileId: Notifications.recipientProfileId,
-      sourceId: Notifications.sourceId,
-    })
-    .from(Notifications)
-    .where(
-      and(
-        eq(Notifications.id, notificationId),
-        notificationSourceAvailabilityWhere(db, { includeRecipientAvailability: true }),
-      ),
-    )
-    .limit(1)
-    .then(first);
+  const notification = await withPrimaryDatabase(() =>
+    db
+      .select({
+        createdAt: Notifications.createdAt,
+        data: Notifications.data,
+        kind: Notifications.kind,
+        recipientAccountId: Notifications.recipientAccountId,
+        recipientProfileId: Notifications.recipientProfileId,
+        sourceId: Notifications.sourceId,
+      })
+      .from(Notifications)
+      .where(
+        and(
+          eq(Notifications.id, notificationId),
+          notificationSourceAvailabilityWhere(db, { includeRecipientAvailability: true }),
+        ),
+      )
+      .limit(1)
+      .then(first),
+  );
   if (!notification) {
     return;
   }
@@ -297,30 +304,32 @@ export const sendPushNotification = async (
   if (notification.recipientProfileId === null) {
     return;
   }
+  const recipientProfileId = notification.recipientProfileId;
 
-  const source = await loadNotificationSource(notification.kind, notification.sourceId);
-  if (
-    !source ||
-    (await isNotificationSuppressed(db, notification.recipientProfileId, source.actorProfileId))
-  ) {
+  const source = await withPrimaryDatabase(() =>
+    loadNotificationSource(notification.kind, notification.sourceId),
+  );
+  if (!source || (await isNotificationSuppressed(db, recipientProfileId, source.actorProfileId))) {
     return;
   }
   if (notification.kind === NotificationKind.REACTION && !source.reaction) {
     return;
   }
 
-  const actor = await db
-    .select({
-      displayName: Profiles.displayName,
-      handle: Profiles.handle,
-      instanceKind: Instances.kind,
-      instanceDomain: Instances.domain,
-    })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(eq(Profiles.id, source.actorProfileId))
-    .limit(1)
-    .then(first);
+  const actor = await withPrimaryDatabase(() =>
+    db
+      .select({
+        displayName: Profiles.displayName,
+        handle: Profiles.handle,
+        instanceKind: Instances.kind,
+        instanceDomain: Instances.domain,
+      })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(eq(Profiles.id, source.actorProfileId))
+      .limit(1)
+      .then(first),
+  );
   if (!actor) {
     return;
   }
@@ -330,18 +339,20 @@ export const sendPushNotification = async (
     DISPLAY_NAME_MAX_CODE_POINTS,
   );
   const actorHandle = relativeHandle(actor.handle, actor.instanceKind, actor.instanceDomain);
-  const recipient = await db
-    .select({
-      displayName: Profiles.displayName,
-      handle: Profiles.handle,
-      instanceDomain: Instances.domain,
-      instanceKind: Instances.kind,
-    })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(eq(Profiles.id, notification.recipientProfileId))
-    .limit(1)
-    .then(first);
+  const recipient = await withPrimaryDatabase(() =>
+    db
+      .select({
+        displayName: Profiles.displayName,
+        handle: Profiles.handle,
+        instanceDomain: Instances.domain,
+        instanceKind: Instances.kind,
+      })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(eq(Profiles.id, recipientProfileId))
+      .limit(1)
+      .then(first),
+  );
   if (!recipient) {
     return;
   }
@@ -362,21 +373,24 @@ export const sendPushNotification = async (
       : `/${relativeHandle(actor.handle, actor.instanceKind, actor.instanceDomain)}`;
   let preview: string | null = null;
 
-  if (source.targetPostId) {
-    const targetPost = await db
-      .select({
-        currentContentId: Posts.currentContentId,
-        id: Posts.id,
-        profileHandle: Profiles.handle,
-        profileInstanceDomain: Instances.domain,
-        profileInstanceKind: Instances.kind,
-      })
-      .from(Posts)
-      .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .where(eq(Posts.id, source.targetPostId))
-      .limit(1)
-      .then(first);
+  const targetPostId = source.targetPostId;
+  if (targetPostId) {
+    const targetPost = await withPrimaryDatabase(() =>
+      db
+        .select({
+          currentContentId: Posts.currentContentId,
+          id: Posts.id,
+          profileHandle: Profiles.handle,
+          profileInstanceDomain: Instances.domain,
+          profileInstanceKind: Instances.kind,
+        })
+        .from(Posts)
+        .innerJoin(Profiles, eq(Profiles.id, Posts.profileId))
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .where(eq(Posts.id, targetPostId))
+        .limit(1)
+        .then(first),
+    );
     if (!targetPost) {
       return;
     }
@@ -386,13 +400,16 @@ export const sendPushNotification = async (
       targetPost.profileInstanceDomain,
     )}/${encodeGlobalId('Post', targetPost.id)}`;
 
-    if (targetPost.currentContentId) {
-      const content = await db
-        .select({ document: PostContents.document })
-        .from(PostContents)
-        .where(eq(PostContents.id, targetPost.currentContentId))
-        .limit(1)
-        .then(first);
+    const currentContentId = targetPost.currentContentId;
+    if (currentContentId) {
+      const content = await withPrimaryDatabase(() =>
+        db
+          .select({ document: PostContents.document })
+          .from(PostContents)
+          .where(eq(PostContents.id, currentContentId))
+          .limit(1)
+          .then(first),
+      );
       if (content) {
         const document = content.document;
         const isSensitive = document.body.attrs?.sensitiveMedia === true;
@@ -429,7 +446,7 @@ export const sendPushNotification = async (
     data: {
       href,
       notificationId: encodeGlobalId(notificationTypes[notification.kind], notificationId),
-      recipientProfileId: encodeGlobalId('Profile', notification.recipientProfileId),
+      recipientProfileId: encodeGlobalId('Profile', recipientProfileId),
     },
     notification: { body, title: actorName },
   } satisfies UntargetedPushMessage;

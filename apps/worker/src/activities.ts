@@ -1,6 +1,17 @@
 import '@kosmo/core/polyfill';
 
 export { deleteAccountActivity } from './activities/account-deletion';
+export {
+  sendLocalPostCreateActivity,
+  sendLocalPostDeleteActivity,
+  sendLocalProfileUpdateActivity,
+  sendProfileBlockActivity,
+  sendProfileBlockUndoActivity,
+  sendReactionActivity,
+  sendReactionUndoActivity,
+  sendRepostAnnounceActivity,
+  sendRepostUndoActivity,
+} from './activities/activitypub-delivery';
 export { cleanupUnavailableNotificationsActivity } from './activities/cleanup-unavailable-notifications';
 export {
   captureDatabaseCountsSnapshotActivity,
@@ -14,8 +25,12 @@ export {
 export { executeHashtagMuteRuleActivity } from './activities/hashtag-mute-rule';
 export {
   admitHomeTimelineFollowReconciliationActivity,
+  fanoutHomeTimelinePostActivity,
+  insertHomeTimelinePostActivity,
+  loadHomeTimelineRecipientPageActivity,
   reconcileHomeTimelineFollowActivity,
   reconcileHomeTimelineFollowChangesActivity,
+  removeHomeTimelinePostActivity,
 } from './activities/home-timeline';
 export { collectPostLinkPreviewActivity } from './activities/link-preview';
 export {
@@ -83,13 +98,7 @@ export {
   loadProfileMigrationMoveFollowerBatchActivity,
   prepareProfileMigrationMoveActivity,
 } from './profile-migration-activities';
-export {
-  fanoutHomeTimelinePost as fanoutHomeTimelinePostActivity,
-  insertHomeTimelinePost as insertHomeTimelinePostActivity,
-  invalidateHomeTimelines as invalidateHomeTimelinesActivity,
-  listHomeTimelineRecipientPage as loadHomeTimelineRecipientPageActivity,
-  removeHomeTimelinePost as removeHomeTimelinePostActivity,
-} from '@kosmo/core/home-timeline/cache';
+export { invalidateHomeTimelines as invalidateHomeTimelinesActivity } from '@kosmo/core/home-timeline/cache';
 export {
   executeProfileFollowPairTransition as executeProfileFollowPairTransitionActivity,
   executeProfileFollowRemoval as executeProfileFollowRemovalActivity,
@@ -103,20 +112,3 @@ export {
 export { deleteReactionNotification as deleteReactionNotificationActivity } from '@kosmo/core/services';
 export { deleteRepostNotification as deleteRepostNotificationActivity } from '@kosmo/core/services';
 export { replaceRemoteFeaturedSnapshot as replaceRemoteFeaturedActivity } from '@kosmo/fedify';
-export {
-  sendLocalPostCreate as sendLocalPostCreateActivity,
-  sendLocalPostDelete as sendLocalPostDeleteActivity,
-} from '@kosmo/fedify';
-export {
-  sendRepostAnnounce as sendRepostAnnounceActivity,
-  sendRepostUndo as sendRepostUndoActivity,
-} from '@kosmo/fedify';
-export {
-  sendReaction as sendReactionActivity,
-  sendReactionUndo as sendReactionUndoActivity,
-} from '@kosmo/fedify';
-export { sendLocalProfileUpdate as sendLocalProfileUpdateActivity } from '@kosmo/fedify';
-export {
-  sendProfileBlock as sendProfileBlockActivity,
-  sendProfileBlockUndo as sendProfileBlockUndoActivity,
-} from '@kosmo/fedify';

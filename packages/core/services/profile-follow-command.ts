@@ -1,5 +1,13 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { db, first, Instances, ProfileFollowRequests, ProfileFollows, Profiles } from '../db';
+import {
+  db,
+  first,
+  Instances,
+  ProfileFollowRequests,
+  ProfileFollows,
+  Profiles,
+  withPrimaryDatabase,
+} from '../db';
 import { InstanceKind, InstanceState } from '../enums';
 import {
   ConflictError,
@@ -299,20 +307,22 @@ export const loadPendingFollowRequestId = async (input: {
   readonly pair: ProfileFollowPair;
   readonly expectedRowId?: string;
 }): Promise<string | undefined> =>
-  db
-    .select({ id: ProfileFollowRequests.id })
-    .from(ProfileFollowRequests)
-    .where(
-      and(
-        pairCondition(ProfileFollowRequests, input.pair),
-        input.expectedRowId === undefined
-          ? undefined
-          : eq(ProfileFollowRequests.id, input.expectedRowId),
-      ),
-    )
-    .limit(1)
-    .then(first)
-    .then((row) => row?.id);
+  withPrimaryDatabase(() =>
+    db
+      .select({ id: ProfileFollowRequests.id })
+      .from(ProfileFollowRequests)
+      .where(
+        and(
+          pairCondition(ProfileFollowRequests, input.pair),
+          input.expectedRowId === undefined
+            ? undefined
+            : eq(ProfileFollowRequests.id, input.expectedRowId),
+        ),
+      )
+      .limit(1)
+      .then(first)
+      .then((row) => row?.id),
+  );
 
 /** Verify the exact Follow source before the removal transaction is scheduled. */
 export const verifyProfileFollowRemoval = async (
@@ -321,13 +331,15 @@ export const verifyProfileFollowRemoval = async (
     'followerProfileId' | 'followeeProfileId' | 'expectedRowId'
   >,
 ): Promise<string | undefined> =>
-  db
-    .select({ id: ProfileFollows.id })
-    .from(ProfileFollows)
-    .where(and(eq(ProfileFollows.id, input.expectedRowId), pairCondition(ProfileFollows, input)))
-    .limit(1)
-    .then(first)
-    .then((row) => row?.id);
+  withPrimaryDatabase(() =>
+    db
+      .select({ id: ProfileFollows.id })
+      .from(ProfileFollows)
+      .where(and(eq(ProfileFollows.id, input.expectedRowId), pairCondition(ProfileFollows, input)))
+      .limit(1)
+      .then(first)
+      .then((row) => row?.id),
+  );
 
 const executeFollow = async (
   input: ProfileFollowPairTransitionInput,
@@ -715,53 +727,54 @@ export const executeProfileFollowPairTransition = async (
 /** Rehydrates only the public result after the Temporal boundary. */
 export const hydrateProfileFollowPairTransition = async (
   result: ProfileFollowPairTransitionResult,
-): Promise<HydratedProfileFollowPairTransition> => {
-  const profiles = await db
-    .select()
-    .from(Profiles)
-    .where(inArray(Profiles.id, [result.followerProfileId, result.followeeProfileId]));
-  const followerProfile = profiles.find(({ id }) => id === result.followerProfileId);
-  const followeeProfile = profiles.find(({ id }) => id === result.followeeProfileId);
-  if (!followerProfile || !followeeProfile) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  const profileFollow =
-    'profileFollowId' in result && result.profileFollowId !== undefined
-      ? await db
-          .select()
-          .from(ProfileFollows)
-          .where(eq(ProfileFollows.id, result.profileFollowId))
-          .limit(1)
-          .then(first)
-      : undefined;
-  const profileFollowRequest =
-    'profileFollowRequestId' in result && result.profileFollowRequestId !== undefined
-      ? await db
-          .select()
-          .from(ProfileFollowRequests)
-          .where(eq(ProfileFollowRequests.id, result.profileFollowRequestId))
-          .limit(1)
-          .then(first)
-      : undefined;
-
-  if (result.commandKind === 'FOLLOW') {
-    if (result.kind === 'ESTABLISHED' && profileFollow === undefined) {
-      throw new Error('Committed Follow relation is missing during hydration');
+): Promise<HydratedProfileFollowPairTransition> =>
+  withPrimaryDatabase(async () => {
+    const profiles = await db
+      .select()
+      .from(Profiles)
+      .where(inArray(Profiles.id, [result.followerProfileId, result.followeeProfileId]));
+    const followerProfile = profiles.find(({ id }) => id === result.followerProfileId);
+    const followeeProfile = profiles.find(({ id }) => id === result.followeeProfileId);
+    if (!followerProfile || !followeeProfile) {
+      throw new NotFoundError('Profile not found');
     }
-    if (result.kind === 'PENDING' && profileFollowRequest === undefined) {
-      throw new Error('Committed Follow request is missing during hydration');
-    }
-  }
 
-  return {
-    result,
-    followerProfile,
-    followeeProfile,
-    ...(profileFollow === undefined ? {} : { profileFollow }),
-    ...(profileFollowRequest === undefined ? {} : { profileFollowRequest }),
-  };
-};
+    const profileFollow =
+      'profileFollowId' in result && result.profileFollowId !== undefined
+        ? await db
+            .select()
+            .from(ProfileFollows)
+            .where(eq(ProfileFollows.id, result.profileFollowId))
+            .limit(1)
+            .then(first)
+        : undefined;
+    const profileFollowRequest =
+      'profileFollowRequestId' in result && result.profileFollowRequestId !== undefined
+        ? await db
+            .select()
+            .from(ProfileFollowRequests)
+            .where(eq(ProfileFollowRequests.id, result.profileFollowRequestId))
+            .limit(1)
+            .then(first)
+        : undefined;
+
+    if (result.commandKind === 'FOLLOW') {
+      if (result.kind === 'ESTABLISHED' && profileFollow === undefined) {
+        throw new Error('Committed Follow relation is missing during hydration');
+      }
+      if (result.kind === 'PENDING' && profileFollowRequest === undefined) {
+        throw new Error('Committed Follow request is missing during hydration');
+      }
+    }
+
+    return {
+      result,
+      followerProfile,
+      followeeProfile,
+      ...(profileFollow === undefined ? {} : { profileFollow }),
+      ...(profileFollowRequest === undefined ? {} : { profileFollowRequest }),
+    };
+  });
 
 /** Short command used after an established Follow (local Unfollow or Undo). */
 export const executeProfileFollowRemoval = async (
