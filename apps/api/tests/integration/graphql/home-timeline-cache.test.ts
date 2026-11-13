@@ -1870,13 +1870,13 @@ test(
 );
 
 test(
-  'uses only the selected Profile’s saved Exclude decisions in Local without new judgments',
+  'uses only the selected Profile’s saved Exclude decisions in Local and Federated without new judgments',
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth(configuredLocalInstanceId);
     const otherViewer = await createAuth();
     const author = await createProfile('local-cached-mute-author', configuredLocalInstanceId);
-    const idPrefix = crypto.randomUUID().slice(0, 23);
+    const idPrefix = 'ffffffff-ffff-7fff-8fff';
     const postId = (suffix: number) => `${idPrefix}-${suffix.toString(16).padStart(12, '0')}`;
 
     const newestExcluded = await createContentfulPost(
@@ -2006,6 +2006,28 @@ test(
           .map(({ id }) => encodeGlobalId('Post', id))
           .sort(),
       );
+      assert.equal(modelCalls, 0);
+
+      const federated = await requestGraphQL<{
+        federatedTimeline: LocalTimelineConnection | null;
+      }>(
+        `query FederatedTimelineNaturalMute($first: Int) {
+          federatedTimeline(first: $first) {
+            edges { node { id } }
+            pageInfo { endCursor hasNextPage hasPreviousPage }
+          }
+        }`,
+        { first: 20 },
+        viewer.token,
+      );
+      assert.equal(federated.errors, undefined, JSON.stringify(federated.errors));
+      assert.ok(federated.data?.federatedTimeline);
+      const federatedIds = new Set(
+        federated.data.federatedTimeline.edges.map(({ node }) => node.id),
+      );
+      assert.equal(federatedIds.has(encodeGlobalId('Post', newestExcluded.id)), false);
+      assert.equal(federatedIds.has(encodeGlobalId('Post', ownPost.id)), true);
+      assert.equal(federatedIds.has(encodeGlobalId('Post', cachedInclude.id)), true);
       assert.equal(modelCalls, 0);
 
       const excludedTtlAfter = (

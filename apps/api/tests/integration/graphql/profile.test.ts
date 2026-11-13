@@ -5327,6 +5327,178 @@ describe('GraphQL remote profile boundary', () => {
     }
   });
 
+  test('paginates Federated public top-level Posts across stored Instances with viewer controls', async () => {
+    const auth = await createAuthenticatedSession();
+    const withoutProfile = await createAuthenticatedSession({ selectedProfile: false });
+    const localAuthor = await createProfile({
+      handle: 'federated-local-author',
+      instanceId: localInstanceId,
+    });
+    const remoteAuthor = await createStoredActivityPubAuthor({
+      domain: 'federated-remote.example',
+      handle: 'remote-author',
+    });
+    const blockedAuthor = await createProfile({
+      handle: 'federated-blocked-author',
+      instanceId: localInstanceId,
+    });
+    const mutedAuthor = await createStoredActivityPubAuthor({
+      domain: 'federated-muted.example',
+      handle: 'muted-author',
+    });
+    const inactiveAuthor = await createStoredActivityPubAuthor({
+      domain: 'federated-inactive.example',
+      handle: 'inactive-author',
+    });
+    const suspendedInstance = await createRemoteInstance({
+      domain: 'federated-suspended-instance.example',
+      state: InstanceState.SUSPENDED,
+    });
+    const suspendedInstanceAuthor = await createProfile({
+      handle: 'federated-suspended-instance-author',
+      instanceId: suspendedInstance.id,
+    });
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, inactiveAuthor.profile.id));
+
+    const parent = await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000700',
+      profileId: remoteAuthor.profile.id,
+      visibility: PostVisibility.UNLISTED,
+    });
+    const remote = await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000990',
+      profileId: remoteAuthor.profile.id,
+    });
+    const local = await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000980',
+      profileId: localAuthor.id,
+    });
+    const quote = await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000970',
+      profileId: localAuthor.id,
+      repostSourceId: parent.id,
+    });
+    const own = await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000960',
+      profileId: auth.profile.id,
+    });
+    const blocked = await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000950',
+      profileId: blockedAuthor.id,
+    });
+    const muted = await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000940',
+      profileId: mutedAuthor.profile.id,
+    });
+    await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000930',
+      profileId: localAuthor.id,
+      visibility: PostVisibility.UNLISTED,
+    });
+    await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000920',
+      profileId: remoteAuthor.profile.id,
+      replyParentId: parent.id,
+    });
+    await createRepost({
+      id: '019f8ed6-0000-7000-8000-000000000910',
+      profileId: localAuthor.id,
+      repostSourceId: parent.id,
+    });
+    await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000900',
+      profileId: inactiveAuthor.profile.id,
+    });
+    await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000880',
+      profileId: suspendedInstanceAuthor.id,
+    });
+    const deleted = await createContentfulPost({
+      id: '019f8ed6-0000-7000-8000-000000000890',
+      profileId: localAuthor.id,
+    });
+    await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, deleted.id));
+
+    await db.insert(ProfileBlocks).values({
+      ownerProfileId: auth.profile.id,
+      targetProfileId: blockedAuthor.id,
+    });
+    await db.insert(ProfileMutes).values({
+      ownerProfileId: auth.profile.id,
+      targetProfileId: mutedAuthor.profile.id,
+    });
+
+    const readPage = (
+      token: string | undefined,
+      variables: {
+        first?: number;
+        after?: string | null;
+        last?: number;
+        before?: string | null;
+      },
+    ) =>
+      requestGraphQL<{ federatedTimeline: RemotePostConnection }>(
+        `query FederatedTimeline($first: Int, $after: String, $last: Int, $before: String) {
+          federatedTimeline(first: $first, after: $after, last: $last, before: $before) {
+            edges { cursor node { id } }
+            pageInfo { endCursor hasNextPage hasPreviousPage }
+          }
+        }`,
+        variables,
+        token,
+      );
+
+    const guest = await readPage(undefined, { first: 10 });
+    assertNoGraphQLErrors(guest);
+    assert.deepEqual(connectionIds(guest.data?.federatedTimeline), [
+      globalId('Post', remote.id),
+      globalId('Post', local.id),
+      globalId('Post', quote.id),
+      globalId('Post', own.id),
+      globalId('Post', blocked.id),
+      globalId('Post', muted.id),
+    ]);
+
+    const noProfile = await readPage(withoutProfile.token, { first: 10 });
+    assertNoGraphQLErrors(noProfile);
+    assert.deepEqual(
+      connectionIds(noProfile.data?.federatedTimeline),
+      connectionIds(guest.data?.federatedTimeline),
+    );
+
+    const firstPage = await readPage(auth.token, { first: 2 });
+    assertNoGraphQLErrors(firstPage);
+    assert.deepEqual(connectionIds(firstPage.data?.federatedTimeline), [
+      globalId('Post', remote.id),
+      globalId('Post', local.id),
+    ]);
+    assert.equal(firstPage.data?.federatedTimeline.pageInfo.hasNextPage, true);
+
+    const secondPage = await readPage(auth.token, {
+      first: 2,
+      after: firstPage.data?.federatedTimeline.pageInfo.endCursor,
+    });
+    assertNoGraphQLErrors(secondPage);
+    assert.deepEqual(connectionIds(secondPage.data?.federatedTimeline), [
+      globalId('Post', quote.id),
+      globalId('Post', own.id),
+    ]);
+    assert.equal(secondPage.data?.federatedTimeline.pageInfo.hasNextPage, false);
+
+    const backwardPage = await readPage(auth.token, {
+      last: 2,
+      before: secondPage.data?.federatedTimeline.edges[0]?.cursor,
+    });
+    assertNoGraphQLErrors(backwardPage);
+    assert.deepEqual(connectionIds(backwardPage.data?.federatedTimeline), [
+      globalId('Post', remote.id),
+      globalId('Post', local.id),
+    ]);
+  });
+
   test('applies Reply candidate policy before paginating Home and excludes Replies from Profile', async () => {
     const auth = await createAuthenticatedSession();
     const replyAuthor = await createStoredActivityPubAuthor({

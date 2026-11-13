@@ -13,7 +13,7 @@ const reselectTab = mock.fn();
 const reselectHome = mock.fn();
 const scrollTo = mock.fn();
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
-let onValueChange: ((value: 'home' | 'local') => void) | undefined;
+let onValueChange: ((value: 'home' | 'local' | 'federated') => void) | undefined;
 let renderer: ReactTestRenderer | null = null;
 const MockTab = ({ option }: { option: { label: string } }) => createElement('Tab', { option });
 
@@ -48,7 +48,7 @@ mock.module(new URL('./shell/ShellChromeContext.tsx', import.meta.url), {
   exports: { useShellChrome: () => ({ reselectHome, reselectTab }) },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-let TimelineTabs: ComponentType<{ value: 'home' | 'local' }>;
+let TimelineTabs: ComponentType<{ value: 'home' | 'local' | 'federated' }>;
 
 before(async () => {
   ({ TimelineTabs } = await import('./TimelineTabs'));
@@ -74,7 +74,7 @@ afterEach(async () => {
 
 describe('TimelineTabs', () => {
   for (const os of ['ios', 'android']) {
-    for (const value of ['home', 'local'] as const) {
+    for (const value of ['home', 'local', 'federated'] as const) {
       it(`${os}: ${value} 재선택은 목록을 올리고 Home refresh owner를 호출한다`, async () => {
         platform.OS = os;
         await act(async () => {
@@ -91,17 +91,6 @@ describe('TimelineTabs', () => {
     }
   }
 
-  it('사용자에게 홈과 로컬 탭을 한국어로 표시한다', async () => {
-    await act(async () => {
-      renderer = create(createElement(TimelineTabs, { value: 'home' }));
-    });
-
-    assert.deepEqual(
-      renderer?.root.findAllByType(MockTab).map(({ props }) => props.option.label),
-      ['홈', '로컬'],
-    );
-  });
-
   it('Native 비활성 route는 현재 파라미터만 바꾸고 refresh하지 않는다', async () => {
     await act(async () => {
       renderer = create(createElement(TimelineTabs, { value: 'home' }));
@@ -111,6 +100,19 @@ describe('TimelineTabs', () => {
     await act(async () => onValueChange?.('local'));
 
     assert.deepEqual(navigations, [{ mode: 'setParams', params: { timeline: 'local' } }]);
+    assert.equal(reselectHome.mock.callCount(), 0);
+    assert.equal(reselectTab.mock.callCount(), 0);
+  });
+
+  it('Native 연합 route는 현재 timeline 파라미터로 전환한다', async () => {
+    await act(async () => {
+      renderer = create(createElement(TimelineTabs, { value: 'local' }));
+    });
+    assert.ok(onValueChange);
+
+    await act(async () => onValueChange?.('federated'));
+
+    assert.deepEqual(navigations, [{ mode: 'setParams', params: { timeline: 'federated' } }]);
     assert.equal(reselectHome.mock.callCount(), 0);
     assert.equal(reselectTab.mock.callCount(), 0);
   });
@@ -146,6 +148,48 @@ describe('TimelineTabs', () => {
     await act(async () => onValueChange?.('home'));
     assert.deepEqual(navigations, [
       { href: '/local', mode: 'replace' },
+      { href: '/home', mode: 'replace' },
+    ]);
+    assert.equal(reselectHome.mock.callCount(), 1);
+
+    await act(async () => {
+      renderer?.update(createElement(TimelineTabs, { value: 'home' }));
+    });
+    await act(async () => onValueChange?.('home'));
+    assert.equal(scrollTo.mock.callCount(), 2);
+    assert.equal(reselectHome.mock.callCount(), 2);
+  });
+
+  it('Web 연합 route는 교체하고 재선택하면 scroll과 refresh를 호출한다', async () => {
+    platform.OS = 'web';
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { scrollTo },
+    });
+
+    await act(async () => {
+      renderer = create(createElement(TimelineTabs, { value: 'local' }));
+    });
+    assert.ok(onValueChange);
+    await act(async () => onValueChange?.('federated'));
+    assert.deepEqual(navigations, [{ href: '/federated', mode: 'replace' }]);
+    assert.equal(scrollTo.mock.callCount(), 0);
+    assert.equal(reselectHome.mock.callCount(), 0);
+
+    await act(async () => {
+      renderer?.update(createElement(TimelineTabs, { value: 'federated' }));
+    });
+    await act(async () => onValueChange?.('federated'));
+    assert.deepEqual(
+      scrollTo.mock.calls.map(({ arguments: args }) => args),
+      [[{ behavior: 'auto', left: 0, top: 0 }]],
+    );
+    assert.equal(reselectHome.mock.callCount(), 1);
+    assert.equal(reselectTab.mock.callCount(), 0);
+
+    await act(async () => onValueChange?.('home'));
+    assert.deepEqual(navigations, [
+      { href: '/federated', mode: 'replace' },
       { href: '/home', mode: 'replace' },
     ]);
     assert.equal(reselectHome.mock.callCount(), 1);

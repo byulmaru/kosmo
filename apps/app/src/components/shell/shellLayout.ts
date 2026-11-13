@@ -33,7 +33,7 @@ export function isSettingsRoute(pathname: string) {
 }
 
 export function isTimelineRoute(pathname: string) {
-  return pathname === '/home' || pathname === '/local';
+  return pathname === '/home' || pathname === '/local' || pathname === '/federated';
 }
 
 export function isNativeDrawerSwipeEnabled(pathname: string) {

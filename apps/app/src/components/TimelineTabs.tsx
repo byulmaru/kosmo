@@ -4,11 +4,12 @@ import { RouteTabList } from '@/components/ui/RouteTabList';
 import { Tab } from '@/components/ui/Tabs';
 import type { TabOption } from '@/components/ui/Tabs';
 
-export type TimelineTab = 'home' | 'local';
+export type TimelineTab = 'home' | 'local' | 'federated';
 
 const options: readonly TabOption<TimelineTab>[] = [
   { label: '홈', value: 'home' },
   { label: '로컬', value: 'local' },
+  { label: '연합', value: 'federated' },
 ];
 
 export function TimelineTabs({ value }: { value: TimelineTab }) {
@@ -16,7 +17,9 @@ export function TimelineTabs({ value }: { value: TimelineTab }) {
   return (
     <RouteTabList
       accessibilityLabel="타임라인"
-      href={(nextValue) => (nextValue === 'home' ? '/home' : '/local')}
+      href={(nextValue) =>
+        nextValue === 'home' ? '/home' : nextValue === 'local' ? '/local' : '/federated'
+      }
       onReselect={() => {
         if (Platform.OS === 'web') {
           window.scrollTo({ behavior: 'auto', left: 0, top: 0 });

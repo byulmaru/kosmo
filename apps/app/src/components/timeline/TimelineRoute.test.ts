@@ -28,6 +28,7 @@ const browserDocument = {
 const appState = { addEventListener: () => ({ remove: () => undefined }) };
 let width = 390;
 let boundaryState: 'content' | 'loading' = 'content';
+let routeTimeline = 'local';
 let renderer: ReactTestRenderer | undefined;
 const shellChrome = {
   navigationDrawerOpen: false,
@@ -39,7 +40,7 @@ const shellChrome = {
 mockModule('expo-router', {
   Redirect: () => null,
   useFocusEffect: () => undefined,
-  useLocalSearchParams: () => ({ timeline: 'local' }),
+  useLocalSearchParams: () => ({ timeline: routeTimeline }),
   useRouter: () => ({ replace: () => undefined, setParams: () => undefined }),
   useIsFocused: () => true,
 });
@@ -139,6 +140,7 @@ afterEach(async () => {
   platform.OS = 'ios';
   width = 390;
   boundaryState = 'content';
+  routeTimeline = 'local';
   shellChrome.navigationDrawerOpen = false;
   if (originalWindowDescriptor) {
     Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
@@ -152,15 +154,20 @@ afterEach(async () => {
   }
 });
 
-test('Native 타임라인 파라미터가 Local이면 같은 route에서 Local 콘텐츠를 표시한다', async () => {
+test('Native 타임라인 파라미터가 Local 또는 Federated이면 같은 route에서 해당 콘텐츠를 표시한다', async () => {
   await act(async () => {
     renderer = create(createElement(HomeScreen));
   });
 
-  const header = renderer!.root
-    .findAll((node) => (node.type as unknown) === 'Text')
-    .filter((node) => node.props.accessibilityRole === 'header');
-  assert.equal(header[0]?.props.children, '로컬');
+  const timelineHeading = () =>
+    renderer!.root
+      .findAll((node) => (node.type as unknown) === 'Text')
+      .find((node) => node.props.accessibilityRole === 'header')?.props.children;
+  assert.equal(timelineHeading(), '로컬');
+
+  routeTimeline = 'federated';
+  await act(async () => renderer!.update(createElement(HomeScreen)));
+  assert.equal(timelineHeading(), '연합');
 });
 
 test('모바일 Web route는 로딩부터 콘텐츠까지 자기 메뉴와 단일 타임라인 제목을 유지한다', async () => {
