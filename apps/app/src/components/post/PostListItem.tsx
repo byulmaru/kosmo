@@ -324,17 +324,23 @@ function PostListItemCard({
         onBackgroundPress={onBackgroundPress}
         focusable={false}
         onPointerEnter={(event) => {
-          if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+          if (
+            event.nativeEvent.pointerType === 'mouse' ||
+            event.nativeEvent.pointerType === 'pen'
+          ) {
             setPointerHovered(true);
           }
         }}
         onPointerLeave={(event) => {
-          if (Platform.OS === 'web' && event.nativeEvent.pointerType !== 'touch') {
+          if (
+            event.nativeEvent.pointerType === 'mouse' ||
+            event.nativeEvent.pointerType === 'pen'
+          ) {
             setPointerHovered(false);
           }
         }}
         role={article ? 'article' : undefined}
-        style={[style, Platform.OS === 'web' ? { cursor: 'pointer' } : undefined]}
+        style={style}
         tabIndex={-1}
         testID="post-list-item-card"
       >
@@ -346,7 +352,7 @@ function PostListItemCard({
             {
               backgroundColor: pressed
                 ? theme.statePressedSubtle
-                : Platform.OS === 'web' && pointerHovered
+                : pointerHovered
                   ? theme.stateHover
                   : undefined,
             },

@@ -1,6 +1,12 @@
 import { expect, userEvent, within } from 'storybook/test';
 
-async function pointerAt(container: HTMLElement, x: number, y: number, drag = 0) {
+async function pointerAt(
+  container: HTMLElement,
+  x: number,
+  y: number,
+  cursor: 'auto' | 'pointer',
+  drag = 0,
+) {
   const target = container.ownerDocument.elementFromPoint(x, y)!;
   expect(target).not.toBeNull();
   const coords = (offset: number) => ({
@@ -9,6 +15,8 @@ async function pointerAt(container: HTMLElement, x: number, y: number, drag = 0)
     pageX: x + window.scrollX,
     pageY: y + offset + window.scrollY,
   });
+  await userEvent.pointer({ target, coords: coords(0) });
+  expect(getComputedStyle(target).cursor).toBe(cursor);
   await userEvent.pointer([
     { keys: '[MouseLeft>]', target, coords: coords(0) },
     ...(drag
@@ -39,12 +47,12 @@ export async function checkReactionSummaryExcludedTouches(
   for (let index = 1; index < controls.length; index += 1) {
     const previous = controls[index - 1]!.getBoundingClientRect();
     const current = controls[index]!.getBoundingClientRect();
-    await pointerAt(container, (previous.right + current.left) / 2, y);
+    await pointerAt(container, (previous.right + current.left) / 2, y, 'auto');
     assertUnchanged();
   }
-  await pointerAt(container, peopleBounds.right + 2, y);
+  await pointerAt(container, peopleBounds.right + 2, y, 'auto');
   assertUnchanged();
-  await pointerAt(container, (bounds.left + bounds.right) / 2, y, 30);
+  await pointerAt(container, (bounds.left + bounds.right) / 2, y, 'pointer', 30);
   assertUnchanged();
 }
 
@@ -56,5 +64,5 @@ export async function tapReactionSummaryWhitespace(container: HTMLElement, fract
   const x = bounds.left + 1 + (bounds.width - 2) * fraction;
   const y = (bounds.top + bounds.bottom) / 2;
   expect(container.ownerDocument.elementFromPoint(x, y)).toBe(background);
-  await pointerAt(container, x, y);
+  await pointerAt(container, x, y, 'pointer');
 }

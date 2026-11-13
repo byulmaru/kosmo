@@ -61,17 +61,17 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 
 ## Action semantic colors
 
-- Reaction은 active·Web hover에서 semantic `actionReactionBase` (`#F97066`)를 사용한다.
-- Repost glyph와 count는 미선택 default에서 `textSecondary`를 사용한다. Web hover에서는 glyph와 원형
+- Reaction은 active·hover에서 semantic `actionReactionBase` (`#F97066`)를 사용한다.
+- Repost glyph와 count는 미선택 default에서 `textSecondary`를 사용한다. hover에서는 glyph와 원형
   background만 semantic `actionRepostBase`를 사용하고 count는 `textSecondary`를 유지한다. selected에서는
   glyph와 count 모두 `actionRepostBase`를 사용한다. Light는 `green/600 #16794A`, Dark는
   `green/500 #409667`이다.
 - pending·disabled처럼 입력이 차단된 상태에서는 기존 중립 처리 표현이 action 의미색보다 우선한다.
 - `actionRepostBase`는 Repost 전용 제품 의미색이며 전역 `feedbackSuccessBase`를 바꾸거나 재사용하지 않는다.
 
-## Web hover target
+## Hover target
 
-- Web의 비터치 pointer가 action 위에 머무르면 16×16px glyph를 중심으로 한 28×28px 원형 background를
+- hover를 지원하는 mouse·pen pointer가 action 위에 머무르면 16×16px glyph를 중심으로 한 28×28px 원형 background를
   표시한다. Reply, Bookmark와 More는 현재 theme의 semantic `primary`를 30% opacity로 사용하고 hover
   foreground에는 불투명 `primary`를 사용한다. Reaction은 `actionReactionBase`, Repost는
   `actionRepostBase`를 같은 방식으로 사용한다. HeartPlus foreground에는 불투명 `actionReactionBase`를
@@ -86,7 +86,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   pressed에서는 각 상태의 foreground에 기존 72% opacity를 적용한다.
   hover가 끝나면 원형 background는 사라지고 미선택 Reaction의 foreground는 기존 default 색으로 돌아간다.
 - pending·disabled·resolution-required처럼 입력이 차단된 action은 hover background를 표시하지 않는다.
-  Native와 Web touch 입력에는 hover 전용 background를 표시하지 않는다.
+  touch 입력에는 hover 전용 background를 표시하지 않는다. Native라는 이유만으로 지원되는 hover를 제외하지 않는다.
 - light·dark theme 모두 `primary`, `actionReactionBase`, `actionRepostBase` semantic token을 사용한다.
 
 ## 플랫폼 rollout과 release gate
@@ -94,16 +94,20 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 현재 출시 범위는 Web이다. PROD-936의 Native 구현은 28px visual을 유지하고 iOS 44pt·Android 48dp target을 제공한다.
 - Native target의 실제 layout·인접 target 비중첩·화면별 정렬, VoiceOver·TalkBack focus boundary, touch 입력과
   bottom sheet runtime 관찰은 Native release gate다. platform style 렌더 테스트나 Web 검증으로 대체하지 않는다.
+- hover의 제품 계약은 플랫폼이 아니라 입력 장치 기준이다. 현재 검증·출시 범위인 Web과 Native의 API 지원·활성화 여부는 이 계약과 구분한다.
+- RN 0.85.3의 Native Pressable hover는 [`shouldPressibilityUseW3CPointerEventsForHover`](https://github.com/facebook/react-native/blob/v0.85.3/packages/react-native/Libraries/Pressability/Pressability.js) 활성화가 필요하다. SDK 기본값은 false이며 앱에서 활성화하지 않았다. 공용 hover 콜백 연결은 Native hover 제공 완료를 뜻하지 않는다. 활성화와 mouse·pen·touch, 자식 입력 분리의 실제 기기 검증을 Native 출시 전에 확인한다. 카드의 공용 View pointer 이벤트 전달과 target/currentTarget도 실제 기기에서 확인한다.
+- Web의 CSS cursor와 달리 [RN iOS 17+의 `cursor: 'pointer'`](https://github.com/facebook/react-native/blob/v0.85.3/packages/react-native/React/Fabric/Mounting/ComponentViews/View/RCTViewComponentView.mm)는 host 전체의 시스템 hover 효과를 켠다. 이 차이 때문에 현재 동적 cursor 스타일은 Web에만 적용한다. Native cursor 지원은 실제 target 경계와 OS 효과를 검증하기 전까지 미확인이다.
+- 이번 hover 공통화는 Native touch pressed 표현을 바꾸지 않는다. 액션의 Native press는 기존 opacity 표현을 유지하고, Web press의 원형 state layer와 구분한다. Native responder의 host 식별·스크롤 양보와 Web responder의 포커스 처리는 각 API 제약을 보존한다.
 
 ## PostListItem surface feedback
 
 - `PROD-977`은 이 surface feedback과 Figma `State=Default|Hover|Pressed` variant를 소유한다.
 - `PostListItem`의 Text·Media·PureRepost·Quote는 별도 card fill 없이 semantic `backgroundCanvas`의 연속 feed 평면을 유지한다.
-- Web의 touch가 아닌 mouse·pen pointer hover에서는 카드 root 전체에 `color/state/hover`, Web pointer press와 Android·iOS touch press에서는
+- hover를 지원하는 mouse·pen pointer에서는 카드 root 전체에 `color/state/hover`, Web pointer press와 Android·iOS touch press에서는
   넓은 surface용 `color/state/pressed-subtle` overlay를 적용한다. overlay는 `radius/md`로 둥글게 처리하고 row divider는 직선으로 유지한다.
   pressed가 hover보다 우선하며 release·cancel·leave 뒤에는 남은 입력
   상태 또는 resting canvas로 돌아간다.
-- 카드 hover는 Web의 touch가 아닌 mouse·pen pointer가 카드 root host 안에 있는 동안 중첩 control 위에서도 유지한다. 중첩 control의 hover·pressed feedback은 각 Pressable의 platform input state를 따르고, 카드 pressed는 상세로 이동하는 비상호작용 배경 responder의 입력을 따른다. 안쪽 행·본문 바깥·attribution·인용 배경에서도 같은 카드 overlay를 표시하고, release·cancel·스크롤 전환이나 배경 경계 이탈로 탭이 취소되면 즉시 해제한다. 독립 링크·미디어·CW 버튼·게시글 액션·열린 메뉴 입력은 카드 pressed와 navigation을 활성화하지 않는다. Content Warning은 조상 hover 억제 계약이 없다.
+- 카드 hover는 mouse·pen pointer가 카드 root host 안에 있는 동안 중첩 control 위에서도 유지한다. 중첩 control의 hover·pressed feedback은 각 Pressable의 platform input state를 따르고, 카드 pressed는 상세로 이동하는 비상호작용 배경 responder의 입력을 따른다. 안쪽 행·본문 바깥·attribution·인용 배경에서도 같은 카드 overlay를 표시하고, release·cancel·스크롤 전환이나 배경 경계 이탈로 탭이 취소되면 즉시 해제한다. 독립 링크·미디어·CW 버튼·게시글 액션·열린 메뉴 입력은 카드 pressed와 navigation을 활성화하지 않는다. Content Warning은 조상 hover 억제 계약이 없다.
 - 이 feedback surface는 별도 navigation target이나 접근성 role을 추가하지 않는다. Action Bar는 실제 PostBody·Source
   navigation target과 content-level sibling으로 남는다. 작성자·시간·본문·미디어·Action Bar의
   기존 입력과 이벤트 분리, 구분선 및 Light·Dark token mapping을 그대로 유지한다.
@@ -113,7 +117,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - 타임라인과 상세 타래의 Action Bar에서 개별 버튼의 실제 입력 영역 밖인 아이콘 사이·slot의 빈 부분·위쪽 내부 여백을 클릭·탭하면 해당 행의 기존 상세 대상으로 한 번 이동한다. 일반 Post·Quote는 자신으로, 순수 Repost는 direct Source로 이동하며 Source가 Quote여도 그 아래 Source로 평탄화하지 않는다.
 - 타래 조상·하위 행은 각 행의 상세로, 현재 행은 현재 Post의 canonical 상세로 이동한다. 각 버튼의 기존 액션 대상과 Reply 가능 여부는 유지한다.
 - 버튼의 glyph·숫자·투명 내부 영역과 Web visual row 위아래로 확장된 target은 해당 액션만 실행한다. disabled/pending target도 상세 이동으로 전환하지 않으며, 그 target 밖에 남은 slot 여백은 상세 이동을 유지한다.
-- 이동하는 Web 여백은 pointer 커서를 표시한다. 드래그·영역 밖 release·스크롤로 취소된 입력은 상세를 열지 않는다. 개별 메뉴·포커스·닫힘, CW·미디어·본문 링크와 Native 버튼 target·스크롤 양보는 유지한다.
+- 이동하는 여백은 커서를 지원하는 환경에서 실제 상세 이동 host 위에 pointer 커서를 표시한다. 자식 링크·미디어·액션은 각 입력과 커서를 유지한다. 드래그·영역 밖 release·스크롤로 취소된 입력은 상세를 열지 않는다. 개별 메뉴·포커스·닫힘, CW·미디어·본문 링크와 Native 버튼 target·스크롤 양보는 유지한다.
 - Action Bar를 본문·Source navigation의 sibling으로 유지하며 전체 toolbar를 하나의 Link/Pressable로 감싸지 않는다. Reaction Summary와 작성자 여백의 기존 경계는 변경하지 않는다.
 
 ## Surface 배치
@@ -411,7 +415,7 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
 - `PROD-936`은 Home·Local·Profile·Bookmarks·상세/스레드의 공용 presentation 재사용 확인, 실제 Web 데이터·액션
   회귀 검증과 Native target·목록 inset 적용을 소유한다. Media Viewer·Notification 자체 이관과 Clipboard
   runtime 복구·공유 OpenSpec archive 소유권은 각각 기존 이슈에 유지한다.
-- `PROD-977`은 `PostListItem` 전체의 Web hover·전 플랫폼 pressed feedback, semantic token과 Figma variant를 소유한다.
+- `PROD-977`은 `PostListItem` 전체의 mouse·pen hover·전 플랫폼 pressed feedback, semantic token과 Figma variant를 소유한다.
 - Reaction, Bookmark, More의 실제 연결과 여러 action의 최종 통합, guest 인증 진입, valid 세션의 Profile
   선택기 진입과 session error 비활성화는 각 구현 이슈와 `PROD-432`가 소유한다.
 
@@ -446,12 +450,12 @@ Post Action Bar는 Post의 Reply, Repost, Reaction, Bookmark와 More action을 �
   `max(50, target 너비)`이고 leading Reply target은 slot 시작에, 나머지 social target은 가운데에 정렬하며,
   Bookmark 50 + gap 4 + More 28 trailing group이 exact
   82px이고 모든 interactive rectangle이 분배 여백을 덮거나 서로 겹치지 않아야 한다.
-- Web pointer hover에서는 glyph 중심 28×28 원형 background, count 기반 HUG 또는 count 없는 28×36 click target,
+- mouse·pen hover에서는 glyph 중심 28×28 원형 background와 플랫폼별 target을 확인한다. Web에서는 count 기반 HUG 또는 count 없는 28×36 click target,
   일반 action의 30% `primary` background·불투명 `primary` foreground,
   Reply glyph·count의 동일 foreground, Repost의 미선택 glyph·count 중립색·hover glyph 의미색과 중립 count·selected
   glyph·count의 mode별 `actionRepostBase`, Reaction의 30% `actionReactionBase` background·불투명 foreground·HeartPlus selected outline과
   기존 pressed 상태 보존을 검증한다.
-  blocked action, Web touch 입력과 Native에는 hover background가 나타나지 않는지 확인한다.
+  blocked action과 touch 입력에는 hover background가 나타나지 않는지 확인한다. Native hover는 지원 조건과 실제 기기 검증 결과를 별도로 기록한다.
 - Web menu가 scroll container 밖에서 잘리지 않고 첫 item이 trigger pointer 지점을 덮는지, 같은 위치의
   두 번째 pointer 활성화로 item이 선택되는지 검증한다. More menu는 card 오른쪽이 trigger 오른쪽보다 5px
   바깥에 있고 첫 item 오른쪽은 trigger 오른쪽과 맞아 왼쪽으로 펼쳐지는지, Repost menu는 기존 시작
