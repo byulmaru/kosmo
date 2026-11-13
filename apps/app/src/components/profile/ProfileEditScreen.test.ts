@@ -37,6 +37,7 @@ class TextHost extends Component<Record<string, unknown> & { children?: ReactNod
 mockModule('lucide-react-native', { ArrowLeft: 'ArrowLeft' });
 mockModule(require.resolve('lucide-react-native'), { ArrowLeft: 'ArrowLeft' });
 mockModule('react-native', {
+  KeyboardAvoidingView: 'KeyboardAvoidingView',
   Platform: platform,
   Pressable: 'Pressable',
   ScrollView: (props: object) => createElement('ScrollView', props),
