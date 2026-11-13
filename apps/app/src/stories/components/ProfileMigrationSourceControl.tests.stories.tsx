@@ -7,6 +7,7 @@ import baseMeta, {
   MemberCannotUnregisterPreparedSource as memberCannotUnregisterPreparedSource,
   OwnerCanUnregisterWhenSourceIsNotVisible as ownerCanUnregisterWhenSourceIsNotVisible,
   OwnerPreparationAndSuccess as ownerPreparationAndSuccess,
+  OwnerUnregisterFailureAndRetry as ownerUnregisterFailureAndRetry,
   OwnerUnregisterThenRegister as ownerUnregisterThenRegister,
 } from './ProfileMigrationSourceControl.stories';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -24,6 +25,7 @@ export const OwnerPreparationAndSuccess: Story = ownerPreparationAndSuccess;
 export const OwnerUnregisterThenRegister: Story = ownerUnregisterThenRegister;
 export const OwnerCanUnregisterWhenSourceIsNotVisible: Story =
   ownerCanUnregisterWhenSourceIsNotVisible;
+export const OwnerUnregisterFailureAndRetry: Story = ownerUnregisterFailureAndRetry;
 export const MemberCannotUnregisterPreparedSource: Story = memberCannotUnregisterPreparedSource;
 export const FailureAndRetry: Story = failureAndRetry;
 export const LateCompletionIgnoredAfterActorLifecycleReset: Story =

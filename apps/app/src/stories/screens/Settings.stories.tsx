@@ -33,6 +33,22 @@ const ownerData = {
     selectedProfile: ownerProfile,
   },
 };
+const preparedOwnerProfile = {
+  ...ownerProfile,
+  hasMigrationSource: true,
+  migrationSource: {
+    __typename: 'Profile' as const,
+    displayName: '원격 원본 Profile',
+    id: 'settings-profile-migration-source',
+    relativeHandle: '@source@remote.example',
+  },
+};
+const preparedOwnerData = {
+  currentSession: {
+    id: 'settings-session-prepared',
+    selectedProfile: preparedOwnerProfile,
+  },
+};
 const settingsMutationResponse = {
   updateProfile: {
     profile: {
@@ -317,6 +333,48 @@ export const ProfileMigrationMobileWeb: Story = {
     expect(canvas.getByRole('button', { name: '팔로잉 가져오기' })).toBeDisabled();
     expectProfileMigrationContentGutter(canvasElement);
     expectProfileMigrationControlLayout(canvasElement, 'vertical');
+  },
+  render: () => (
+    <SettingsRouteLayout>
+      <SettingsProfileMigrationRoute />
+    </SettingsRouteLayout>
+  ),
+};
+
+export const ProfileMigrationPreparedFullWeb: Story = {
+  beforeEach: () => setVisualViewportWidth(1400, 'Prepared profile migration full Web story'),
+  globals: { viewport: { isRotated: false, value: 'kosmoFull' } },
+  parameters: {
+    controls: { disable: true },
+    relay: { data: preparedOwnerData },
+    router: { pathname: '/settings/profile-migration' },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
+    expect(canvas.queryByRole('textbox', { name: '기존 계정 주소' })).toBeNull();
+    expect(canvas.queryByRole('button', { name: '기존 계정 등록' })).toBeNull();
+    expect(canvas.queryByRole('alertdialog')).toBeNull();
+  },
+  render: () => (
+    <SettingsRouteLayout>
+      <SettingsProfileMigrationRoute />
+    </SettingsRouteLayout>
+  ),
+};
+
+export const ProfileMigrationPreparedMobileWeb: Story = {
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: {
+    controls: { disable: true },
+    relay: { data: preparedOwnerData },
+    router: { pathname: '/settings/profile-migration' },
+  },
+  play: ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    expect(canvas.getByTestId('profile-migration-source-control')).toBeVisible();
+    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
+    expect(canvas.queryByRole('textbox', { name: '기존 계정 주소' })).toBeNull();
   },
   render: () => (
     <SettingsRouteLayout>
