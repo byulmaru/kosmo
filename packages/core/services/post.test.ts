@@ -221,7 +221,65 @@ test('createPost는 Local Mention node를 저장하고 반복 Profile relation�
   assert.deepEqual(result.content.document, document);
   assert.deepEqual(
     await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
-    [{ postContentId: result.content.id, profileId: mentioned.id }],
+    [{ postContentId: result.content.id, postId: null, profileId: mentioned.id }],
+  );
+});
+
+test('PostMentions는 legacy null postId를 허용하고 Post/Profile pair를 한 번만 저장한다', async () => {
+  const author = await createProfile();
+  const mentioned = await createProfile();
+  const { content, post } = await createPost({
+    bodyText: 'post mention relation constraint',
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.UNLISTED,
+  });
+  const historicalContent = await db
+    .insert(PostContents)
+    .values({ document: content.document, postId: post.id })
+    .returning()
+    .then(firstOrThrow);
+
+  await db.insert(PostMentions).values([
+    { postContentId: content.id, profileId: mentioned.id },
+    { postContentId: historicalContent.id, profileId: mentioned.id },
+  ]);
+
+  const legacyRows = await db
+    .select()
+    .from(PostMentions)
+    .where(inArray(PostMentions.postContentId, [content.id, historicalContent.id]));
+  assert.equal(legacyRows.length, 2);
+  assert.deepEqual(new Set(legacyRows.map(({ postId }) => postId)), new Set([null]));
+
+  await db
+    .update(PostMentions)
+    .set({ postId: post.id })
+    .where(eq(PostMentions.postContentId, content.id));
+  await assert.rejects(
+    db
+      .update(PostMentions)
+      .set({ postId: post.id })
+      .where(eq(PostMentions.postContentId, historicalContent.id)),
+    (error: unknown) =>
+      error instanceof DrizzleQueryError &&
+      error.cause !== undefined &&
+      'code' in error.cause &&
+      error.cause.code === '23505',
+  );
+
+  const relationRows = await db
+    .select()
+    .from(PostMentions)
+    .where(inArray(PostMentions.postContentId, [content.id, historicalContent.id]));
+  assert.deepEqual(
+    relationRows
+      .map(({ postContentId, postId }) => [postContentId, postId])
+      .sort(([left], [right]) => left!.localeCompare(right!)),
+    [
+      [content.id, post.id],
+      [historicalContent.id, null],
+    ].sort(([left], [right]) => left!.localeCompare(right!)),
   );
 });
 
@@ -896,7 +954,7 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
   assert.ok(result.created);
   assert.deepEqual(
     await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
-    [{ postContentId: result.content.id, profileId: mentioned.id }],
+    [{ postContentId: result.content.id, postId: null, profileId: mentioned.id }],
   );
   assert.deepEqual(result.content.document.body.content, [
     {
@@ -952,7 +1010,7 @@ test('createPost는 ActivityPub relation을 document Mention node가 아닌 veri
   assert.ok(result.created);
   assert.deepEqual(
     await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
-    [{ postContentId: result.content.id, profileId: verifiedProfile.id }],
+    [{ postContentId: result.content.id, postId: null, profileId: verifiedProfile.id }],
   );
 });
 
@@ -1043,7 +1101,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
   assert.equal(storedActivity.receivedAt.toString(), firstReceivedAt.toString());
   assert.deepEqual(
     await db.select().from(PostMentions).where(eq(PostMentions.postContentId, storedContent.id)),
-    [{ postContentId: storedContent.id, profileId: firstMention.id }],
+    [{ postContentId: storedContent.id, postId: null, profileId: firstMention.id }],
   );
 });
 

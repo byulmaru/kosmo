@@ -395,8 +395,8 @@ describe('inbound Create dispatch', () => {
         left.postContentId.localeCompare(right.postContentId),
       ),
       [
-        { postContentId: original.content.id, profileId: profile.id },
-        { postContentId: createdAfterRefresh.content.id, profileId: profile.id },
+        { postContentId: original.content.id, postId: null, profileId: profile.id },
+        { postContentId: createdAfterRefresh.content.id, postId: null, profileId: profile.id },
       ].sort((left, right) => left.postContentId.localeCompare(right.postContentId)),
     );
     assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
@@ -449,7 +449,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: profile.id },
+      { postContentId: content.id, postId: null, profileId: profile.id },
     ]);
     assert.equal(fetchMock.mock.callCount(), 0);
   });
@@ -639,7 +639,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: profile.id },
+      { postContentId: content.id, postId: null, profileId: profile.id },
     ]);
   });
 
@@ -696,8 +696,8 @@ describe('inbound Create dispatch', () => {
         left.profileId.localeCompare(right.profileId),
       ),
       [
-        { postContentId: content.id, profileId: alice.id },
-        { postContentId: content.id, profileId: bob.id },
+        { postContentId: content.id, postId: null, profileId: alice.id },
+        { postContentId: content.id, postId: null, profileId: bob.id },
       ].sort((left, right) => left.profileId.localeCompare(right.profileId)),
     );
   });
@@ -796,7 +796,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: target.id },
+      { postContentId: content.id, postId: null, profileId: target.id },
     ]);
     assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
@@ -857,7 +857,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: storedActor.profile.id },
+      { postContentId: content.id, postId: null, profileId: storedActor.profile.id },
     ]);
   });
 
@@ -1127,7 +1127,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: validProfile.id },
+      { postContentId: content.id, postId: null, profileId: validProfile.id },
     ]);
     assert.deepEqual(
       observations
@@ -1230,7 +1230,7 @@ describe('inbound Create dispatch', () => {
     );
     assert.ok(knownProfileId);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: knownProfileId },
+      { postContentId: content.id, postId: null, profileId: knownProfileId },
     ]);
   });
 
@@ -1318,7 +1318,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: knownProfile.id },
+      { postContentId: content.id, postId: null, profileId: knownProfile.id },
     ]);
     assert.equal((await db.select().from(Profiles)).length, profileCount);
     assert.equal((await db.select().from(ActivityPubActors)).length, actorCount);
@@ -1381,7 +1381,7 @@ describe('inbound Create dispatch', () => {
       { altText: 'Mention image', mediaType: 'image/webp', url: mediaUri.href },
     );
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: profile.id },
+      { postContentId: content.id, postId: null, profileId: profile.id },
     ]);
   });
 
@@ -1513,7 +1513,7 @@ describe('inbound Create dispatch', () => {
     assert.equal(materialized.post.profileId, author.id);
     assert.equal(materialized.post.visibility, PostVisibility.FOLLOWERS);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: materialized.content.id, profileId: recipient.id },
+      { postContentId: materialized.content.id, postId: null, profileId: recipient.id },
     ]);
   });
 
@@ -1579,7 +1579,7 @@ describe('inbound Create dispatch', () => {
       assert.equal(workflowLookupObject.mock.callCount(), 1);
       assert.equal(contextLookupObject.mock.callCount(), 0);
       assert.deepEqual(await db.select().from(PostMentions), [
-        { postContentId: materialized.content.id, profileId: recipient.id },
+        { postContentId: materialized.content.id, postId: null, profileId: recipient.id },
       ]);
     } finally {
       lookupWorkflow.mock.restore();
@@ -1633,7 +1633,7 @@ describe('inbound Create dispatch', () => {
       assert.equal(materialized.post.profileId, storedAuthor.profileId);
       assert.equal(materialized.post.visibility, PostVisibility.DIRECT);
       assert.deepEqual(await db.select().from(PostMentions), [
-        { postContentId: materialized.content.id, profileId: recipient.id },
+        { postContentId: materialized.content.id, postId: null, profileId: recipient.id },
       ]);
     } finally {
       lookupWorkflow.mock.restore();
@@ -1733,7 +1733,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: materialized.content.id, profileId: recipient.id },
+      { postContentId: materialized.content.id, postId: null, profileId: recipient.id },
     ]);
   });
 
@@ -2047,7 +2047,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: mentionProfile.id },
+      { postContentId: content.id, postId: null, profileId: mentionProfile.id },
     ]);
   });
 
@@ -4435,7 +4435,7 @@ describe('inbound Create dispatch', () => {
     );
     assert.equal((await db.select().from(PostContents)).length, 1);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: profile.id },
+      { postContentId: content.id, postId: null, profileId: profile.id },
     ]);
     const firstHashtag = await db
       .select()
