@@ -894,13 +894,13 @@ test.describe('로그인 사용자 보호 라우트', () => {
 
     await page.goto('/settings/default-post-visibility');
     await expect(page).toHaveURL(/\/settings\/profile$/);
-    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: '일반' })).toHaveCount(1);
     await expect(page.getByRole('button', { name: '설정으로 돌아가기' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: '설정 목록' })).toHaveCount(0);
 
     await page.getByRole('button', { name: '설정으로 돌아가기' }).click();
     await expect(page).toHaveURL(/\/settings\/?$/);
-    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '일반' })).toHaveCount(0);
 
     await page.goBack();
     await expect(page).toHaveURL(/\/home$/);
@@ -908,20 +908,20 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings\/?$/);
     await expect(page.getByRole('heading', { name: '설정', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '일반' })).toHaveCount(0);
     await expect(page.getByRole('radiogroup')).toHaveCount(0);
 
-    await page.getByRole('link', { name: '프로필 설정 열기' }).click();
+    await page.getByRole('link', { name: '일반 설정 열기' }).click();
     await expect(page).toHaveURL(/\/settings\/profile$/);
-    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: '일반' })).toHaveCount(1);
 
     await page.getByRole('button', { name: '설정으로 돌아가기' }).click();
     await expect(page).toHaveURL(/\/settings\/?$/);
-    await expect(page.getByRole('heading', { name: '프로필 설정' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: '일반' })).toHaveCount(0);
 
     await page.goForward();
     await expect(page).toHaveURL(/\/settings\/profile$/);
-    await expect(page.getByRole('heading', { name: '프로필 설정' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '일반' })).toBeVisible();
     await expect(page.getByText('앱을 불러오지 못했어요 잠시 후 다시 시도해주세요.')).toHaveCount(
       0,
     );
@@ -951,7 +951,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await page.setViewportSize({ height: 900, width: 1440 });
     await page.goto('/settings');
 
-    await page.getByRole('link', { name: '프로필 설정 열기' }).click();
+    await page.getByRole('link', { name: '일반 설정 열기' }).click();
     await expect(page).toHaveURL(/\/settings\/profile$/);
     await page.getByRole('link', { name: '정보 설정 열기' }).click();
     await expect(page).toHaveURL(/\/settings\/info$/);
@@ -962,7 +962,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
 
     await page.goForward();
     await expect(page).toHaveURL(/\/settings\/profile$/);
-    await expect(page.getByRole('heading', { name: '프로필 설정' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '일반' })).toBeVisible();
     await page.goForward();
     await expect(page).toHaveURL(/\/settings\/info$/);
     await expect(page.getByRole('heading', { name: '정보' })).toBeVisible();
@@ -976,7 +976,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await page.reload();
 
     await expect(page).toHaveURL(/\/settings\/theme$/);
-    await expect(page.getByRole('heading', { exact: true, name: '테마' })).toBeVisible();
+    await expect(page.getByRole('heading', { exact: true, name: '화면' })).toBeVisible();
     await expect(page.getByRole('radio')).toHaveCount(3);
     await expect(
       page.getByRole('radio', { name: '시스템: 기기 색상 모드를 따라요.' }),
@@ -989,15 +989,15 @@ test.describe('로그인 사용자 보호 라우트', () => {
 
     await page.goto('/settings');
     await expect(
-      page.getByRole('link', { name: '테마 설정 열기, 다크', exact: true }),
+      page.getByRole('link', { name: '화면 설정 열기, 다크', exact: true }),
     ).toContainText('다크');
     await page.reload();
     await expect(
-      page.getByRole('link', { name: '테마 설정 열기, 다크', exact: true }),
+      page.getByRole('link', { name: '화면 설정 열기, 다크', exact: true }),
     ).toContainText('다크');
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#000000');
 
-    await page.getByRole('link', { name: '테마 설정 열기, 다크', exact: true }).click();
+    await page.getByRole('link', { name: '화면 설정 열기, 다크', exact: true }).click();
     await page.getByRole('radio', { name: '시스템: 기기 색상 모드를 따라요.' }).click();
     await expect(
       page.getByRole('radio', { name: '시스템: 기기 색상 모드를 따라요.' }),
@@ -1013,7 +1013,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
     await expect(page).toHaveURL(/\/settings\/?$/);
     await page.goForward();
     await expect(page).toHaveURL(/\/settings\/theme$/);
-    await expect(page.getByRole('heading', { exact: true, name: '테마' })).toBeVisible();
+    await expect(page.getByRole('heading', { exact: true, name: '화면' })).toBeVisible();
   });
 
   test('테마 설정 저장소 오류는 Toast를 보이고 현재 선택을 유지한다', async ({ page }) => {
