@@ -40,7 +40,7 @@ export default function SettingsThemeRoute() {
       webStyle={styles.webRoot}
     >
       <MobileWebRouteChrome>
-        <PageHeader leading={backButton} title="테마" />
+        <PageHeader leading={backButton} title="화면" />
       </MobileWebRouteChrome>
       <View style={[layoutRecipes.formStack, styles.root]}>
         <Text

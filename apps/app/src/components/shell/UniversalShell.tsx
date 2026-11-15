@@ -59,6 +59,7 @@ const ShellQuery = graphql`
         id
         ...BottomTabBar_profile
         ...RightRail_profile
+        ...SettingsNavigationList_profile
       }
     }
   }
@@ -514,6 +515,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       openComposer={openComposer}
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
+      selectedProfile={profile}
       registerHomeReselection={registerHomeReselection}
       registerTabReselection={registerTabReselection}
       reselectTab={reselectTab}

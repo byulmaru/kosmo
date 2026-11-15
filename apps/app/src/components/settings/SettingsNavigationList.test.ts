@@ -2,14 +2,30 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { cloneElement, createElement } from 'react';
+import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactElement } from 'react';
+import {
+  createOperationDescriptor,
+  Environment,
+  getRequest,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
+import UniversalShellQueryArtifact from '../shell/__generated__/UniversalShellQuery.graphql';
+import { ShellChromeProvider } from '../shell/ShellChromeContext';
+import { getSettingsMenuSelection } from './settingsNavigation';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { GraphQLResponse } from 'relay-runtime';
+import type { UniversalShellQuery$data } from '../shell/__generated__/UniversalShellQuery.graphql';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
 let platform: 'android' | 'ios' | 'web' = 'web';
+let navigationPath = '/settings';
 let openSettingsCalls = 0;
 let openSettingsFailure = false;
 let permission: { granted: boolean; status?: 'denied' | 'granted' | 'undetermined' } = {
@@ -37,6 +53,22 @@ let requestPermissionAndSync: () => Promise<void> = async () => {
 };
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Notification');
+let openProfileSwitcherCalls = 0;
+
+mock.module('react-relay', {
+  exports: {
+    ...ReactRelay,
+    graphql: (parts: TemplateStringsArray) => {
+      const name = parts.join('').match(/(?:fragment|query|mutation) (\w+)/)?.[1];
+      assert.ok(name);
+      const generatedPath =
+        name === 'ProfileListItemRow_profile'
+          ? `../profile/__generated__/${name}.graphql.ts`
+          : `./__generated__/${name}.graphql.ts`;
+      return require(generatedPath).default;
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('expo-router', {
   exports: {
@@ -120,8 +152,50 @@ mock.module(require.resolve('lucide-react-native'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   exports: {
-    NavigationLink: ({ children, href }: { children: ReactElement; href: string }) =>
-      createElement('NavigationLink', { href }, cloneElement(children, { href } as never)),
+    NavigationLink: ({
+      children,
+      href,
+      onNavigate,
+    }: {
+      children: ReactElement<{
+        onClick?: (event: unknown) => void;
+        onPress?: (event: unknown) => void;
+      }>;
+      href: string;
+      onNavigate?: () => void;
+    }) => {
+      const onActivate = (event: unknown) => {
+        if (platform === 'web') {
+          children.props.onClick?.(event);
+        } else {
+          children.props.onPress?.(event);
+        }
+        onNavigate?.();
+        navigationPath = href;
+      };
+
+      return createElement(
+        'NavigationLink',
+        { href },
+        cloneElement(
+          children,
+          platform === 'web'
+            ? ({ href, onClick: onActivate } as never)
+            : ({ href, onPress: onActivate } as never),
+        ),
+      );
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/Button.tsx', import.meta.url), {
+  exports: {
+    Button: ({ children, ...props }: Record<string, unknown>) =>
+      createElement('Pressable', { accessibilityRole: 'button', ...props }, children as ReactNode),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/Avatar.tsx', import.meta.url), {
+  exports: {
+    Avatar: (props: Record<string, unknown>) => createElement('Avatar', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsItem.tsx', import.meta.url), {
@@ -146,6 +220,8 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
       text: '#111111',
       textSecondary: '#666666',
       foregroundSecondary: 'foreground-secondary',
+      foregroundPrimary: '#111111',
+      borderDefault: '#dddddd',
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -167,11 +243,16 @@ let SettingsNavigationList: ComponentType<{
     | 'profile-migration'
     | 'mute-and-block'
     | 'theme'
-    | 'labs'
+    | 'natural-language-mute'
     | 'info'
     | 'account-deletion';
 }>;
 let renderer: ReactTestRenderer | null = null;
+let environment: Environment | null = null;
+let selectedProfile: NonNullable<
+  NonNullable<UniversalShellQuery$data['currentSession']>['selectedProfile']
+> | null = null;
+let shellChromeAvailable = false;
 
 before(async () => {
   ({ SettingsNavigationList } = await import('./SettingsNavigationList'));
@@ -179,6 +260,7 @@ before(async () => {
 
 afterEach(async () => {
   platform = 'web';
+  navigationPath = '/settings';
   openSettingsCalls = 0;
   openSettingsFailure = false;
   permission = { granted: true, status: 'granted' };
@@ -202,6 +284,10 @@ afterEach(async () => {
     Reflect.deleteProperty(globalThis, 'Notification');
   }
   toastCalls.length = 0;
+  openProfileSwitcherCalls = 0;
+  environment = null;
+  selectedProfile = null;
+  shellChromeAvailable = false;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -209,61 +295,83 @@ afterEach(async () => {
 });
 
 describe('SettingsNavigationList', () => {
-  it('실제 데이터가 연결된 설정 진입점만 제공한다', async () => {
-    await render({ pathname: '/settings/natural-language-mute', selected: 'labs' });
+  it('그룹의 각 direct destination으로 이동하면 현재 route가 표시된다', async () => {
+    await renderAtPath('/settings');
 
-    const links = rendered('Pressable');
+    assert.deepEqual(
+      rendered('Text')
+        .filter((node) => node.props.accessibilityRole === 'header')
+        .map((node) => node.children[0]),
+      ['프로필', '앱', '계정'],
+    );
+    const destinations = rendered('Pressable')
+      .filter((node) =>
+        typeof node.props.href === 'string' ? node.props.href.startsWith('/settings/') : false,
+      )
+      .map((node) => node.props.href);
+    assert.deepEqual(destinations, [
+      '/settings/profile',
+      '/settings/mute-and-block',
+      '/settings/profile-migration',
+      '/settings/natural-language-mute',
+      '/settings/theme',
+      '/settings/account-deletion',
+      '/settings/info',
+    ]);
+
+    for (const href of destinations) {
+      assert.equal(typeof href, 'string');
+      const destination = rendered('Pressable').find((node) => node.props.href === href);
+      assert.ok(destination, `Missing direct destination ${href}`);
+      assert.equal(destination.props.accessibilityRole, 'link');
+
+      const activate = platform === 'web' ? destination.props.onClick : destination.props.onPress;
+      assert.equal(typeof activate, 'function');
+      await act(async () => activate());
+      assert.equal(navigationPath, href);
+      await rerenderAtPath(navigationPath);
+
+      const activeDestination = rendered('Pressable').find((node) => node.props.href === href);
+      assert.ok(activeDestination);
+      assert.equal(activeDestination.props['aria-current'], 'page');
+      assert.deepEqual(activeDestination.props.accessibilityState, { selected: true });
+
+      navigationPath = '/settings';
+      await rerenderAtPath(navigationPath);
+    }
+  });
+
+  it('Byulmaru ID는 기존 canonical external link와 새 탭 동작을 유지한다', async () => {
+    await render();
+
+    const account = rendered('Pressable').find(
+      (node) => node.props.testID === 'byulmaru-id-account-settings-entry',
+    );
+    assert.ok(account);
     assert.equal(
-      links[0].props.accessibilityLabel,
+      account.props.accessibilityLabel,
       'Byulmaru ID Account Settings 외부 서비스로 이동',
     );
-    assert.equal(links[0].props.href, 'https://id.byulmaru.co');
-    assert.deepEqual(links[0].props.hrefAttrs, {
+    assert.equal(account.props.href, 'https://id.byulmaru.co');
+    assert.deepEqual(account.props.hrefAttrs, {
       rel: 'noopener noreferrer',
       target: '_blank',
     });
-    assert.equal(links[1].props.accessibilityLabel, '프로필 설정 열기');
-    assert.equal(links[1].props.href, '/settings/profile');
-    assert.equal(links[2].props.accessibilityLabel, '다른 서비스에서 이전 설정 열기');
-    assert.equal(links[2].props.href, '/settings/profile-migration');
-    assert.equal(links[3].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
-    assert.equal(links[3].props.href, '/settings/mute-and-block');
-    assert.equal(links[4].props.accessibilityLabel, '테마 설정 열기, 시스템');
-    assert.equal(links[4].props.href, '/settings/theme');
-    assert.equal(links[5].props.accessibilityLabel, '실험실 열기');
-    assert.equal(links[5].props.href, '/settings/labs');
-    assert.equal(links[5].props['aria-current'], undefined);
-    assert.deepEqual(links[5].props.accessibilityState, { selected: true });
-    assert.equal(links[6].props.accessibilityLabel, '정보 설정 열기');
-    assert.equal(links[6].props.href, '/settings/info');
-    assert.equal(links[7].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
-    assert.equal(links[7].props.href, '/settings/account-deletion');
-    assert.equal(
-      links.filter((node) => node.props.href === '/settings/profile-migration').length,
-      1,
-    );
-    assert.equal(
-      links.some((node) => node.props.href === '/settings/following-import'),
-      false,
-    );
-    assert.equal(
-      links.some((node) => node.props.testID === 'native-notification-settings'),
-      false,
-    );
   });
 
-  it('provider 없이도 통합 migration destination을 노출한다', async () => {
-    await render();
+  it('UniversalShell Relay fragment identity를 표시하고 기존 Profile picker를 연다', async () => {
+    await renderWithSelectedProfile();
 
-    assert.equal(
-      rendered('Pressable').filter((node) => node.props.href === '/settings/profile-migration')
-        .length,
-      1,
+    assert.ok(rendered('Text').some((node) => node.children[0] === '현재 Profile'));
+    assert.ok(rendered('Text').some((node) => node.children[0] === '@current'));
+    const picker = rendered('Pressable').find(
+      (node) => node.props.accessibilityLabel === '다른 Profile 선택',
     );
-    assert.equal(
-      rendered('Pressable').some((node) => node.props.href === '/settings/following-import'),
-      false,
-    );
+    assert.ok(picker);
+    assert.equal(picker.props.accessibilityRole, 'button');
+
+    await act(async () => picker.props.onPress());
+    assert.equal(openProfileSwitcherCalls, 1);
   });
 
   it('Web Push config가 없으면 provider 없이 설정 목록을 렌더링한다', async () => {
@@ -401,21 +509,13 @@ describe('SettingsNavigationList', () => {
     await render();
 
     const rows = rendered('Pressable');
-    const muteIndex = rows.findIndex(
-      (node) => node.props.accessibilityLabel === '뮤트 및 차단 설정 열기',
-    );
     const notificationIndex = rows.findIndex(
       (node) => node.props.testID === 'native-notification-settings',
     );
-    const labsIndex = rows.findIndex((node) => node.props.href === '/settings/labs');
-    const infoIndex = rows.findIndex((node) => node.props.accessibilityLabel === '정보 설정 열기');
     const notification = rows[notificationIndex];
 
-    assert.equal(notificationIndex, muteIndex + 1);
     const themeIndex = rows.findIndex((node) => node.props.href === '/settings/theme');
-    assert.equal(themeIndex, notificationIndex + 1);
-    assert.equal(labsIndex, themeIndex + 1);
-    assert.equal(infoIndex, labsIndex + 1);
+    assert.equal(notificationIndex, themeIndex + 1);
     assert.equal(notification?.props.accessibilityLabel, 'OS 알림 설정 열기');
     assert.equal(notification?.props.accessibilityRole, 'button');
     const notificationItem = rendered('SettingsItem').find(
@@ -564,7 +664,8 @@ describe('SettingsNavigationList', () => {
       selected: 'profile',
     });
 
-    const internal = rendered('Pressable')[1];
+    const internal = rendered('Pressable').find((node) => node.props.href === '/settings/profile');
+    assert.ok(internal);
     assert.equal(internal.props['aria-current'], 'page');
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
   });
@@ -594,7 +695,10 @@ describe('SettingsNavigationList', () => {
   it('root detail을 visual selected로 표시해도 root path에서는 current page가 아니다', async () => {
     await render({ pathname: '/settings', selected: 'profile' });
 
-    const profileSettings = rendered('Pressable')[1];
+    const profileSettings = rendered('Pressable').find(
+      (node) => node.props.href === '/settings/profile',
+    );
+    assert.ok(profileSettings);
     assert.equal(profileSettings.props['aria-current'], undefined);
     assert.deepEqual(profileSettings.props.accessibilityState, { selected: true });
   });
@@ -613,7 +717,7 @@ describe('SettingsNavigationList', () => {
   it('테마 경로의 메뉴는 현재 페이지와 선택 상태를 표시한다', async () => {
     await render({ pathname: '/settings/theme', selected: 'theme' });
     const theme = rendered('Pressable').find((link) => link.props.href === '/settings/theme')!;
-    assert.equal(theme.props.accessibilityLabel, '테마 설정 열기, 시스템');
+    assert.equal(theme.props.accessibilityLabel, '화면 설정 열기, 시스템');
     assert.equal(theme.props['aria-current'], 'page');
     assert.deepEqual(theme.props.accessibilityState, { selected: true });
   });
@@ -644,15 +748,94 @@ async function render(
       | 'profile-migration'
       | 'mute-and-block'
       | 'theme'
-      | 'labs'
+      | 'natural-language-mute'
       | 'info'
       | 'account-deletion';
   } = {},
 ) {
+  environment ??= createTestEnvironment();
   await act(async () => {
-    renderer = create(createElement(SettingsNavigationList, props));
+    renderer = create(createNavigationTree(props));
   });
   assert.ok(renderer);
+}
+
+async function renderAtPath(pathname: string) {
+  navigationPath = pathname;
+  await render({ pathname, selected: getSettingsMenuSelection(pathname) });
+}
+
+async function rerenderAtPath(pathname: string) {
+  navigationPath = pathname;
+  assert.ok(renderer);
+  await act(async () => {
+    renderer?.update(
+      createNavigationTree({ pathname, selected: getSettingsMenuSelection(pathname) }),
+    );
+  });
+}
+
+async function renderWithSelectedProfile() {
+  environment = createTestEnvironment();
+  const shellQuery = createOperationDescriptor(getRequest(UniversalShellQueryArtifact), {});
+  environment.commitPayload(shellQuery, {
+    currentSession: {
+      id: 'session:settings-navigation',
+      selectedProfile: {
+        __typename: 'Profile',
+        avatar: null,
+        displayName: '현재 Profile',
+        id: 'profile:settings-navigation',
+        relativeHandle: '@current',
+      },
+    },
+    me: { profiles: [] },
+  });
+
+  // Read the fragment reference produced by the real UniversalShell query and Relay Store.
+  selectedProfile =
+    (environment.lookup(shellQuery.fragment).data as UniversalShellQuery$data).currentSession
+      ?.selectedProfile ?? null;
+  assert.ok(selectedProfile);
+  shellChromeAvailable = true;
+  await render({ pathname: '/settings' });
+}
+
+function createTestEnvironment() {
+  return new Environment({
+    network: Network.create(() => Observable.create<GraphQLResponse>(() => undefined)),
+    store: new Store(new RecordSource()),
+  });
+}
+
+function createNavigationTree(props: {
+  pathname?: string;
+  selected?:
+    | 'profile'
+    | 'profile-migration'
+    | 'mute-and-block'
+    | 'theme'
+    | 'natural-language-mute'
+    | 'info'
+    | 'account-deletion';
+}) {
+  const navigation = createElement(SettingsNavigationList, props);
+  const content = shellChromeAvailable
+    ? createElement(ShellChromeProvider, {
+        navigationDrawerOpen: false,
+        openNavigationDrawer: () => undefined,
+        openProfileSwitcher: () => {
+          openProfileSwitcherCalls += 1;
+        },
+        registerHomeReselection: () => () => undefined,
+        reselectHome: () => undefined,
+        selectedProfile,
+        children: navigation,
+      })
+    : navigation;
+
+  assert.ok(environment);
+  return createElement(ReactRelay.RelayEnvironmentProvider, { children: content, environment });
 }
 
 function exposeBrowserNotification() {

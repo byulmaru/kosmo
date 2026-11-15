@@ -370,7 +370,7 @@ describe('Settings routes', () => {
     assert.equal(byTestId('settings-detail-pane').props.style.flex, 1);
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
-      ['설정', '프로필 설정'],
+      ['설정', '일반'],
     );
     const detailContainer = byTestId('settings-detail-pane')
       .findAll(
@@ -395,7 +395,7 @@ describe('Settings routes', () => {
     assert.ok(byTestId('settings-workspace'));
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
-      ['설정', '프로필 설정'],
+      ['설정', '일반'],
     );
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile');
     assert.equal(
@@ -464,40 +464,28 @@ describe('Settings routes', () => {
     );
   });
 
-  it('full Web Labs category는 Smart Filter를 연결하고 Labs master를 선택한다', async () => {
+  it('legacy Labs route는 스마트 필터 detail로 redirect한다', async () => {
     await renderRoute('/settings/labs', SettingsLabsRoute);
 
-    assert.deepEqual(
-      rendered('PageHeader').map((node) => node.props.title),
-      ['설정', '실험실'],
-    );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'labs');
-
-    const smartFilter = rendered('SettingsLinkRow').find(
-      (node) => node.props.href === '/settings/natural-language-mute',
-    );
-    assert.ok(smartFilter);
-
-    const back = rendered('PageHeader')[1]?.props.leading;
-    assert.equal(back?.props.accessibilityLabel, '설정으로 돌아가기');
-    await act(async () => back?.props.onPress());
-    assert.deepEqual(dismissedToPaths, ['/settings']);
+    const redirect = rendered('Redirect')[0];
+    assert.ok(redirect);
+    assert.equal(redirect.props.href, '/settings/natural-language-mute');
   });
 
-  it('full Web 스마트 필터 detail은 Labs category를 선택하고 category parent로 돌아간다', async () => {
+  it('full Web 스마트 필터 detail은 direct active key를 선택하고 Settings로 돌아간다', async () => {
     await renderRoute('/settings/natural-language-mute', SettingsNaturalLanguageMuteRoute);
 
     assert.deepEqual(
       rendered('PageHeader').map((node) => node.props.title),
       ['설정', '스마트 필터'],
     );
-    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'labs');
+    assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'natural-language-mute');
     assert.equal(rendered('SettingsNaturalLanguageMute').length, 1);
 
     const back = rendered('PageHeader')[1]?.props.leading;
-    assert.equal(back?.props.accessibilityLabel, '실험실로 돌아가기');
+    assert.equal(back?.props.accessibilityLabel, '설정으로 돌아가기');
     await act(async () => back?.props.onPress());
-    assert.deepEqual(dismissedToPaths, ['/settings/labs']);
+    assert.deepEqual(dismissedToPaths, ['/settings']);
   });
 
   it('full Web 코스모 탈퇴 detail은 마지막 master entry와 route heading을 선택한다', async () => {
@@ -700,7 +688,7 @@ describe('Settings routes', () => {
     const scrollView = rendered('ScrollView')[0];
     assert.ok(scrollView);
     const header = scrollView.findAll((node) => (node.type as unknown) === 'PageHeader')[0];
-    assert.equal(header.props.title, '프로필 설정');
+    assert.equal(header.props.title, '일반');
     assert.equal(header.props.leading.props.accessibilityLabel, '설정으로 돌아가기');
     assert.equal(
       scrollView.findAll((node) => (node.type as unknown) === 'SettingsProfileDetail').length,
@@ -748,7 +736,7 @@ describe('Settings routes', () => {
     await renderRoute('/settings/profile', SettingsProfileRoute);
 
     const header = rendered('PageHeader')[0];
-    assert.equal(header.props.title, '프로필 설정');
+    assert.equal(header.props.title, '일반');
     const back = header.props.leading;
     assert.equal(back.props.accessibilityLabel, '설정으로 돌아가기');
     await act(async () => back.props.onPress());

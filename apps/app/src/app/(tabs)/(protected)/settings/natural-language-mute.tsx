@@ -17,7 +17,7 @@ export default function SettingsNaturalLanguageMuteRoute() {
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
-        accessibilityLabel="실험실로 돌아가기"
+        accessibilityLabel="설정으로 돌아가기"
         onPress={() => returnToSettingsParent('/settings/natural-language-mute', router)}
         style={styles.backButton}
         targetSize={44}
