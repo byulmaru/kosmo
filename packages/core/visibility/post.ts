@@ -30,7 +30,7 @@ export const currentPostMentionWhere = ({
     AND ${PostMentions.postContentId} = ${postContentId}
     AND NOT EXISTS (
       SELECT 1
-      FROM ${CurrentPostMentionMarkers}
+      FROM ${PostMentions} AS ${CurrentPostMentionMarkers}
       WHERE ${CurrentPostMentionMarkers.postId} = ${postId}
         AND ${CurrentPostMentionMarkers.profileId} = ${PostMentions.profileId}
     )

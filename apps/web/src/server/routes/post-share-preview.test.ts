@@ -18,6 +18,7 @@ vi.mock('../sentry', () => ({ captureUnexpectedError: vi.fn() }));
 
 const postId = '00000000-0000-8000-8000-000000000001';
 const mediaId = '00000000-0000-8000-8000-000000000002';
+const mentionProfileId = '00000000-0000-4000-8000-000000000111';
 const path = `/@alice/${encodeGlobalId('Post', postId)}`;
 let staticRoot: string;
 let routes: Hono;
@@ -172,7 +173,7 @@ test('uses visible Profile handles from the preview document nodes without consu
           {
             end: bodyText.length,
             handle: relativeHandle,
-            profileId: 'remote-profile',
+            profileId: mentionProfileId,
             relativeHandle,
             start: bodyText.indexOf(relativeHandle),
           },
@@ -187,7 +188,7 @@ test('uses visible Profile handles from the preview document nodes without consu
       {
         domain: 'remote.example',
         instanceId: 'remote-instance',
-        profileId: 'remote-profile',
+        profileId: mentionProfileId,
         handle: 'remote-target',
         joinedInstanceId: 'remote-instance',
       },
