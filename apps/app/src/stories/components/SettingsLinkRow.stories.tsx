@@ -16,10 +16,10 @@ function SettingsLinkRowComparison() {
         selected
       />
       <SettingsLinkRow
-        accessibilityLabel="Byulmaru ID Account Settings 외부 서비스로 이동"
+        accessibilityLabel="별마루 ID 계정 설정 외부 서비스로 이동"
         external
         href="https://id.byulmaru.co"
-        label="계정 설정"
+        label="별마루 ID"
       />
       <SettingsLinkRow
         accessibilityLabel="화면 설정 열기, 시스템"
@@ -115,7 +115,7 @@ export const RepresentativeStates: Story = {
     const canvas = within(canvasElement);
     const selected = canvas.getByRole('link', { name: '긴 레이블 설정 열기' });
     const external = canvas.getByRole('link', {
-      name: 'Byulmaru ID Account Settings 외부 서비스로 이동',
+      name: '별마루 ID 계정 설정 외부 서비스로 이동',
     });
     const compact = canvas.getByRole('link', { name: '화면 설정 열기, 시스템' });
 

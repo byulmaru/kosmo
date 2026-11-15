@@ -222,7 +222,7 @@ export const FullMasterDetail: Story = {
     const canvas = within(canvasElement);
     const navigation = canvas.getByRole('navigation', { name: '설정 목록' });
     const account = within(navigation).getByRole('link', {
-      name: 'Byulmaru ID Account Settings 외부 서비스로 이동',
+      name: '별마루 ID 계정 설정 외부 서비스로 이동',
     });
     const profileEntry = within(navigation).getByRole('link', {
       name: '일반 설정 열기',

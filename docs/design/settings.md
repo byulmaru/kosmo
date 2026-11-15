@@ -9,7 +9,7 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 현재 선택된 Local Profile의 신원과 기존 Profile picker를 표시하고, `일반`(`/settings/profile`), `뮤트 및 차단`,
 `다른 서비스에서 이전`, `스마트 필터`(`/settings/natural-language-mute`)를 둔다. 기존 Profile picker를
 재사용한다. `앱`에는 기존 테마 설정으로 바로 가는 `화면`(`/settings/theme`)과
-`알림`을 둔다. 알림은 Web의 기존 flag와 Native OS 알림 설정 action만 사용한다. `계정`에는 Byulmaru ID의 기존
+`알림`을 둔다. 알림은 Web의 기존 flag와 Native OS 알림 설정 action만 사용한다. `계정`에는 `별마루 ID`의 기존
 외부 Account Settings 진입점과 Kosmo의 `코스모 탈퇴`를 둔다. `정보`는 그룹에 넣지 않고 `/settings/info`로 가는
 독립된 마지막 entry로 유지한다.
 
@@ -76,10 +76,11 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
   `다른 서비스에서 이전` → `스마트 필터` 순서로 제공한다. 기존 Profile picker를 재사용한다.
 - `앱` 그룹은 `화면` → `알림` 순서다. `화면`은 현재 테마 선택값을 함께 표시하고 `/settings/theme`로 직접
   이동한다. `알림`은 Web의 기존 flag와 Native OS 알림 설정 action을 유지한다.
-- `계정` 그룹은 `Byulmaru ID` 외부 진입점 다음 `코스모 탈퇴` 순서다. 외부 진입점은 기존 canonical target과
+- `계정` 그룹은 `별마루 ID` 외부 진입점 다음 `코스모 탈퇴` 순서다. 외부 진입점은 기존 canonical target과
   Web 새 탭·Native OS navigation 동작을 유지한다. `코스모 탈퇴`는 연결된 Profile 상태와 무관하게 표시한다.
 - `게시물 기본 공개 범위`는 `/settings/profile` 안의 Profile 설정 field이며 root의 독립 destination으로 중복
-  배치하지 않는다. `정보`는 별도 group 없이 root/master 마지막 entry로 `/settings/info`를 연다.
+  배치하지 않는다. 모든 Settings root navigation에서 `정보`는 계정 그룹 밖의 독립된 마지막 footer entry로
+  `/settings/info`를 연다. 계정 그룹과 16px 간격 및 1px 상단 구분선으로 시각 분리하고, `정보` heading은 추가하지 않는다.
 - `정보`는 generic policy registry가 아닌 Settings root의 독립 destination이다. `/settings/info`
   detail은 `개인정보 처리방침`, `계정 삭제 안내`, `아동 안전 정책`을 각각 public route로 여는 기존 Settings
   link-row 문법을 사용한다. 모든 플랫폼에서 세 policy link, `오픈소스 라이선스`, `개발 정보` link row를 이
@@ -150,9 +151,9 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
   destination으로 추가할 수 있다. 모든 detail을 Settings workspace 안에 강제로 넣거나 현재 구현에 미래
   category를 위한 disabled item·placeholder를 만들지 않는다.
 - Account 외부 진입점은 Byulmaru ID가 소유하는 canonical Account Settings 페이지로만 이동한다. 시각 label은
-  `Byulmaru ID`를 사용하고 link accessible name과 canonical destination에서 Byulmaru ID 외부 서비스임을
-  전달한다. Kosmo는 Account 데이터, 현재 값, 입력 form, 저장 action 또는 Account 관리 기능을 구현하지
-  않는다.
+  `별마루 ID`, link accessible name은 `별마루 ID 계정 설정 외부 서비스로 이동`, canonical destination은
+  `https://id.byulmaru.co`다. Kosmo는 Account 데이터, 현재 값, 입력 form, 저장 action 또는 Account 관리 기능을
+  구현하지 않는다.
 - Account 진입점은 모든 플랫폼에서 Expo Router의 실제 external `Link`와 canonical HTTPS `href`를 사용한다.
   브라우저 또는 OS가 외부 navigation을 소유하며 URL 지원 확인, navigation 성공·실패,
   loading·error·retry·lock 상태를 Kosmo가 소유하지 않는다. Web에서는 기존 `target="_blank"` 동작으로 외부
@@ -198,7 +199,7 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
   Web에서 `breakpoints.compact`(`768px`) 이상은 파일 영역과 시작 action을 한 줄에 배치하고, 그보다 좁은 Web과
   Native는 두 action을 세로·가용 폭으로 배치한다.
 - `코스모 탈퇴`는 Byulmaru ID의 Account Settings를 수정하지 않고 Kosmo Account만 대상으로 하는 별도 내부
-  action이다. 이 행은 `/settings/account-deletion`으로 이동하며, 외부 `계정 설정` 행을 바꾸거나 대체하지 않는다.
+  action이다. 이 행은 `/settings/account-deletion`으로 이동하며, 외부 `별마루 ID` 행을 바꾸거나 대체하지 않는다.
 - Profile target selector의 Figma lifecycle source는
   [`Mobile`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4867-13083),
   [`Compact`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=4868-38112),
@@ -390,7 +391,7 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
   시각적으로 없는 heading을 screen reader 전용으로 반복하지 않는다.
 - Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `프로필` heading → 기존 Profile picker를
   여는 현재 Profile identity trigger → `일반` → `뮤트 및 차단` → `다른 서비스에서 이전` → `스마트 필터` → `앱` heading →
-  `화면`과 현재 선택값 → `알림` → `계정` heading → `Byulmaru ID` → `코스모 탈퇴` → 독립 `정보` entry다.
+  `화면`과 현재 선택값 → `알림` → `계정` heading → `별마루 ID` → `코스모 탈퇴` → 독립 `정보` entry다.
   full Web에서는 이어서 현재 detail heading과 content를 읽는다. `/settings/profile`의 detail heading은 `일반`,
   `/settings/theme`의 detail heading은 `화면`이다. `/settings/profile` detail은 현재 Profile identity를 계속 보여
   주고 중복 `Profile 전환` button을 두지 않는다. 기존 Profile picker trigger를 사용한다.
@@ -409,8 +410,8 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
   `채널` selector를 읽는다. Native에서는 이어서 OTA 진단 행을 읽으며, Web에는 OTA 전용 행을 만들지 않는다.
   Native Settings의 `앱` group에서는 `알림` OS settings action을 읽는다. Web에서는 기존 notification flag만
   유지한다.
-- Account 진입점은 시각 label `Byulmaru ID`와 link accessible name·canonical destination에서 Byulmaru ID 외부
-  Account Settings로 이동한다는 사실을 전달한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
+- Account 진입점은 시각 label `별마루 ID`, link accessible name `별마루 ID 계정 설정 외부 서비스로 이동`,
+  canonical destination `https://id.byulmaru.co`를 사용한다. 내부 진입점은 선택·현재 상태와 destination을, Profile
   control은 Kosmo 내부 기능과 현재 대상을 전달한다.
 - `코스모 탈퇴`는 Kosmo 내부 action임을 accessible name과 destination에서 전달한다. 탈퇴 detail은 blocker의
   `ACTIVE` Profile 개수와 이유, acknowledgement checkbox의 checked·disabled 상태, 확정 action의 busy·disabled
@@ -441,7 +442,7 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
   검증을 소유한다.
 - [PROD-1336](https://linear.app/byulmaru/issue/PROD-1336/프로필별-설정과-공통-설정을-구분한다)은 Settings root의
   `프로필`·`앱`·`계정` 그룹과 독립된 마지막 `정보` entry, `일반`·`화면`·
-  `Byulmaru ID` navigation label, Profile group의 selected identity와 기존 Profile picker, grouped master와 기본 `일반` detail,
+  `별마루 ID` navigation label, Profile group의 selected identity와 기존 Profile picker, grouped master와 기본 `일반` detail,
   compact/mobile/native의 list→detail→명시적 parent back 구성을 소유한다. 기존 detail contract와 Figma source는
   유지하며, `/settings/labs`는 기존 스마트 필터 route로 가는 호환 경로로 남긴다.
 - PROD-1336의 current IA는 기존 root ordering과 nav label을 대체한다. 아래의 feature owner 설명은 기존 소유 범위를

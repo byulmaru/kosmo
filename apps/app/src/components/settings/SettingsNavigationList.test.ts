@@ -386,10 +386,7 @@ describe('SettingsNavigationList', () => {
       (node) => node.props.testID === 'byulmaru-id-account-settings-entry',
     );
     assert.ok(account);
-    assert.equal(
-      account.props.accessibilityLabel,
-      'Byulmaru ID Account Settings 외부 서비스로 이동',
-    );
+    assert.equal(account.props.accessibilityLabel, '별마루 ID 계정 설정 외부 서비스로 이동');
     assert.equal(account.props.href, 'https://id.byulmaru.co');
     assert.deepEqual(account.props.hrefAttrs, {
       rel: 'noopener noreferrer',

@@ -234,11 +234,11 @@ export function SettingsNavigationList({
           </Text>
         </View>
         <SettingsLinkRow
-          accessibilityLabel="Byulmaru ID Account Settings 외부 서비스로 이동"
+          accessibilityLabel="별마루 ID 계정 설정 외부 서비스로 이동"
           density={density}
           external
           href="https://id.byulmaru.co"
-          label="Byulmaru ID"
+          label="별마루 ID"
           target="_blank"
           testID="byulmaru-id-account-settings-entry"
         />
@@ -252,15 +252,17 @@ export function SettingsNavigationList({
           selected={selected === 'account-deletion'}
         />
       </View>
-      <SettingsLinkRow
-        accessibilityLabel="정보 설정 열기"
-        density={density}
-        href="/settings/info"
-        label="정보"
-        primary
-        currentPage={pathname === '/settings/info'}
-        selected={selected === 'info'}
-      />
+      <View style={[styles.section, styles.footer, { borderTopColor: theme.borderSubtle }]}>
+        <SettingsLinkRow
+          accessibilityLabel="정보 설정 열기"
+          density={density}
+          href="/settings/info"
+          label="정보"
+          primary
+          currentPage={pathname === '/settings/info'}
+          selected={selected === 'info'}
+        />
+      </View>
     </View>
   );
 }
@@ -407,6 +409,7 @@ const styles = StyleSheet.create({
   profilePickerRow: { borderBottomWidth: 0, borderRadius: radius[8] },
   root: { width: '100%' },
   section: { minWidth: 0, width: '100%' },
+  footer: { borderTopWidth: borderWidths[1], marginTop: space[16] },
   sectionHeadingContainer: {
     paddingBottom: space[8],
     paddingHorizontal: space[16],

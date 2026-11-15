@@ -275,10 +275,10 @@ describe('SettingsLinkRow', () => {
 
   it('외부 링크는 expo Link asChild와 exact href를 사용한다', async () => {
     await render({
-      accessibilityLabel: 'Byulmaru ID Account Settings 외부 서비스로 이동',
+      accessibilityLabel: '별마루 ID 계정 설정 외부 서비스로 이동',
       external: true,
       href: 'https://id.byulmaru.co',
-      label: '계정 설정',
+      label: '별마루 ID',
       primary: true,
       testID: 'external-settings-row',
     });
@@ -290,7 +290,7 @@ describe('SettingsLinkRow', () => {
     assert.equal(row.props.hrefAttrs, undefined);
     assert.equal(row.props['aria-current'], undefined);
     assert.deepEqual(row.props.accessibilityState, { selected: false });
-    assert.deepEqual(texts(), ['계정 설정']);
+    assert.deepEqual(texts(), ['별마루 ID']);
   });
 
   it('내부 링크 활성화를 onNavigate callback으로 노출한다', async () => {
@@ -328,7 +328,7 @@ describe('SettingsLinkRow', () => {
       accessibilityLabel: '외부 설정 새 탭으로 열기',
       external: true,
       href: 'https://id.byulmaru.co',
-      label: '계정 설정',
+      label: '별마루 ID',
       target: '_blank',
       testID: 'external-settings-row-with-target',
     });
