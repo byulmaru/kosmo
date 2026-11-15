@@ -225,6 +225,7 @@ test('Home query applies selected Profile candidate, mention, access, block, mut
       })
       .returning()
       .then(firstOrThrow);
+    contentIds.push(replacementMentionContent.id);
     await db
       .update(Posts)
       .set({ currentContentId: replacementMentionContent.id })
