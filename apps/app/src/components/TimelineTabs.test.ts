@@ -28,6 +28,9 @@ mock.module('expo-router', {
 mock.module('react-native', {
   exports: { Platform: platform },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module('@/components/FeatureFlagsContext', {
+  exports: { useFeatureFlag: () => true },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./ui/Tabs.tsx', import.meta.url), {
   exports: {
     Tab: MockTab,

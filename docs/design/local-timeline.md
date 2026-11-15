@@ -14,6 +14,8 @@ PROD-1199의 비로그인 Web 첫 화면(`/`)은 공통 공개 화면의 중앙 
 
 아래 Home·Local·Federated 탭과 재선택 규칙은 인증 타임라인에 적용한다.
 
+`연합` 탭은 해당 계정에서 연합 기능의 feature flag가 활성화된 경우에만 표시한다. 이 조건은 상단 탭 표시만 제어한다. 탭이 숨겨져 있어도 `/federated` Web·Native canonical route의 직접 진입과 기존 API 동작은 유지한다.
+
 - 모바일과 Web 모두 기존 `PageHeader` 아래에 공용 `TabList`와 underline `Tab`을 배치한다.
 - 선택된 underline 탭은 하단 중앙의 `action/primary/base` 64×4px 채움 인디케이터로 표시한다. 인디케이터는
   border가 아니라 `Tab/Underline`이 소유하는 별도 요소다.

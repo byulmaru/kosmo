@@ -38,6 +38,114 @@ test.beforeEach(async () => {
   await resetE2EDatabase();
 });
 
+const federatedTimelineFlagUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
+
+async function routeFederatedTimelineFlag(page: Page, enabled: boolean) {
+  await page.route('**/channel.js', (route) =>
+    route.fulfill({
+      contentType: 'application/javascript; charset=UTF-8',
+      body: "globalThis.__KOSMO_CHANNEL__ = 'prod';",
+    }),
+  );
+  await page.route(federatedTimelineFlagUrl, (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      status: 200,
+      body: JSON.stringify({ flags: [{ key: 'federated-timeline', value: enabled }] }),
+    }),
+  );
+}
+
+function waitForFederatedTimelineFlagResponse(page: Page) {
+  return page.waitForResponse(
+    (response) =>
+      response.url() === federatedTimelineFlagUrl && response.request().method() === 'POST',
+  );
+}
+
+test('Federated flag off hides its tab while Home, Local and direct entry remain usable', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({
+    displayName: 'E2E Federated Flag Off Viewer',
+    handle: 'e2e-federated-flag-off-viewer',
+  });
+  const remoteAuthor = await createE2ERemoteProfile({
+    displayName: 'E2E Federated Flag Off Writer',
+    domain: 'e2e-federated-flag-off.remote.example',
+    handle: 'e2e-federated-flag-off-writer',
+  });
+  const postBody = 'E2E federated flag off post';
+  await createE2EPost({
+    body: postBody,
+    profileId: remoteAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  await setE2ESessionCookie(context, viewer.token);
+  await routeFederatedTimelineFlag(page, false);
+
+  let flagResponse = waitForFederatedTimelineFlagResponse(page);
+  await page.goto('/home');
+  await (await flagResponse).finished();
+
+  let timelineTabs = page.getByRole('tablist', { name: '타임라인' });
+  await expect(timelineTabs.getByRole('tab', { name: '홈', exact: true })).toBeVisible();
+  await expect(timelineTabs.getByRole('tab', { name: '로컬', exact: true })).toBeVisible();
+  await expect(timelineTabs.getByRole('tab', { name: '연합', exact: true })).toHaveCount(0);
+
+  await timelineTabs.getByRole('tab', { name: '로컬', exact: true }).click();
+  await expect(page).toHaveURL(/\/local$/);
+  timelineTabs = page.getByRole('tablist', { name: '타임라인' });
+  await timelineTabs.getByRole('tab', { name: '홈', exact: true }).click();
+  await expect(page).toHaveURL(/\/home$/);
+
+  flagResponse = waitForFederatedTimelineFlagResponse(page);
+  await page.goto('/federated');
+  await (await flagResponse).finished();
+  await expect(page).toHaveURL(/\/federated$/);
+  await expect(page.getByText(postBody, { exact: true })).toBeVisible();
+  timelineTabs = page.getByRole('tablist', { name: '타임라인' });
+  await expect(timelineTabs.getByRole('tab', { name: '연합', exact: true })).toHaveCount(0);
+  await timelineTabs.getByRole('tab', { name: '홈', exact: true }).click();
+  await expect(page).toHaveURL(/\/home$/);
+});
+
+test('Federated flag on shows its tab and opens the eligible timeline post', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({
+    displayName: 'E2E Federated Flag On Viewer',
+    handle: 'e2e-federated-flag-on-viewer',
+  });
+  const remoteAuthor = await createE2ERemoteProfile({
+    displayName: 'E2E Federated Flag On Writer',
+    domain: 'e2e-federated-flag-on.remote.example',
+    handle: 'e2e-federated-flag-on-writer',
+  });
+  const postBody = 'E2E federated flag on post';
+  await createE2EPost({
+    body: postBody,
+    profileId: remoteAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  await setE2ESessionCookie(context, viewer.token);
+  await routeFederatedTimelineFlag(page, true);
+
+  const flagResponse = waitForFederatedTimelineFlagResponse(page);
+  await page.goto('/home');
+  await (await flagResponse).finished();
+
+  const timelineTabs = page.getByRole('tablist', { name: '타임라인' });
+  const federatedTab = timelineTabs.getByRole('tab', { name: '연합', exact: true });
+  await expect(federatedTab).toBeVisible();
+  await federatedTab.click();
+
+  await expect(page).toHaveURL(/\/federated$/);
+  await expect(page.getByText(postBody, { exact: true })).toBeVisible();
+});
+
 test('홈 타임라인은 본인 글과 팔로우한 프로필 글만 최신순으로 보여준다', async ({
   context,
   page,

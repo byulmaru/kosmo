@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { useFeatureFlag } from '@/components/FeatureFlagsContext';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { RouteTabList } from '@/components/ui/RouteTabList';
 import { Tab } from '@/components/ui/Tabs';
@@ -13,6 +14,7 @@ const options: readonly TabOption<TimelineTab>[] = [
 ];
 
 export function TimelineTabs({ value }: { value: TimelineTab }) {
+  const federatedTimelineEnabled = useFeatureFlag('federated-timeline');
   const shellChrome = useShellChrome();
   return (
     <RouteTabList
@@ -33,9 +35,11 @@ export function TimelineTabs({ value }: { value: TimelineTab }) {
       variant="underline"
       webAction="replace"
     >
-      {options.map((option) => (
-        <Tab key={option.value} option={option} />
-      ))}
+      {options
+        .filter((option) => option.value !== 'federated' || federatedTimelineEnabled)
+        .map((option) => (
+          <Tab key={option.value} option={option} />
+        ))}
     </RouteTabList>
   );
 }
