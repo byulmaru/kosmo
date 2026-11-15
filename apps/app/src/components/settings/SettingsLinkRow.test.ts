@@ -174,6 +174,7 @@ describe('SettingsLinkRow', () => {
     await render({
       accessibilityLabel: '프로필 설정 열기',
       currentPage: true,
+      description: '현재 공개 범위',
       href: '/settings/profile',
       label: '프로필 설정',
       primary: true,
@@ -191,6 +192,12 @@ describe('SettingsLinkRow', () => {
     assert.equal(row.props.accessibilityLabel, '프로필 설정 열기');
     assert.equal(row.props['aria-current'], 'page');
     assert.deepEqual(row.props.accessibilityState, { selected: true });
+    const label = rendered('Text').find((node) => node.children[0] === '프로필 설정');
+    const description = rendered('Text').find((node) => node.children[0] === '현재 공개 범위');
+    assert.ok(label);
+    assert.ok(description);
+    assert.equal(label.parent, description.parent);
+    assert.notEqual(flattenStyle(label.parent?.props.style).flexDirection, 'row');
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
     const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
     assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
@@ -232,6 +239,38 @@ describe('SettingsLinkRow', () => {
     const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
     assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
     assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
+  });
+
+  it('compact theme link keeps its accessible name and shows the current value before the chevron', async () => {
+    await render({
+      accessibilityLabel: '화면 설정 열기, 시스템',
+      density: 'compact',
+      description: '시스템',
+      href: '/settings/theme',
+      label: '화면',
+      testID: 'compact-theme-row',
+    });
+
+    const row = byTestId('compact-theme-row');
+    const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
+    const item = rendered('View').find((node) => flattenStyle(node.props.style).minHeight === 40);
+    const value = rendered('Text').find((node) => node.children[0] === '시스템');
+    const trailing = value?.parent;
+    assert.ok(item);
+    assert.ok(value);
+    assert.ok(trailing);
+    assert.equal(row.props.accessibilityLabel, '화면 설정 열기, 시스템');
+    assert.equal(rowStyle.minHeight, 40);
+    assert.equal(item.props.style.paddingVertical, 4);
+    assert.equal(item.props.style.paddingHorizontal, 16);
+    assert.equal(flattenStyle(value.props.style).color, '#666666');
+    assert.equal(flattenStyle(trailing.props.style).flexDirection, 'row');
+    assert.equal(trailing.children[0], value);
+    assert.equal(
+      trailing.findAll((node) => (node.type as unknown) === 'ChevronRightIcon').length,
+      1,
+    );
+    assert.deepEqual(texts(), ['화면', '시스템']);
   });
 
   it('외부 링크는 expo Link asChild와 exact href를 사용한다', async () => {

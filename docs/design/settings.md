@@ -15,8 +15,9 @@ Kosmo의 인증된 설정은 `/settings`를 canonical hub로 사용하는 route 
 
 `다른 서비스에서 이전`은 하나의 destination이며, 본문에서 `계정 이전`과 `팔로잉 가져오기` section을 이 순서로
 제공한다. entry는 항상 표시하고, control은 기존 Owner 권한과 Profile 멤버십 조건에 따라 제공한다. 그룹화는
-기존 route, theme token, `SettingsItem`, `PageHeader`, 행 geometry, target·persistence·권한·loading·error·destructive
-동작을 유지하는 navigation IA 변경이다. Backend, 계정 form, 보안 정책, 설정 기능을 추가하지 않는다.
+기존 route와 각 destination의 target·persistence·권한·loading·error·destructive 동작을 유지하는 navigation IA
+변경이다. Full Web master navigation은 compact presentation을 사용하고, one-pane navigation과 detail은 기존 기본
+presentation을 유지한다. Backend, 계정 form, 보안 정책, 설정 기능을 추가하지 않는다.
 DSN-54는 테마 선택의 Figma 계약을, PROD-812는 production runtime과 기기 로컬 persistence를 소유한다.
 아래 Figma 링크는 기존 source와 consumer의 근거로만 남기며, PROD-1336 그룹화가 Figma에 반영됐다는 뜻은 아니다.
 
@@ -133,9 +134,17 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
   destination [`6316:8075`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8075)와
   [`6316:8089`](https://www.figma.com/design/Erj975S6vVP8PlHQius801/KOSMO?node-id=6316-8089)을 같은 순서로 제공한다.
 - full Web의 Target `/settings`는 `프로필` 그룹의 `일반`(`/settings/profile`)을 기본 선택해 detail에 표시한다.
-  약 320px master/detail 구조를 유지하며 master에는 그룹과 각 기존 진입점을 함께 표시한다. compact Web, mobile
+  320px master/detail 구조를 유지하며 master에는 그룹과 각 기존 진입점을 함께 표시한다. compact Web, mobile
   Web, Android와 iOS의 `/settings`는 그룹이 있는 root 목록부터 표시하고, 기존 진입점을 선택하면 한 화면짜리
   detail로 이동한다.
+- Full Web master의 navigation row는 최소 높이 `40px`, 세로 padding `4px`, 가로 padding `16px`의 compact
+  presentation을 사용한다. 그룹은 위 `12px`, 아래 `4px` 간격을 둔다. 짧은 현재값(예: `화면`의 현재 테마)은
+  chevron 앞 trailing text로 표시하고, 긴 설명은 stacked text로 유지해 내용에 따라 행이 늘어날 수 있다. Compact
+  Web, mobile Web, Android·iOS navigation과 full Web detail은 기본 presentation을 유지한다.
+- 현재 선택된 Profile은 모든 navigation size에서 하나의 둥근 테두리 trigger로 표시한다. trigger 전체가 기존
+  Profile picker를 열고, avatar·이름·handle과 장식용 chevron을 포함한다. 접근성 이름은 현재 이름·handle과
+  `다른 Profile 선택` action을 전달한다. 별도의 `Profile 전환` button을 두지 않는다. 선택된 Profile이 없을 때는
+  기존 Profile 선택·생성 recovery를 유지하고 대체 identity를 표시하지 않는다.
 - 향후 승인된 항목은 direct destination, 하위 목록을 여는 category 또는 기존 독립 화면으로 이동하는
   destination으로 추가할 수 있다. 모든 detail을 Settings workspace 안에 강제로 넣거나 현재 구현에 미래
   category를 위한 disabled item·placeholder를 만들지 않는다.
@@ -378,8 +387,8 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
 - root 화면과 master pane은 `설정` heading을, one-pane category·detail 화면과 full Web detail pane은 현재
   destination heading을 programmatic하게 노출한다. Root의 `프로필`, `앱`, `계정` group heading도 노출한다.
   시각적으로 없는 heading을 screen reader 전용으로 반복하지 않는다.
-- Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `프로필` heading → 현재 선택된 Profile
-  신원과 기존 picker trigger → `일반` → `뮤트 및 차단` → `다른 서비스에서 이전` → `스마트 필터` → `앱` heading →
+- Target root/master 목록의 문서·보조기술 읽기 순서는 `설정` heading → `프로필` heading → 기존 Profile picker를
+  여는 현재 Profile identity trigger → `일반` → `뮤트 및 차단` → `다른 서비스에서 이전` → `스마트 필터` → `앱` heading →
   `화면`과 현재 선택값 → `알림` → `계정` heading → `Byulmaru ID` → `코스모 탈퇴` → 독립 `정보` entry다.
   full Web에서는 이어서 현재 detail heading과 content를 읽는다. `/settings/profile`의 detail heading은 `일반`,
   `/settings/theme`의 detail heading은 `화면`이다. `/settings/profile` detail은 현재 Profile identity를 계속 보여

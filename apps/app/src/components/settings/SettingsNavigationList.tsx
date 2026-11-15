@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from 'lucide-react-native';
 import { useState } from 'react';
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
@@ -6,16 +7,16 @@ import { useRequestNativePushPermissionAndSync } from '@/components/native-push/
 import { useWebPushPermission } from '@/components/native-push/webPushPermissionContext';
 import { ProfileListItemRow } from '@/components/profile/ProfileListItemRow';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import { Button } from '@/components/ui/Button';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useToast } from '@/components/ui/ToastProvider';
 import { getPublicConfig } from '@/config/public';
 import { getThemePreferenceLabel } from '@/theme/themePreference';
 import { useThemePreference } from '@/theme/ThemePreferenceProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { layoutRecipes, space, textStyles } from '@/theme/tokens';
+import { borderWidths, iconSizes, layoutRecipes, radius, space, textStyles } from '@/theme/tokens';
 import { SettingsItem } from './SettingsItem';
 import { SettingsLinkRow } from './SettingsLinkRow';
+import type { ViewStyle } from 'react-native';
 import type { SettingsNavigationList_profile$key } from './__generated__/SettingsNavigationList_profile.graphql';
 
 type SettingsDestination =
@@ -29,14 +30,18 @@ type SettingsDestination =
 
 const settingsNavigationListProfileFragment = graphql`
   fragment SettingsNavigationList_profile on Profile {
+    displayName
+    relativeHandle
     ...ProfileListItemRow_profile
   }
 `;
 
 export function SettingsNavigationList({
+  density = 'default',
   pathname,
   selected,
 }: {
+  density?: 'default' | 'compact';
   pathname?: string;
   selected?: SettingsDestination;
 }) {
@@ -48,6 +53,14 @@ export function SettingsNavigationList({
   );
   const theme = useTheme();
   const themePreference = useThemePreference();
+  const web = Platform.OS === 'web';
+  const [profileFocusVisible, setProfileFocusVisible] = useState(false);
+  const profilePickerAccessibilityLabel = selectedProfile
+    ? `${selectedProfile.displayName ?? selectedProfile.relativeHandle}${
+        selectedProfile.displayName != null ? ` ${selectedProfile.relativeHandle}` : ''
+      } 다른 Profile 선택`
+    : 'Profile 선택하기';
+
   return (
     <View
       accessibilityLabel="설정 목록"
@@ -55,7 +68,12 @@ export function SettingsNavigationList({
       style={[layoutRecipes.listStack, styles.root]}
     >
       <View style={styles.section}>
-        <View style={styles.sectionHeadingContainer}>
+        <View
+          style={[
+            styles.sectionHeadingContainer,
+            density === 'compact' ? styles.sectionHeadingContainerCompact : undefined,
+          ]}
+        >
           <Text
             accessibilityRole="header"
             style={[textStyles.uiLabelS, { color: theme.foregroundSecondary }]}
@@ -63,33 +81,75 @@ export function SettingsNavigationList({
             프로필
           </Text>
         </View>
-        {selectedProfile ? (
-          <ProfileListItemRow profile={selectedProfile}>
-            {shellChrome ? (
-              <Button
-                accessibilityLabel="다른 Profile 선택"
-                onPress={shellChrome.openProfileSwitcher}
-                size="compact"
-                tone="secondary"
-              >
-                Profile 전환
-              </Button>
-            ) : null}
-          </ProfileListItemRow>
-        ) : shellChrome ? (
-          <View style={[layoutRecipes.listRow, styles.profileSelectionFallback]}>
-            <Button
-              accessibilityLabel="Profile 선택하기"
-              onPress={shellChrome.openProfileSwitcher}
-              size="compact"
-              tone="secondary"
-            >
-              Profile 선택하기
-            </Button>
-          </View>
+        {shellChrome ? (
+          <Pressable
+            accessibilityLabel={profilePickerAccessibilityLabel}
+            accessibilityRole="button"
+            onBlur={() => setProfileFocusVisible(false)}
+            onFocus={(event) => {
+              if (!web) {
+                return;
+              }
+              const target = event.currentTarget as unknown as {
+                matches?: (selector: string) => boolean;
+              };
+              setProfileFocusVisible(Boolean(target.matches?.(':focus-visible')));
+            }}
+            onPress={shellChrome.openProfileSwitcher}
+            onPointerDown={() => setProfileFocusVisible(false)}
+            style={[
+              styles.profileTrigger,
+              {
+                outlineColor: profileFocusVisible ? theme.stateFocusRing : undefined,
+                outlineOffset: 2,
+                outlineStyle: profileFocusVisible ? 'solid' : 'none',
+                outlineWidth: profileFocusVisible ? borderWidths[2] : 0,
+              } as unknown as ViewStyle,
+            ]}
+          >
+            {(state) => {
+              const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
+              const backgroundColor = state.pressed
+                ? theme.statePressed
+                : hovered
+                  ? theme.stateHover
+                  : 'transparent';
+              const chevron = (
+                <View accessibilityElementsHidden pointerEvents="none">
+                  <ChevronDownIcon color={theme.foregroundSecondary} size={iconSizes[20]} />
+                </View>
+              );
+
+              return selectedProfile ? (
+                <ProfileListItemRow
+                  profile={selectedProfile}
+                  style={[
+                    styles.profilePickerRow,
+                    { backgroundColor, borderColor: theme.borderDefault },
+                  ]}
+                >
+                  {chevron}
+                </ProfileListItemRow>
+              ) : (
+                <View
+                  style={[
+                    layoutRecipes.listRow,
+                    styles.profileSelectionFallback,
+                    { backgroundColor, borderColor: theme.borderDefault },
+                  ]}
+                >
+                  <Text style={[textStyles.uiLabelM, { color: theme.foregroundPrimary }]}>
+                    Profile 선택하기
+                  </Text>
+                  {chevron}
+                </View>
+              );
+            }}
+          </Pressable>
         ) : null}
         <SettingsLinkRow
           accessibilityLabel="일반 설정 열기"
+          density={density}
           href="/settings/profile"
           label="일반"
           primary
@@ -100,6 +160,7 @@ export function SettingsNavigationList({
         />
         <SettingsLinkRow
           accessibilityLabel="뮤트 및 차단 설정 열기"
+          density={density}
           href="/settings/mute-and-block"
           label="뮤트 및 차단"
           primary
@@ -108,6 +169,7 @@ export function SettingsNavigationList({
         />
         <SettingsLinkRow
           accessibilityLabel="다른 서비스에서 이전 설정 열기"
+          density={density}
           href="/settings/profile-migration"
           label="다른 서비스에서 이전"
           primary
@@ -118,6 +180,7 @@ export function SettingsNavigationList({
         />
         <SettingsLinkRow
           accessibilityLabel="스마트 필터 설정 열기"
+          density={density}
           href="/settings/natural-language-mute"
           label="스마트 필터"
           primary
@@ -128,7 +191,12 @@ export function SettingsNavigationList({
         />
       </View>
       <View style={styles.section}>
-        <View style={styles.sectionHeadingContainer}>
+        <View
+          style={[
+            styles.sectionHeadingContainer,
+            density === 'compact' ? styles.sectionHeadingContainerCompact : undefined,
+          ]}
+        >
           <Text
             accessibilityRole="header"
             style={[textStyles.uiLabelS, { color: theme.foregroundSecondary }]}
@@ -138,6 +206,7 @@ export function SettingsNavigationList({
         </View>
         <SettingsLinkRow
           accessibilityLabel={`화면 설정 열기, ${getThemePreferenceLabel(themePreference)}`}
+          density={density}
           description={getThemePreferenceLabel(themePreference)}
           href="/settings/theme"
           label="화면"
@@ -147,14 +216,19 @@ export function SettingsNavigationList({
         />
         {Platform.OS === 'web' ? (
           getPublicConfig('webPush') ? (
-            <WebNotificationSettingsAction />
+            <WebNotificationSettingsAction density={density} />
           ) : null
         ) : (
-          <NativeNotificationSettingsAction />
+          <NativeNotificationSettingsAction density={density} />
         )}
       </View>
       <View style={styles.section}>
-        <View style={styles.sectionHeadingContainer}>
+        <View
+          style={[
+            styles.sectionHeadingContainer,
+            density === 'compact' ? styles.sectionHeadingContainerCompact : undefined,
+          ]}
+        >
           <Text
             accessibilityRole="header"
             style={[textStyles.uiLabelS, { color: theme.foregroundSecondary }]}
@@ -164,6 +238,7 @@ export function SettingsNavigationList({
         </View>
         <SettingsLinkRow
           accessibilityLabel="Byulmaru ID Account Settings 외부 서비스로 이동"
+          density={density}
           external
           href="https://id.byulmaru.co"
           label="Byulmaru ID"
@@ -172,6 +247,7 @@ export function SettingsNavigationList({
         />
         <SettingsLinkRow
           accessibilityLabel="코스모 탈퇴 설정 열기"
+          density={density}
           href="/settings/account-deletion"
           label="코스모 탈퇴"
           primary
@@ -181,6 +257,7 @@ export function SettingsNavigationList({
       </View>
       <SettingsLinkRow
         accessibilityLabel="정보 설정 열기"
+        density={density}
         href="/settings/info"
         label="정보"
         primary
@@ -191,7 +268,7 @@ export function SettingsNavigationList({
   );
 }
 
-function NativeNotificationSettingsAction() {
+function NativeNotificationSettingsAction({ density }: { density: 'default' | 'compact' }) {
   const theme = useTheme();
   const { showToast } = useToast();
   const requestPermissionAndSync = useRequestNativePushPermissionAndSync();
@@ -233,6 +310,7 @@ function NativeNotificationSettingsAction() {
       testID="native-notification-settings"
     >
       <SettingsItem
+        density={density}
         description="기기의 알림 설정에서 Push 알림을 관리할 수 있어요."
         label="알림 설정"
         trailing={
@@ -245,7 +323,7 @@ function NativeNotificationSettingsAction() {
   );
 }
 
-function WebNotificationSettingsAction() {
+function WebNotificationSettingsAction({ density }: { density: 'default' | 'compact' }) {
   const theme = useTheme();
   const { showToast } = useToast();
   const { permission, support, requestPermission } = useWebPushPermission();
@@ -255,17 +333,18 @@ function WebNotificationSettingsAction() {
     return null;
   }
   if (support === 'installation-required') {
-    return <SettingsItem label="홈 화면에 추가한 앱에서 알림을 켜세요." />;
+    return <SettingsItem density={density} label="홈 화면에 추가한 앱에서 알림을 켜세요." />;
   }
   if (support === 'unsupported') {
-    return <SettingsItem label="이 브라우저는 알림을 지원하지 않아요." />;
+    return <SettingsItem density={density} label="이 브라우저는 알림을 지원하지 않아요." />;
   }
   if (support === 'unavailable') {
-    return <SettingsItem label="알림을 사용할 수 없어요." />;
+    return <SettingsItem density={density} label="알림을 사용할 수 없어요." />;
   }
   if (permission === 'denied') {
     return (
       <SettingsItem
+        density={density}
         description="브라우저 설정에서 알림을 허용해 주세요."
         label="알림이 차단됐어요."
       />
@@ -309,6 +388,7 @@ function WebNotificationSettingsAction() {
       testID="web-notification-settings"
     >
       <SettingsItem
+        density={density}
         label={permission === 'granted' ? '알림 다시 연결' : '알림 켜기'}
         trailing={
           pending ? (
@@ -321,7 +401,14 @@ function WebNotificationSettingsAction() {
 }
 
 const styles = StyleSheet.create({
-  profileSelectionFallback: { alignSelf: 'stretch' },
+  profileSelectionFallback: {
+    borderRadius: radius[8],
+    borderWidth: borderWidths[1],
+    minHeight: 64,
+    width: '100%',
+  },
+  profileTrigger: { borderRadius: radius[8], width: '100%' },
+  profilePickerRow: { borderRadius: radius[8], borderWidth: borderWidths[1] },
   root: { width: '100%' },
   section: { minWidth: 0, width: '100%' },
   sectionHeadingContainer: {
@@ -329,4 +416,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: space[16],
     paddingTop: space[16],
   },
+  sectionHeadingContainerCompact: { paddingBottom: space[4], paddingTop: space[12] },
 });

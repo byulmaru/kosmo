@@ -244,7 +244,11 @@ export const FullMasterDetail: Story = {
     expect(within(navigation).getByRole('heading', { name: '계정' })).toBeVisible();
     expect(within(navigation).getByText('현재 Profile')).toBeVisible();
     expect(within(navigation).getByText('@settings-owner')).toBeVisible();
-    expect(within(navigation).getByRole('button', { name: '다른 Profile 선택' })).toBeVisible();
+    expect(
+      within(navigation).getByRole('button', {
+        name: /현재 Profile.*@settings-owner.*다른 Profile 선택/,
+      }),
+    ).toBeVisible();
     expect(within(navigation).getByRole('link', { name: '스마트 필터 설정 열기' })).toHaveAttribute(
       'href',
       '/settings/natural-language-mute',

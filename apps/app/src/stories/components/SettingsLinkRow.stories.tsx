@@ -21,6 +21,13 @@ function SettingsLinkRowComparison() {
         href="https://id.byulmaru.co"
         label="계정 설정"
       />
+      <SettingsLinkRow
+        accessibilityLabel="화면 설정 열기, 시스템"
+        density="compact"
+        description="시스템"
+        href="/settings/theme"
+        label="화면"
+      />
     </View>
   );
 }
@@ -110,6 +117,7 @@ export const RepresentativeStates: Story = {
     const external = canvas.getByRole('link', {
       name: 'Byulmaru ID Account Settings 외부 서비스로 이동',
     });
+    const compact = canvas.getByRole('link', { name: '화면 설정 열기, 시스템' });
 
     await expect(selected).toHaveAttribute('href', '/settings/default-post-visibility');
     await expect(selected.firstElementChild).toHaveStyle({
@@ -121,5 +129,6 @@ export const RepresentativeStates: Story = {
     await expect(selected).not.toHaveAttribute('aria-current');
     await expect(external).toHaveAttribute('href', 'https://id.byulmaru.co');
     await expect(external).not.toHaveAttribute('aria-current');
+    await expect(compact).toHaveAttribute('href', '/settings/theme');
   },
 };

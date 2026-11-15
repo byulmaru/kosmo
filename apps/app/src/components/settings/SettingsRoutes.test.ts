@@ -386,6 +386,7 @@ describe('Settings routes', () => {
     assert.equal(flattenStyle(detailContainer.props.style).minWidth, 0);
     assert.equal(flattenStyle(detailContainer.props.style).width, '100%');
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, 'profile');
+    assert.equal(rendered('SettingsNavigationList')[0].props.density, 'compact');
     assert.equal(rendered('SettingsProfileDetail').length, 1);
   });
 
@@ -607,6 +608,7 @@ describe('Settings routes', () => {
 
     assert.equal(rendered('PageHeader')[0].props.title, '설정');
     assert.equal(rendered('SettingsNavigationList')[0].props.selected, undefined);
+    assert.notEqual(rendered('SettingsNavigationList')[0].props.density, 'compact');
     assert.equal(rendered('SettingsProfileDetail').length, 0);
     const rootContainer = rendered('View')
       .filter(
@@ -945,6 +947,7 @@ describe('Settings routes', () => {
 
     assert.equal(settingsItems().length, 1);
     assert.equal(settingsItem('채널').props.description, 'dev');
+    assert.notEqual(settingsItem('채널').props.density, 'compact');
     assert.equal(rendered('NativeChannelSettings').length, 0);
     assert.deepEqual(rendered('SettingsLinkRow'), []);
   });

@@ -101,12 +101,24 @@ mock.module('react-native', {
       },
     },
     ActivityIndicator: 'ActivityIndicator',
+    Animated: { View: 'AnimatedView' },
     Platform: {
       get OS() {
         return platform;
       },
     },
-    Pressable: 'Pressable',
+    Pressable: ({
+      children,
+      ...props
+    }: {
+      children?: ReactNode | ((state: { hovered: boolean; pressed: boolean }) => ReactNode);
+      [key: string]: unknown;
+    }) =>
+      createElement(
+        'Pressable',
+        props,
+        typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+      ),
     StyleSheet: {
       create: <T>(styles: T) => styles,
       flatten: (style: unknown) =>
@@ -148,7 +160,10 @@ mock.module(new URL('../native-push/webPushPermissionContext.ts', import.meta.ur
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(require.resolve('lucide-react-native'), {
-  exports: { ChevronRightIcon: 'ChevronRightIcon' },
+  exports: {
+    ChevronDownIcon: 'ChevronDownIcon',
+    ChevronRightIcon: 'ChevronRightIcon',
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   exports: {
@@ -237,6 +252,7 @@ mock.module(new URL('../ui/ToastProvider.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsNavigationList: ComponentType<{
+  density?: 'default' | 'compact';
   pathname?: string;
   selected?:
     | 'profile'
@@ -341,6 +357,23 @@ describe('SettingsNavigationList', () => {
     }
   });
 
+  it('compact density를 모든 navigation row와 Native notification item에 전달한다', async () => {
+    platform = 'ios';
+    await render({ density: 'compact' });
+
+    const items = rendered('SettingsItem');
+    assert.ok(items.length > 0);
+    assert.equal(
+      items.every((item) => item.props.density === 'compact'),
+      true,
+    );
+    const notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    assert.ok(notification);
+    assert.equal(items.find((item) => item.props.label === '알림 설정')?.props.density, 'compact');
+  });
+
   it('Byulmaru ID는 기존 canonical external link와 새 탭 동작을 유지한다', async () => {
     await render();
 
@@ -362,13 +395,29 @@ describe('SettingsNavigationList', () => {
   it('UniversalShell Relay fragment identity를 표시하고 기존 Profile picker를 연다', async () => {
     await renderWithSelectedProfile();
 
-    assert.ok(rendered('Text').some((node) => node.children[0] === '현재 Profile'));
-    assert.ok(rendered('Text').some((node) => node.children[0] === '@current'));
     const picker = rendered('Pressable').find(
-      (node) => node.props.accessibilityLabel === '다른 Profile 선택',
+      (node) =>
+        node.props.accessibilityRole === 'button' &&
+        node.findAll((child) => (child.type as unknown) === 'Avatar').length === 1,
     );
     assert.ok(picker);
+    assert.match(
+      String(picker.props.accessibilityLabel),
+      /현재 Profile.*@current.*다른 Profile 선택/,
+    );
     assert.equal(picker.props.accessibilityRole, 'button');
+    assert.deepEqual(
+      picker.findAll((node) => (node.type as unknown) === 'Text').map((node) => node.children[0]),
+      ['현재 Profile', '@current'],
+    );
+    const chevron = picker.findAll((node) => (node.type as unknown) === 'ChevronDownIcon')[0];
+    assert.ok(chevron);
+    assert.equal(chevron.parent?.props.accessibilityElementsHidden, true);
+    assert.equal(chevron.parent?.props.pointerEvents, 'none');
+    assert.equal(
+      rendered('Text').some((node) => node.children[0] === 'Profile 전환'),
+      false,
+    );
 
     await act(async () => picker.props.onPress());
     assert.equal(openProfileSwitcherCalls, 1);
@@ -744,6 +793,7 @@ describe('SettingsNavigationList', () => {
 
 async function render(
   props: {
+    density?: 'default' | 'compact';
     pathname?: string;
     selected?:
       | 'profile'
@@ -811,6 +861,7 @@ function createTestEnvironment() {
 }
 
 function createNavigationTree(props: {
+  density?: 'default' | 'compact';
   pathname?: string;
   selected?:
     | 'profile'

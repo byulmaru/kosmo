@@ -1,11 +1,11 @@
 import { Link } from 'expo-router';
 import { ChevronRightIcon } from 'lucide-react-native';
 import { useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, radius, space } from '@/theme/tokens';
+import { borderWidths, fontFamilies, radius, space, typography } from '@/theme/tokens';
 import { SettingsItem } from './SettingsItem';
 import type { Href, WebAnchorProps } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -14,6 +14,7 @@ import type { ViewStyle } from 'react-native';
 export type SettingsLinkRowProps = {
   accessibilityLabel: string;
   currentPage?: boolean;
+  density?: 'default' | 'compact';
   description?: string;
   external?: boolean;
   href: Href;
@@ -73,6 +74,7 @@ function SettingsLinkFeedback({ children, hovered, pressed, selected }: Settings
 export function SettingsLinkRow({
   accessibilityLabel,
   currentPage = false,
+  density = 'default',
   description,
   external = false,
   href,
@@ -110,6 +112,7 @@ export function SettingsLinkRow({
       style={() => {
         return [
           styles.entry,
+          density === 'compact' ? styles.entryCompact : undefined,
           {
             borderColor: 'transparent',
             borderWidth: borderWidths[1],
@@ -128,11 +131,24 @@ export function SettingsLinkRow({
         return (
           <SettingsLinkFeedback hovered={hovered} pressed={pressed} selected={selected}>
             <SettingsItem
-              description={description}
+              density={density}
+              description={density === 'compact' ? undefined : description}
               label={label}
               trailing={
-                <View accessibilityElementsHidden pointerEvents="none">
-                  <ChevronRightIcon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
+                <View
+                  style={density === 'compact' && description ? styles.inlineTrailing : undefined}
+                >
+                  {density === 'compact' && description ? (
+                    <Text
+                      numberOfLines={1}
+                      style={[styles.inlineDescription, { color: theme.foregroundSecondary }]}
+                    >
+                      {description}
+                    </Text>
+                  ) : null}
+                  <View accessibilityElementsHidden pointerEvents="none">
+                    <ChevronRightIcon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
+                  </View>
                 </View>
               }
             />
@@ -171,4 +187,7 @@ const styles = StyleSheet.create({
     minHeight: 64,
     width: '100%',
   },
+  entryCompact: { minHeight: 40 },
+  inlineTrailing: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
+  inlineDescription: { flexShrink: 1, fontFamily: fontFamilies.ui, ...typography.sm },
 });
