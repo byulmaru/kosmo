@@ -16,6 +16,9 @@ summary, audience와 역참조 결정은 유지한다.
 
 Quote 동의와 federation 표현은 [ADR 0029](./0029-quote-consent-and-federation.md)이 정의한다.
 
+현재 Mentioned Profile 집합의 Post 소유권과 inbound DIRECT 저장의 body Mention node 조건은
+[ADR 0032](./0032-current-post-mentions-from-body-nodes.md)를 따른다. 그 결정은 아래의 typed identity만으로 Mention 대상 집합을 만들던 부분을 좁히며, 나머지 Local Note 정책은 유지한다.
+
 ## 결정
 
 - Content가 있는 Local Post의 ActivityPub identity는 Author Profile이 연결된 Local Instance의 canonical
@@ -32,16 +35,14 @@ Quote 동의와 federation 표현은 [ADR 0029](./0029-quote-consent-and-federat
 - Public은 ActivityStreams Public을 `to`, followers collection을 `cc`로 사용한다. Unlisted는 followers
   collection을 `to`, ActivityStreams Public을 `cc`로 사용한다. Followers Only는 followers collection만
   `to`로 사용하고 Author 또는 established Follower의 signed fetch에서만 역참조할 수 있다.
-- Local `Mentioned Profiles` visibility는 canonical Mentioned Profile 관계([ADR 0030](./0030-post-content-mention-identity.md))를
-  사용한다. Local Note의 역참조와 Featured collection은 이 visibility를 제공하지 않는다. outbound `Create(Note)`만 현재
-  Content의 eligible remote ActivityPub Mentioned Profile actor URI만 `to`로 사용하며, `cc`에는 Public이나 followers
+- Local `Mentioned Profiles` visibility는 Post의 현재 Mentioned Profile 관계([ADR 0032](./0032-current-post-mentions-from-body-nodes.md))를
+  사용한다. Local Note의 역참조와 Featured collection은 이 visibility를 제공하지 않는다. outbound `Create(Note)`만 Post의 현재
+  Mentioned Profile 관계에서 eligible remote ActivityPub actor URI를 `to`로 사용하며, `cc`에는 Public이나 followers
   collection을 넣지 않는다. 해당 Post의 outbound `Delete`도 같은 remote Mentioned Profiles에게만 전달한다. eligible remote
   actor URI가 없으면 두 Activity 모두 delivery recipient가 없다. 이 outbound 예외는 signed-fetch 권한을 부여하지 않으며,
   ActivityPub DIRECT/limited audience의 inbound 권한은 별도 [PROD-359](https://linear.app/byulmaru/issue/PROD-359)가 정의한다.
 - 수신 `Create(Note)`와 remote source에서 fetch/hydrate해 공통 Note materializer로 전달한 Note는 기존 우선순위대로 Public,
-  Unlisted, Author Followers를 분류하고, 어느 marker도 없으면 DIRECT 후보로 분류한다. DIRECT 저장은 typed Mention href가 ACTIVE Local
-  Profile과 ACTIVE Local Instance를 가리킬 때 허용하며, inbox 종류나 `context.recipient`와의 일치는 조건이 아니다. 현재 검증된
-  typed Mention relation은 local/remote Profile 모두에 보존하고, 읽을 수 있는 Profile은 작성자와 현재 Mentioned Profile이다.
+  Unlisted, Author Followers를 분류하고, 어느 marker도 없으면 DIRECT 후보로 분류한다. DIRECT 저장에는 검증된 typed Mention identity와 일치하는 실제 body Mention node가 ACTIVE Local Profile과 ACTIVE Local Instance를 하나 이상 가리켜야 한다. typed identity 확인만으로는 충분하지 않다. 이 조건은 inbox 종류나 `context.recipient`와의 일치 여부와 무관하다. 현재 Post의 Mentioned Profile 집합은 검증된 body node identity에서 만들며, body node가 없는 typed Mention은 집합에 포함하지 않는다. 읽을 수 있는 Profile은 작성자와 현재 Mentioned Profile이다.
   `to`/`cc`는 기존 visibility marker 분류에만 사용하며, 그 주소만으로 Mention relation이나 DIRECT 접근 권한을 만들지 않는다.
   audience 주소가 없거나 Mention과 달라도 검증된 Mention 수신을 막지 않는다. Follow는 요구하지 않으며, Mention되지 않은 inbox
   recipient는 읽을 수 없다. Note Update와 과거 Note 복구는 이 범위에 포함하지 않는다.

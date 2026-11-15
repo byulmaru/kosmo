@@ -15,10 +15,33 @@ import { profileBlockVisibilityWhere } from './profile-block';
 import type { SQL, SQLWrapper } from 'drizzle-orm';
 import type { DatabaseHandle } from '../db';
 
+const CurrentPostMentionMarkers = alias(PostMentions, 'current_post_mention_marker');
+
+export const currentPostMentionWhere = ({
+  postId,
+  postContentId,
+}: {
+  readonly postId: SQLWrapper | string;
+  readonly postContentId: SQLWrapper | string;
+}): SQL<boolean> => sql<boolean>`(
+  ${PostMentions.postId} = ${postId}
+  OR (
+    ${PostMentions.postId} IS NULL
+    AND ${PostMentions.postContentId} = ${postContentId}
+    AND NOT EXISTS (
+      SELECT 1
+      FROM ${CurrentPostMentionMarkers}
+      WHERE ${CurrentPostMentionMarkers.postId} = ${postId}
+        AND ${CurrentPostMentionMarkers.profileId} = ${PostMentions.profileId}
+    )
+  )
+)`;
+
 type PostVisibilityConditionColumns = {
   readonly authorProfileId: SQLWrapper;
   readonly authorVisible: SQLWrapper;
   readonly postContentId: SQLWrapper;
+  readonly postId: SQLWrapper;
   readonly postState: SQLWrapper;
   readonly postVisibility: SQLWrapper;
 };
@@ -42,7 +65,10 @@ export const postVisibilityCondition = ({
         sql<boolean>`EXISTS (
           SELECT 1
           FROM ${PostMentions}
-          WHERE ${PostMentions.postContentId} = ${columns.postContentId}
+          WHERE ${currentPostMentionWhere({
+            postId: columns.postId,
+            postContentId: columns.postContentId,
+          })}
             AND ${PostMentions.profileId} = ${viewerProfileId}
         )`,
       )
@@ -67,6 +93,7 @@ export const postVisibilityCondition = ({
 
 type VisiblePost = {
   readonly currentContentId: SQLWrapper;
+  readonly id: SQLWrapper;
   readonly profileId: SQLWrapper;
   readonly state: SQLWrapper;
   readonly visibility: SQLWrapper;
@@ -128,6 +155,7 @@ export const visiblePostWhere = ({
         authorProfileId: post.profileId,
         authorVisible: profileVisible,
         postContentId: post.currentContentId,
+        postId: post.id,
         postState: post.state,
         postVisibility: post.visibility,
       },

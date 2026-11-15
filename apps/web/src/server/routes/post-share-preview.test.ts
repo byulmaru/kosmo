@@ -155,6 +155,63 @@ test.each([
   ]);
 });
 
+test('uses visible Profile handles from the preview document nodes without consulting PostMentions', async () => {
+  vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
+  vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);
+  const bodyText = 'hello @remote-target';
+  const relativeHandle = '@remote-target';
+  const rows = [
+    [
+      {
+        authorDisplayName: 'Alice',
+        authorHandle: 'alice',
+        authorInstanceId: 'local',
+        authorInstanceJoinedId: 'local',
+        authorInstanceDomain: 'kos.moe',
+        contentDocument: postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+          {
+            end: bodyText.length,
+            handle: relativeHandle,
+            profileId: 'remote-profile',
+            relativeHandle,
+            start: bodyText.indexOf(relativeHandle),
+          },
+        ]),
+        currentContentId: 'content',
+        postId,
+        replyParentId: null,
+        repostSourceId: null,
+      },
+    ],
+    [
+      {
+        domain: 'remote.example',
+        instanceId: 'remote-instance',
+        profileId: 'remote-profile',
+        handle: 'remote-target',
+        joinedInstanceId: 'remote-instance',
+      },
+    ],
+  ];
+  vi.spyOn(db, 'select').mockImplementation(() => {
+    const result = Promise.resolve(rows.shift());
+    const query = {
+      from: () => query,
+      innerJoin: () => query,
+      leftJoin: () => query,
+      where: () => query,
+      limit: () => result,
+      then: result.then.bind(result),
+    };
+    return query as unknown as ReturnType<typeof db.select>;
+  });
+
+  const response = await routes.request(path);
+  const html = await response.text();
+  expect(response.status).toBe(200);
+  expect(html).toContain('hello @remote-target@remote.example');
+});
+
 test('escapes hostile image alt text in share metadata attributes', async () => {
   vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
   vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);

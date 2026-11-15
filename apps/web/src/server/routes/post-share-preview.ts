@@ -1,11 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { db, Instances, Media, PostContents, PostMentions, Posts, Profiles } from '@kosmo/core/db';
+import { db, Instances, Media, PostContents, Posts, Profiles } from '@kosmo/core/db';
 import { MediaState } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { isValidMediaPublicationRights, mediaUseTermsUrl } from '@kosmo/core/media-metadata';
-import { postContentDocumentToText } from '@kosmo/core/post-content/server';
+import {
+  getPostContentMentionProfileIds,
+  postContentDocumentToText,
+} from '@kosmo/core/post-content/server';
 import { visiblePostWhere, visibleProfileWhere } from '@kosmo/core/visibility';
 import { resolveActivityPubPostUri } from '@kosmo/fedify';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
@@ -185,11 +188,7 @@ async function createPostMetadata(
   const relativeHandle = formatRelativeHandle(target, configuredLocalInstanceId);
   let mentionHandles: ReadonlyMap<string, string> = new Map();
   try {
-    mentionHandles = await findVisibleMentionHandles(
-      document,
-      target.currentContentId!,
-      configuredLocalInstanceId,
-    );
+    mentionHandles = await findVisibleMentionHandles(document, configuredLocalInstanceId);
   } catch (cause) {
     captureUnexpectedError(cause);
   }
@@ -235,19 +234,10 @@ async function createPostMetadata(
 
 async function findVisibleMentionHandles(
   document: (typeof PostContents.$inferSelect)['document'],
-  contentId: string,
   configuredLocalInstanceId: string,
 ): Promise<ReadonlyMap<string, string>> {
-  const mentionIds = new Set(
-    document.body.content.flatMap((block) =>
-      block.type === 'paragraph'
-        ? (block.content ?? [])
-            .filter((node) => node.type === 'mention')
-            .map((node) => node.attrs.profileId)
-        : [],
-    ),
-  );
-  if (mentionIds.size === 0) {
+  const mentionIds = getPostContentMentionProfileIds(document);
+  if (mentionIds.length === 0) {
     return new Map();
   }
 
@@ -259,13 +249,11 @@ async function findVisibleMentionHandles(
       handle: Profiles.handle,
       joinedInstanceId: Instances.id,
     })
-    .from(PostMentions)
-    .innerJoin(Profiles, eq(Profiles.id, PostMentions.profileId))
+    .from(Profiles)
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .where(
       and(
-        eq(PostMentions.postContentId, contentId),
-        inArray(PostMentions.profileId, [...mentionIds]),
+        inArray(Profiles.id, mentionIds),
         visibleProfileWhere({ profile: Profiles, instance: Instances }),
       ),
     );

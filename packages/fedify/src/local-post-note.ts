@@ -26,9 +26,12 @@ import {
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { postContentDocumentToHtml } from '@kosmo/core/post-content/server';
+import {
+  getPostContentMentionProfileIds,
+  postContentDocumentToHtml,
+} from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
-import { visibleProfileWhere } from '@kosmo/core/visibility';
+import { currentPostMentionWhere, visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { escapeText } from 'entities/escape';
 import { isCanonicalPostId, resolveActivityPubPostUri } from './activitypub-post-uri';
@@ -153,16 +156,11 @@ const parseHttpUrl = (value: string | null): URL | null => {
 
 const projectLocalPostMentions = async (
   configuredLocalInstance: ConfiguredLocalInstance,
+  postId: string,
   contentId: string,
   document: PostContentDocumentV1,
 ) => {
-  const profileIds = document.body.content.flatMap((block) =>
-    block.type === 'paragraph'
-      ? (block.content ?? []).flatMap((node) =>
-          node.type === 'mention' ? [node.attrs.profileId] : [],
-        )
-      : [],
-  );
+  const profileIds = getPostContentMentionProfileIds(document);
   const mentionLinks = new Map<string, { readonly href: string; readonly label: string }>();
   const remoteActorUris: URL[] = [];
   const tags: Mention[] = [];
@@ -186,7 +184,7 @@ const projectLocalPostMentions = async (
     .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
     .where(
       and(
-        eq(PostMentions.postContentId, contentId),
+        currentPostMentionWhere({ postId, postContentId: contentId }),
         inArray(PostMentions.profileId, profileIds),
         visibleProfileWhere({ profile: Profiles, instance: Instances }),
       ),
@@ -413,7 +411,12 @@ export const projectLocalPostNote = async (
         : undefined;
   const configuredLocalInstance = await resolveConfiguredLocalInstance();
   const [mentions, hashtags] = await Promise.all([
-    projectLocalPostMentions(configuredLocalInstance, note.contentId, note.contentDocument),
+    projectLocalPostMentions(
+      configuredLocalInstance,
+      note.id,
+      note.contentId,
+      note.contentDocument,
+    ),
     projectLocalPostHashtags(configuredLocalInstance, note.contentId, note.contentDocument),
   ]);
   const tags = [...mentions.tags, ...hashtags.tags];

@@ -1466,10 +1466,12 @@ describe('Post Reply GraphQL 경계', () => {
     );
   });
 
-  test('여러 PostContent의 mentionedProfiles를 각각의 relation으로 조회한다', async () => {
+  test('여러 PostContent의 mentionedProfiles는 각 본문 node에서 가져오고 숨겨진 Profile은 제외한다', async () => {
     const auth = await createAuthenticatedSession();
     const firstMentioned = await createProfile('batch-mentioned-first');
     const secondMentioned = await createProfile('batch-mentioned-second');
+    const repeatedMentioned = await createProfile('batch-mentioned-current-relation');
+    const hiddenMentioned = await createProfile('batch-mentioned-disabled', ProfileState.DISABLED);
     const firstPost = await createContentfulPost(auth.profile.id, { bodyText: '첫 번째 본문' });
     const secondPost = await createContentfulPost(auth.profile.id, { bodyText: '두 번째 본문' });
     const firstContentId = firstPost.currentContentId;
@@ -1477,9 +1479,21 @@ describe('Post Reply GraphQL 경계', () => {
     assert.ok(firstContentId);
     assert.ok(secondContentId);
 
+    await db
+      .update(PostContents)
+      .set({
+        document: documentWithMentions([firstMentioned, firstMentioned]),
+      })
+      .where(eq(PostContents.id, firstContentId));
+    await db
+      .update(PostContents)
+      .set({ document: documentWithMentions([secondMentioned, hiddenMentioned]) })
+      .where(eq(PostContents.id, secondContentId));
+
+    // Relation rows can lag or refer to another revision; this field follows the requested document.
     await db.insert(PostMentions).values([
-      { postContentId: firstContentId, profileId: firstMentioned.id },
-      { postContentId: secondContentId, profileId: secondMentioned.id },
+      { postContentId: firstContentId, profileId: repeatedMentioned.id },
+      { postContentId: secondContentId, profileId: firstMentioned.id },
     ]);
 
     const result = await requestPostContents([
@@ -1507,6 +1521,56 @@ describe('Post Reply GraphQL 경계', () => {
         ],
       ],
     );
+  });
+
+  test('historical PostContent의 mentionedProfiles는 현재 Post relation과 독립적이다', async () => {
+    const auth = await createAuthenticatedSession();
+    const historicalMentioned = await createProfile('historical-content-mentioned');
+    const currentMentioned = await createProfile('current-content-mentioned');
+    const post = await createContentfulPost(auth.profile.id, { bodyText: 'historical body' });
+    const historicalContentId = post.currentContentId;
+    assert.ok(historicalContentId);
+
+    await db
+      .update(PostContents)
+      .set({ document: documentWithMentions([historicalMentioned]) })
+      .where(eq(PostContents.id, historicalContentId));
+    const currentContent = await db
+      .insert(PostContents)
+      .values({
+        document: documentWithMentions([currentMentioned]),
+        postId: post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(Posts)
+      .set({ currentContentId: currentContent.id })
+      .where(eq(Posts.id, post.id));
+    await db.insert(PostMentions).values({
+      postContentId: currentContent.id,
+      postId: post.id,
+      profileId: currentMentioned.id,
+    });
+
+    const result = await requestGraphQL<{
+      node: { mentionedProfiles: Array<{ id: string; relativeHandle: string }> } | null;
+    }>(
+      `query HistoricalPostContentMentions($id: ID!) {
+        node(id: $id) {
+          ... on PostContent { mentionedProfiles { id relativeHandle } }
+        }
+      }`,
+      { id: encodeGlobalId('PostContent', historicalContentId) },
+    );
+
+    assertNoGraphQLErrors(result);
+    assert.deepEqual(result.data?.node?.mentionedProfiles, [
+      {
+        id: encodeGlobalId('Profile', historicalMentioned.id),
+        relativeHandle: `@${historicalMentioned.handle}`,
+      },
+    ]);
   });
 
   test('Media 재사용 시 최신 Alt Text가 모든 참조에서 보인다', async () => {
@@ -2943,6 +3007,22 @@ const requestPostContentLinkPreview = (postId: string, token?: string) =>
     { postId },
     token,
   );
+
+const documentWithMentions = (profiles: readonly { id: string; handle: string }[]) => {
+  let bodyText = '';
+  const mentions = profiles.map(({ handle, id }) => {
+    bodyText += `${bodyText.length > 0 ? ' ' : ''}@${handle}`;
+    const relativeHandle = `@${handle}`;
+    return {
+      end: bodyText.length,
+      handle: relativeHandle,
+      profileId: id,
+      relativeHandle,
+      start: bodyText.length - relativeHandle.length,
+    };
+  });
+  return postContentDocumentFromTextAndMedia(bodyText, [], false, null, mentions);
+};
 
 const postContentDocumentWithLinks = (urls: readonly string[], mediaId?: string) =>
   canonicalizePostContentDocument({

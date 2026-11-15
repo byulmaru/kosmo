@@ -395,16 +395,19 @@ describe('inbound Create dispatch', () => {
         left.postContentId.localeCompare(right.postContentId),
       ),
       [
-        { postContentId: original.content.id, postId: null, profileId: profile.id },
-        { postContentId: createdAfterRefresh.content.id, postId: null, profileId: profile.id },
-      ].sort((left, right) => left.postContentId.localeCompare(right.postContentId)),
+        {
+          postContentId: createdAfterRefresh.content.id,
+          postId: createdAfterRefresh.content.postId,
+          profileId: profile.id,
+        },
+      ],
     );
     assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
   });
 
-  test('keeps a name-matching untrusted body URL as a safe link and stores the typed relation', async () => {
-    const profile = await createStoredRemoteActor({ profileUrl: null });
+  test('keeps a name-matching untrusted body URL as a safe link without a Mention relation', async () => {
+    await createStoredRemoteActor({ profileUrl: null });
     const untrustedUrl = 'https://evil.example/login';
     const objectUri = new URL('https://remote.example/notes/untrusted-mention-link');
     const note = new Note({
@@ -448,9 +451,7 @@ describe('inbound Create dispatch', () => {
         ],
       },
     ]);
-    assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: profile.id },
-    ]);
+    assert.deepEqual(await db.select().from(PostMentions), []);
     assert.equal(fetchMock.mock.callCount(), 0);
   });
 
@@ -639,7 +640,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: profile.id },
+      { postContentId: content.id, postId: content.postId, profileId: profile.id },
     ]);
   });
 
@@ -696,8 +697,8 @@ describe('inbound Create dispatch', () => {
         left.profileId.localeCompare(right.profileId),
       ),
       [
-        { postContentId: content.id, postId: null, profileId: alice.id },
-        { postContentId: content.id, postId: null, profileId: bob.id },
+        { postContentId: content.id, postId: content.postId, profileId: alice.id },
+        { postContentId: content.id, postId: content.postId, profileId: bob.id },
       ].sort((left, right) => left.profileId.localeCompare(right.profileId)),
     );
   });
@@ -722,7 +723,7 @@ describe('inbound Create dispatch', () => {
       instanceKind: InstanceKind.LOCAL,
     });
 
-    const { candidates } = await resolveStoredInboundMentionCandidates([
+    const { activeLocalProfileIds, candidates } = await resolveStoredInboundMentionCandidates([
       remoteActor.href,
       localActor.href,
       otherLocalActor.href,
@@ -744,6 +745,10 @@ describe('inbound Create dispatch', () => {
     expected.sort(([left], [right]) => left.localeCompare(right));
 
     assert.deepEqual(actual, expected);
+    assert.deepEqual(
+      new Set(activeLocalProfileIds),
+      new Set([localProfile.id, otherLocalProfile.id]),
+    );
   });
 
   test('projects a local Profile Mention when the actor URI and human URL use different forms', async () => {
@@ -796,7 +801,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: target.id },
+      { postContentId: content.id, postId: content.postId, profileId: target.id },
     ]);
     assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
@@ -857,7 +862,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: storedActor.profile.id },
+      { postContentId: content.id, postId: content.postId, profileId: storedActor.profile.id },
     ]);
   });
 
@@ -1127,7 +1132,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: validProfile.id },
+      { postContentId: content.id, postId: content.postId, profileId: validProfile.id },
     ]);
     assert.deepEqual(
       observations
@@ -1230,7 +1235,7 @@ describe('inbound Create dispatch', () => {
     );
     assert.ok(knownProfileId);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: knownProfileId },
+      { postContentId: content.id, postId: content.postId, profileId: knownProfileId },
     ]);
   });
 
@@ -1318,7 +1323,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: knownProfile.id },
+      { postContentId: content.id, postId: content.postId, profileId: knownProfile.id },
     ]);
     assert.equal((await db.select().from(Profiles)).length, profileCount);
     assert.equal((await db.select().from(ActivityPubActors)).length, actorCount);
@@ -1381,7 +1386,7 @@ describe('inbound Create dispatch', () => {
       { altText: 'Mention image', mediaType: 'image/webp', url: mediaUri.href },
     );
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: profile.id },
+      { postContentId: content.id, postId: content.postId, profileId: profile.id },
     ]);
   });
 
@@ -1498,8 +1503,9 @@ describe('inbound Create dispatch', () => {
       context: createContext(),
       note: new Note({
         attribution: remoteActorUri,
-        content: 'Stored-author Followers-only Mention',
+        content: `<p><a href="${recipientActorUri.href}">@hydrated-followers-recipient</a></p>`,
         id: objectUri,
+        mediaType: 'text/html',
         tags: [new Mention({ href: recipientActorUri, name: '@hydrated-followers-recipient' })],
         to: new URL(`${remoteActorUri.href}/followers`),
       }),
@@ -1513,7 +1519,11 @@ describe('inbound Create dispatch', () => {
     assert.equal(materialized.post.profileId, author.id);
     assert.equal(materialized.post.visibility, PostVisibility.FOLLOWERS);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: materialized.content.id, postId: null, profileId: recipient.id },
+      {
+        postContentId: materialized.content.id,
+        postId: materialized.post.id,
+        profileId: recipient.id,
+      },
     ]);
   });
 
@@ -1554,8 +1564,11 @@ describe('inbound Create dispatch', () => {
         } as unknown as InboxContext<void>,
         note: new Note({
           attribution: remoteActorUri,
-          content: 'Fetched-author Followers-only Mention',
+          content:
+            `<p><a href="${recipientActorUri.href}">` +
+            '@hydrated-unknown-followers-recipient</a></p>',
           id: objectUri,
+          mediaType: 'text/html',
           tags: [
             new Mention({ href: recipientActorUri, name: '@hydrated-unknown-followers-recipient' }),
           ],
@@ -1579,7 +1592,11 @@ describe('inbound Create dispatch', () => {
       assert.equal(workflowLookupObject.mock.callCount(), 1);
       assert.equal(contextLookupObject.mock.callCount(), 0);
       assert.deepEqual(await db.select().from(PostMentions), [
-        { postContentId: materialized.content.id, postId: null, profileId: recipient.id },
+        {
+          postContentId: materialized.content.id,
+          postId: materialized.post.id,
+          profileId: recipient.id,
+        },
       ]);
     } finally {
       lookupWorkflow.mock.restore();
@@ -1611,8 +1628,11 @@ describe('inbound Create dispatch', () => {
         context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
         note: new Note({
           attribution: remoteActorUri,
-          content: 'Fetched-author Mention-only Direct',
+          content:
+            `<p>Fetched-author <a href="${recipientActorUri.href}">` +
+            '@hydrated-unknown-direct-recipient</a></p>',
           id: objectUri,
+          mediaType: 'text/html',
           tags: [
             new Mention({ href: recipientActorUri, name: '@hydrated-unknown-direct-recipient' }),
           ],
@@ -1633,7 +1653,11 @@ describe('inbound Create dispatch', () => {
       assert.equal(materialized.post.profileId, storedAuthor.profileId);
       assert.equal(materialized.post.visibility, PostVisibility.DIRECT);
       assert.deepEqual(await db.select().from(PostMentions), [
-        { postContentId: materialized.content.id, postId: null, profileId: recipient.id },
+        {
+          postContentId: materialized.content.id,
+          postId: materialized.post.id,
+          profileId: recipient.id,
+        },
       ]);
     } finally {
       lookupWorkflow.mock.restore();
@@ -1666,8 +1690,11 @@ describe('inbound Create dispatch', () => {
         note: new Note({
           attachments: [new Image({ url: new URL('ftp://remote.example/media/image.webp') })],
           attribution: remoteActorUri,
-          content: 'Invalid image',
+          content:
+            `<p><a href="${recipientActorUri.href}">` +
+            '@hydrated-invalid-direct-recipient</a></p>',
           id: objectUri,
+          mediaType: 'text/html',
           tags: [
             new Mention({ href: recipientActorUri, name: '@hydrated-invalid-direct-recipient' }),
           ],
@@ -1708,8 +1735,9 @@ describe('inbound Create dispatch', () => {
     const objectUri = new URL('https://objects.example/notes/hydrated-direct');
     const note = new Note({
       attribution: remoteActorUri,
-      content: 'Hydrated Mention-only Direct',
+      content: `<p><a href="${recipientActorUri.href}">@hydrated-direct-recipient</a></p>`,
       id: objectUri,
+      mediaType: 'text/html',
       tags: [new Mention({ href: recipientActorUri, name: '@hydrated-direct-recipient' })],
       to: new URL('https://unrelated.example/users/recipient'),
     });
@@ -1729,11 +1757,20 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(materialized.content.document.body.content, [
       {
         type: 'paragraph',
-        content: [{ text: 'Hydrated Mention-only Direct', type: 'text' }],
+        content: [
+          {
+            attrs: { handle: '@hydrated-direct-recipient', profileId: recipient.id },
+            type: 'mention',
+          },
+        ],
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: materialized.content.id, postId: null, profileId: recipient.id },
+      {
+        postContentId: materialized.content.id,
+        postId: materialized.post.id,
+        profileId: recipient.id,
+      },
     ]);
   });
 
@@ -2047,7 +2084,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: mentionProfile.id },
+      { postContentId: content.id, postId: content.postId, profileId: mentionProfile.id },
     ]);
   });
 
@@ -2553,8 +2590,11 @@ describe('inbound Create dispatch', () => {
       actor: remoteActorUri,
       object: new Note({
         attribution: remoteActorUri,
-        content: 'Mention-only Direct',
+        content:
+          `<p><a href="${recipientActorUri.href}">@direct-recipient</a> ` +
+          `<a href="${remoteMentionActorUri.href}">@direct-target</a></p>`,
         id: objectUri,
+        mediaType: 'text/html',
         tags: [
           new Mention({ href: recipientActorUri, name: '@direct-recipient' }),
           new Mention({ href: remoteMentionActorUri, name: '@direct-target' }),
@@ -2647,8 +2687,9 @@ describe('inbound Create dispatch', () => {
         actor: remoteActorUri,
         object: new Note({
           attribution: remoteActorUri,
-          content: 'Mention-only shared Direct',
+          content: `<p><a href="${recipientActorUri.href}">@direct-recipient</a></p>`,
           id: sharedObjectUri,
+          mediaType: 'text/html',
           tags: [new Mention({ href: recipientActorUri, name: '@direct-recipient' })],
         }),
       }),
@@ -2734,9 +2775,29 @@ describe('inbound Create dispatch', () => {
           tags: [new Mention({ href: suspendedLocalInstanceMentionUri, name: '@suspended-local' })],
         }),
       },
+      {
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content:
+            '<p><a href="https://other.example/@direct-address-recipient">@recipient</a></p>',
+          id: new URL('https://remote.example/notes/direct-tag-without-body-identity'),
+          mediaType: 'text/html',
+          tags: [
+            new Mention({ href: recipientActorUri, name: '@direct-address-recipient' }),
+            new Mention({
+              href: new URL('https://unknown-mention.example/users/target'),
+              name: '@unknown-target',
+            }),
+          ],
+        }),
+      },
     ];
 
     const logs: unknown[] = [];
+    const lookupWorkflow = mockRemoteProfileRefresh(async () => {
+      throw new Error('DIRECT rejection must happen before unknown Mention lookup');
+    });
     const restoreReporter = setInboundObservabilityReporter({
       log: (observation) => logs.push(observation),
     });
@@ -2750,7 +2811,9 @@ describe('inbound Create dispatch', () => {
       }
     } finally {
       restoreReporter();
+      lookupWorkflow.mock.restore();
     }
+    assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 0);
 
     assert.deepEqual(
       logs,
@@ -2773,6 +2836,73 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(PostContents), 0);
     assert.equal(await db.$count(PostMentions), 0);
     assert.equal(await db.$count(Notifications), 0);
+  });
+
+  test('rejects DIRECT when actor materialization makes a local body Mention ambiguous', async () => {
+    await createStoredRemoteActor();
+    const localTarget = await createLocalFollowerProfile('direct-ambiguous-body-target');
+    const localActorUri = new URL(`/ap/actor/${localTarget.id}`, publicOrigin);
+    await ensureDrizzleLocalProfileActor({
+      actorUri: localActorUri,
+      localInstanceId,
+      profileId: localTarget.id,
+    });
+    const unknownActorUri = new URL('https://mentions.example/users/ambiguous');
+    const localHumanUrl = `${publicOrigin}/@${encodeURIComponent(localTarget.handle)}`;
+    const objectUri = new URL('https://remote.example/notes/direct-ambiguous-body-mention');
+    const lookupWorkflow = mockRemoteProfileRefresh(
+      async (actorUri) =>
+        (
+          await createStoredRemoteActor({
+            actorUri: new URL(actorUri),
+            handle: 'ambiguous',
+            profileUrl: localHumanUrl,
+          })
+        ).id,
+    );
+    const observations: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => observations.push(observation),
+    });
+
+    try {
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            content: `<p><a href="${localHumanUrl}">@target</a></p>`,
+            id: objectUri,
+            mediaType: 'text/html',
+            tags: [
+              new Mention({ href: localActorUri, name: '@local-target' }),
+              new Mention({ href: unknownActorUri, name: '@ambiguous' }),
+            ],
+          }),
+        }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+      lookupWorkflow.mock.restore();
+    }
+
+    assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
+    assert.deepEqual(
+      observations.map((observation) => {
+        const { phase, reasonCode, outcome } = observation as {
+          readonly phase: string;
+          readonly reasonCode: string;
+          readonly outcome: string;
+        };
+        return { outcome, phase, reasonCode };
+      }),
+      [{ outcome: 'rejected', phase: 'validation', reasonCode: 'no_active_local_mention' }],
+    );
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
   });
 
   test('skips actor-only and foreign-followers-only audiences without side effects', async () => {
@@ -4435,7 +4565,7 @@ describe('inbound Create dispatch', () => {
     );
     assert.equal((await db.select().from(PostContents)).length, 1);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, postId: null, profileId: profile.id },
+      { postContentId: content.id, postId: content.postId, profileId: profile.id },
     ]);
     const firstHashtag = await db
       .select()

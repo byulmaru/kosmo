@@ -11,7 +11,7 @@ import {
   Profiles,
 } from '../db';
 import { InstanceKind, InstanceState, NotificationKind, ProfileState } from '../enums';
-import { postVisibilityCondition } from '../visibility/post';
+import { currentPostMentionWhere, postVisibilityCondition } from '../visibility/post';
 import { materializeNotification } from './notification-policy';
 import { materializeReplyNotificationIfEligible } from './quote-notification-coordination';
 import type { Database, Transaction } from '../db';
@@ -44,7 +44,13 @@ const findEligibleMentionCandidates = async (
       PostContents,
       and(eq(PostContents.id, Posts.currentContentId), eq(PostContents.postId, Posts.id)),
     )
-    .innerJoin(PostMentions, eq(PostMentions.postContentId, PostContents.id))
+    .innerJoin(
+      PostMentions,
+      currentPostMentionWhere({
+        postId: Posts.id,
+        postContentId: Posts.currentContentId,
+      }),
+    )
     .innerJoin(MentionAuthors, eq(MentionAuthors.id, Posts.profileId))
     .innerJoin(MentionAuthorInstances, eq(MentionAuthorInstances.id, MentionAuthors.instanceId))
     .innerJoin(MentionRecipients, eq(MentionRecipients.id, PostMentions.profileId))
@@ -74,6 +80,7 @@ const findEligibleMentionCandidates = async (
               ne(MentionAuthorInstances.state, InstanceState.SUSPENDED),
             )!,
             postContentId: Posts.currentContentId,
+            postId: Posts.id,
             postState: Posts.state,
             postVisibility: Posts.visibility,
           },

@@ -15,6 +15,7 @@ import {
   PostVisibility,
   ProfileState,
 } from '@kosmo/core/enums';
+import { currentPostMentionWhere } from '@kosmo/core/visibility';
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { isHttpUri } from './activitypub-uri';
@@ -49,7 +50,13 @@ const getMentionDeliveryRecipients = async (postId: string, contentId: string) =
       uri: ActivityPubActors.uri,
     })
     .from(Posts)
-    .innerJoin(PostMentions, eq(PostMentions.postContentId, Posts.currentContentId))
+    .innerJoin(
+      PostMentions,
+      currentPostMentionWhere({
+        postId: Posts.id,
+        postContentId: Posts.currentContentId,
+      }),
+    )
     .innerJoin(Profiles, eq(Profiles.id, PostMentions.profileId))
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .innerJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
