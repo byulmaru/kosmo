@@ -128,6 +128,11 @@ mock.module('react-native', {
     View: 'View',
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/useAnimatedColorTransition.ts', import.meta.url), {
+  exports: {
+    useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../native-push/nativePushClient.ts', import.meta.url), {
   exports: {
     getNativeNotificationPermissionStatus: () => {
