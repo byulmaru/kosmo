@@ -123,10 +123,7 @@ export function SettingsNavigationList({
               return selectedProfile ? (
                 <ProfileListItemRow
                   profile={selectedProfile}
-                  style={[
-                    styles.profilePickerRow,
-                    { backgroundColor, borderColor: theme.borderDefault },
-                  ]}
+                  style={[styles.profilePickerRow, { backgroundColor }]}
                 >
                   {chevron}
                 </ProfileListItemRow>
@@ -135,7 +132,7 @@ export function SettingsNavigationList({
                   style={[
                     layoutRecipes.listRow,
                     styles.profileSelectionFallback,
-                    { backgroundColor, borderColor: theme.borderDefault },
+                    { backgroundColor },
                   ]}
                 >
                   <Text style={[textStyles.uiLabelM, { color: theme.foregroundPrimary }]}>
@@ -403,12 +400,11 @@ function WebNotificationSettingsAction({ density }: { density: 'default' | 'comp
 const styles = StyleSheet.create({
   profileSelectionFallback: {
     borderRadius: radius[8],
-    borderWidth: borderWidths[1],
     minHeight: 64,
     width: '100%',
   },
   profileTrigger: { borderRadius: radius[8], width: '100%' },
-  profilePickerRow: { borderRadius: radius[8], borderWidth: borderWidths[1] },
+  profilePickerRow: { borderBottomWidth: 0, borderRadius: radius[8] },
   root: { width: '100%' },
   section: { minWidth: 0, width: '100%' },
   sectionHeadingContainer: {

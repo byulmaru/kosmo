@@ -141,10 +141,11 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
   presentation을 사용한다. 그룹은 위 `12px`, 아래 `4px` 간격을 둔다. 짧은 현재값(예: `화면`의 현재 테마)은
   chevron 앞 trailing text로 표시하고, 긴 설명은 stacked text로 유지해 내용에 따라 행이 늘어날 수 있다. Compact
   Web, mobile Web, Android·iOS navigation과 full Web detail은 기본 presentation을 유지한다.
-- 현재 선택된 Profile은 모든 navigation size에서 하나의 둥근 테두리 trigger로 표시한다. trigger 전체가 기존
-  Profile picker를 열고, avatar·이름·handle과 장식용 chevron을 포함한다. 접근성 이름은 현재 이름·handle과
-  `다른 Profile 선택` action을 전달한다. 별도의 `Profile 전환` button을 두지 않는다. 선택된 Profile이 없을 때는
-  기존 Profile 선택·생성 recovery를 유지하고 대체 identity를 표시하지 않는다.
+- 현재 선택된 Profile은 모든 navigation size에서 하나의 borderless compound trigger로 표시한다. 둥근 hit region의
+  hover·pressed surface와 keyboard focus-visible ring을 유지한다. trigger 전체가 기존 Profile picker를 열고,
+  avatar·이름·handle과 장식용 chevron을 포함한다. 접근성 이름은 현재 이름·handle과 `다른 Profile 선택` action을
+  전달한다. 별도의 `Profile 전환` button을 두지 않는다. 선택된 Profile이 없을 때는 같은 borderless trigger로 기존
+  Profile 선택·생성 recovery를 유지하고 대체 identity를 표시하지 않는다.
 - 향후 승인된 항목은 direct destination, 하위 목록을 여는 category 또는 기존 독립 화면으로 이동하는
   destination으로 추가할 수 있다. 모든 detail을 Settings workspace 안에 강제로 넣거나 현재 구현에 미래
   category를 위한 disabled item·placeholder를 만들지 않는다.
