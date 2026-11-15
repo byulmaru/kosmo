@@ -730,11 +730,13 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(info.props.accessibilityState, { selected: true });
   });
 
-  it('코스모 탈퇴는 마지막 root destination으로 current 상태를 전달한다', async () => {
+  it('코스모 탈퇴 destination은 현재 페이지와 선택 상태를 표시한다', async () => {
     await render({ pathname: '/settings/account-deletion', selected: 'account-deletion' });
 
-    const links = rendered('Pressable');
-    const deletion = links[links.length - 1];
+    const deletion = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/account-deletion',
+    );
+    assert.ok(deletion);
     assert.equal(deletion.props['aria-current'], 'page');
     assert.deepEqual(deletion.props.accessibilityState, { selected: true });
   });
