@@ -31,6 +31,7 @@ import {
   ProfileState,
 } from '../enums';
 import {
+  canonicalizePostContentDocument,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
@@ -97,7 +98,25 @@ const createTestPost = async ({
   readonly visibility?: PostVisibility;
 }) => {
   const result = await persistPost({
-    document: postContentDocumentFromText(`mention ${crypto.randomUUID()}`),
+    document: canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: `mention ${crypto.randomUUID()}` },
+              ...mentionProfileIds.map((profileId) => ({
+                type: 'mention',
+                attrs: { profileId },
+              })),
+            ],
+          },
+        ],
+      },
+    }),
     mentionProfileIds,
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
     origin: 'ACTIVITYPUB',
@@ -985,6 +1004,7 @@ test('availability follows Post Mention identity and excludes Recipient-only dow
   assert.equal(await isAvailable(notification.id, false), true);
   await db.insert(PostMentions).values({
     postContentId: replacementContent.id,
+    postId: null,
     profileId: recipient.id,
   });
   assert.equal(await isAvailable(notification.id, true), true);
@@ -994,21 +1014,14 @@ test('availability follows Post Mention identity and excludes Recipient-only dow
 test('a Post mention marker survives content changes and suppresses a duplicate legacy fallback', async () => {
   const author = await createProfile(InstanceKind.ACTIVITYPUB);
   const recipient = await createProfile();
-  const post = await createTestPost({
-    authorProfileId: author.id,
-    mentionProfileIds: [recipient.id],
-  });
+  const post = await createTestPost({ authorProfileId: author.id });
   assert.ok(post.currentContentId);
+  await db.insert(PostMentions).values({
+    postContentId: post.currentContentId,
+    postId: null,
+    profileId: recipient.id,
+  });
 
-  await db
-    .update(PostMentions)
-    .set({ postId: null })
-    .where(
-      and(
-        eq(PostMentions.postContentId, post.currentContentId),
-        eq(PostMentions.profileId, recipient.id),
-      ),
-    );
   const legacyNotificationIds = await createMentionNotification(post.id);
   assert.equal(legacyNotificationIds.length, 1);
 
@@ -1035,6 +1048,7 @@ test('a Post mention marker survives content changes and suppresses a duplicate 
     .where(eq(Posts.id, post.id));
   await db.insert(PostMentions).values({
     postContentId: replacementContent.id,
+    postId: null,
     profileId: recipient.id,
   });
 

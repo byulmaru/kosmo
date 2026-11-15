@@ -429,15 +429,19 @@ describe('Post Reply GraphQL 경계', () => {
       .returning()
       .then(firstOrThrow);
     await db
+      .update(PostMentions)
+      .set({ postId: null })
+      .where(eq(PostMentions.postId, storedPost.id));
+    await db
       .update(Posts)
       .set({ currentContentId: replacementContent.id })
       .where(eq(Posts.id, storedPost.id));
 
-    const staleMentionReads = await Promise.all([
+    const revokedMentionReads = await Promise.all([
       requestPostContent(postId, recipient.token),
       requestPostContent(postId, remoteRecipient.token),
     ]);
-    for (const result of staleMentionReads) {
+    for (const result of revokedMentionReads) {
       assertNoGraphQLErrors(result);
       assert.equal(result.data?.node, null);
     }
@@ -461,8 +465,19 @@ describe('Post Reply GraphQL 경계', () => {
 
     const remoteAuthor = await createRemoteActorProfile('remote_direct_author');
     const { createPost: persistPost } = await import('@kosmo/core/services');
+    const remoteDirectHandle = `@${recipient.profile.handle}`;
+    const remoteDirectBodyText = `remote direct content ${remoteDirectHandle}`;
+    const remoteDirectMentionStart = remoteDirectBodyText.indexOf(remoteDirectHandle);
     const remotePost = await persistPost({
-      document: postContentDocumentFromText('remote direct content'),
+      document: postContentDocumentFromTextAndMedia(remoteDirectBodyText, [], false, null, [
+        {
+          end: remoteDirectMentionStart + remoteDirectHandle.length,
+          handle: remoteDirectHandle,
+          profileId: recipient.profile.id,
+          relativeHandle: remoteDirectHandle,
+          start: remoteDirectMentionStart,
+        },
+      ]),
       mentionProfileIds: [recipient.profile.id],
       objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
       origin: 'ACTIVITYPUB',
@@ -478,7 +493,7 @@ describe('Post Reply GraphQL 경계', () => {
       recipient.token,
     );
     assertNoGraphQLErrors(remoteDirectRead);
-    assert.equal(remoteDirectRead.data?.node?.content.bodyText, 'remote direct content');
+    assert.equal(remoteDirectRead.data?.node?.content.bodyText, remoteDirectBodyText);
   });
 
   test('비활성 viewer의 이전 context로는 FOLLOWERS Post Node와 PostContent를 읽을 수 없다', async () => {

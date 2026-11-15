@@ -2234,8 +2234,32 @@ test('공통 Notification Activity는 저장된 Mention ID마다 Push를 시작�
     assert.ok(secondRecipient);
     const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
     const publishedAt = Temporal.Now.instant();
+    const document: PostContentDocumentV1 = {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Mention source preview ' },
+              {
+                type: 'mention',
+                attrs: { handle: `@${recipient.handle}`, profileId: recipient.id },
+              },
+              { type: 'text', text: ' ' },
+              {
+                type: 'mention',
+                attrs: { handle: `@${secondRecipient.handle}`, profileId: secondRecipient.id },
+              },
+            ],
+          },
+        ],
+      },
+    };
     const createdPost = await createCorePost({
-      document: postContentDocumentFromText('Mention source preview'),
+      document,
       mentionProfileIds: [recipient.id, secondRecipient.id],
       objectUri: `https://${author.handle}.example/posts/${crypto.randomUUID()}`,
       origin: 'ACTIVITYPUB',
@@ -2421,7 +2445,7 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     const publishedAt = Temporal.Now.instant();
     const createdPost = await createCorePost({
       document: postContentDocumentFromText('Mention source preview'),
-      mentionProfileIds: [recipient.id],
+      mentionProfileIds: [],
       objectUri: `https://${author.handle}.example/posts/${crypto.randomUUID()}`,
       origin: 'ACTIVITYPUB',
       profileId: author.id,
@@ -2434,6 +2458,12 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     }
     const { post } = createdPost;
     postId = post.id;
+    // Model a legacy stored Mention relation without asking the new Post writer to create it.
+    await db.insert(PostMentions).values({
+      postContentId: createdPost.content.id,
+      postId: post.id,
+      profileId: recipient.id,
+    });
     const authorInstance = await db
       .select({ domain: Instances.domain })
       .from(Instances)

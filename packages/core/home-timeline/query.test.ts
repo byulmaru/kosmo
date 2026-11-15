@@ -112,7 +112,7 @@ test('Home query applies selected Profile candidate, mention, access, block, mut
         })),
       );
     }
-    return post;
+    return { ...post, currentContentId: content.id };
   };
 
   const follow = async (followerProfileId: string, followeeProfileId: string) => {
