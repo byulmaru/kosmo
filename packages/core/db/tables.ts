@@ -505,6 +505,7 @@ export const PostMentions = pgTable(
     postContentId: uuid('post_content_id')
       .notNull()
       .references(() => PostContents.id, { onDelete: 'cascade' }),
+    postId: uuid('post_id').references(() => Posts.id, { onDelete: 'cascade' }),
     profileId: uuid('profile_id')
       .notNull()
       .references(() => Profiles.id, { onDelete: 'cascade' }),
@@ -512,6 +513,9 @@ export const PostMentions = pgTable(
   (table) => [
     primaryKey({ columns: [table.postContentId, table.profileId] }),
     index().on(table.profileId),
+    uniqueIndex('post_mentions_post_id_profile_id_unique')
+      .on(table.postId, table.profileId)
+      .where(sql`${table.postId} IS NOT NULL`),
   ],
 );
 

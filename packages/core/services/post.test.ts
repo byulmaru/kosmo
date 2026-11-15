@@ -225,6 +225,64 @@ test('createPost는 Local Mention node를 저장하고 반복 Profile relation�
   );
 });
 
+test('PostMentions는 legacy null postId를 허용하고 Post/Profile pair를 한 번만 저장한다', async () => {
+  const author = await createProfile();
+  const mentioned = await createProfile();
+  const { content, post } = await createPost({
+    bodyText: 'post mention relation constraint',
+    origin: 'LOCAL',
+    profileId: author.id,
+    visibility: PostVisibility.UNLISTED,
+  });
+  const historicalContent = await db
+    .insert(PostContents)
+    .values({ document: content.document, postId: post.id })
+    .returning()
+    .then(firstOrThrow);
+
+  await db.insert(PostMentions).values([
+    { postContentId: content.id, profileId: mentioned.id },
+    { postContentId: historicalContent.id, profileId: mentioned.id },
+  ]);
+
+  const legacyRows = await db
+    .select()
+    .from(PostMentions)
+    .where(inArray(PostMentions.postContentId, [content.id, historicalContent.id]));
+  assert.equal(legacyRows.length, 2);
+  assert.deepEqual(new Set(legacyRows.map(({ postId }) => postId)), new Set([null]));
+
+  await db
+    .update(PostMentions)
+    .set({ postId: post.id })
+    .where(eq(PostMentions.postContentId, content.id));
+  await assert.rejects(
+    db
+      .update(PostMentions)
+      .set({ postId: post.id })
+      .where(eq(PostMentions.postContentId, historicalContent.id)),
+    (error: unknown) =>
+      error instanceof DrizzleQueryError &&
+      error.cause !== undefined &&
+      'code' in error.cause &&
+      error.cause.code === '23505',
+  );
+
+  const relationRows = await db
+    .select()
+    .from(PostMentions)
+    .where(inArray(PostMentions.postContentId, [content.id, historicalContent.id]));
+  assert.deepEqual(
+    relationRows
+      .map(({ postContentId, postId }) => [postContentId, postId])
+      .sort(([left], [right]) => left!.localeCompare(right!)),
+    [
+      [content.id, post.id],
+      [historicalContent.id, null],
+    ].sort(([left], [right]) => left!.localeCompare(right!)),
+  );
+});
+
 test('createPost, Reply, Quote reuse Profile Hashtags and preserve repeated authored tokens', async () => {
   const author = await createProfile();
   const account = await createAccount();
