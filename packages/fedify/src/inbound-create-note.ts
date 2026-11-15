@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import { randomUUID } from 'node:crypto';
 import { MIMEType } from 'node:util';
-import { Document, Hashtag, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
+import { Document, Emoji, Hashtag, Image, Link, PUBLIC_COLLECTION } from '@fedify/vocab';
 import {
   projectRemoteNoteContent,
   RemoteNoteContentLengthExceededError,
@@ -28,6 +28,7 @@ import {
 } from './remote-actor-materialization';
 import type { Context, InboxContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+import type { RemoteNoteCustomEmojiCandidate } from '@kosmo/core/activitypub-note-content/server';
 import type { ActivityPubPostInput } from '@kosmo/core/services';
 import type {
   ActivityPubPostCreateInput,
@@ -51,23 +52,49 @@ const noNetworkDocumentLoader = async (): Promise<never> => {
 
 const maxUnknownRemoteMentionLookups = 32;
 
-const collectInboundHashtagNames = async (note: Note): Promise<string[]> => {
-  const names: string[] = [];
+const collectInboundNoteTags = async (
+  note: Note,
+): Promise<{ emojis: RemoteNoteCustomEmojiCandidate[]; hashtagNames: string[] }> => {
+  const emojis: RemoteNoteCustomEmojiCandidate[] = [];
+  const hashtagNames: string[] = [];
   for await (const tag of note.getTags({
     contextLoader: noNetworkDocumentLoader,
     crossOrigin: 'trust',
     documentLoader: noNetworkDocumentLoader,
     suppressError: true,
   })) {
-    if (!(tag instanceof Hashtag)) {
+    if (tag instanceof Hashtag) {
+      const name = tag.name?.toString();
+      if (name !== undefined && name !== '') {
+        hashtagNames.push(name);
+      }
       continue;
     }
-    const name = tag.name?.toString();
-    if (name !== undefined && name !== '') {
-      names.push(name);
+    if (!(tag instanceof Emoji)) {
+      continue;
+    }
+
+    const shortcode = tag.name?.toString();
+    if (!shortcode) {
+      continue;
+    }
+    let icon: Image | null;
+    try {
+      icon = await tag.getIcon({
+        contextLoader: noNetworkDocumentLoader,
+        crossOrigin: 'trust',
+        documentLoader: noNetworkDocumentLoader,
+        suppressError: true,
+      });
+    } catch {
+      continue;
+    }
+    const url = icon?.url;
+    if (url !== null && url !== undefined) {
+      emojis.push({ shortcode, url: String(url) });
     }
   }
-  return names;
+  return { emojis, hashtagNames };
 };
 
 const isImageAttachment = (attachment: Document): boolean => {
@@ -138,8 +165,8 @@ const projectRemoteNote = async (
   const targetHrefs = await collectInboundMentionTargetHrefs(note);
   const { candidates: mentionCandidates, knownActorHrefs } =
     await resolveStoredInboundMentionCandidates(targetHrefs);
-  const hashtagNames = await collectInboundHashtagNames(note);
-  let document = projectRemoteNoteContent({ ...noteContent, mentions: mentionCandidates });
+  const { emojis, hashtagNames } = await collectInboundNoteTags(note);
+  let document = projectRemoteNoteContent({ ...noteContent, emojis, mentions: mentionCandidates });
   const media = await projectRemoteNoteMedia(note);
   const knownActorHrefSet = new Set(knownActorHrefs);
   const localOrigin = new URL(context.canonicalOrigin).origin;
@@ -191,7 +218,7 @@ const projectRemoteNote = async (
     const { candidates } = await resolveStoredInboundMentionCandidates(materializedActorHrefs);
     if (candidates.length > 0) {
       mentionCandidates.push(...candidates);
-      document = projectRemoteNoteContent({ ...noteContent, mentions: mentionCandidates });
+      document = projectRemoteNoteContent({ ...noteContent, emojis, mentions: mentionCandidates });
     }
   }
 

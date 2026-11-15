@@ -1019,6 +1019,66 @@ test('canonicalizes empty paragraphs, adjacent text, duplicate marks and URLs', 
   );
 });
 
+test('canonicalizes Custom Emoji metadata while preserving linked shortcode text', () => {
+  const document = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      attrs: {
+        customEmojis: [
+          { shortcode: ':party:', url: 'https://emoji.example/party.png' },
+          { shortcode: ':party:', url: 'https://emoji.example/party.png' },
+        ],
+        sensitiveMedia: true,
+      },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: ':party:',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com' } }],
+            },
+          ],
+        },
+        { type: 'media', attrs: { mediaId: '019f6678-86fa-709b-984e-1520766b8447' } },
+      ],
+    },
+  });
+
+  assert.deepEqual(document.body.attrs, {
+    customEmojis: [{ shortcode: ':party:', url: 'https://emoji.example/party.png' }],
+    sensitiveMedia: true,
+  });
+  assert.equal(isPostContentDocumentV1(document), true);
+  assert.deepEqual(readPostContentDocumentV1(document), document);
+  assert.equal(postContentDocumentToText(document), ':party:');
+
+  for (const attrs of [
+    { customEmojis: [{ shortcode: ':party:', url: 'http://emoji.example/party.png' }] },
+    {
+      customEmojis: [{ shortcode: ':party:', url: 'https://user:pass@emoji.example/p.png' }],
+    },
+    { customEmojis: [{ shortcode: ':party', url: 'https://emoji.example/p.png' }] },
+    {
+      customEmojis: [
+        { shortcode: ':party:', url: 'https://emoji.example/one.png' },
+        { shortcode: ':party:', url: 'https://emoji.example/two.png' },
+      ],
+    },
+  ]) {
+    assert.throws(() =>
+      canonicalizePostContentDocument({
+        version: 1,
+        summary: null,
+        body: { type: 'doc', attrs, content: [{ type: 'paragraph' }] },
+      }),
+    );
+  }
+});
+
 test('canonicalizes line endings inside document text nodes to hard breaks', () => {
   assert.deepEqual(
     canonicalizePostContentDocument({
@@ -1031,6 +1091,35 @@ test('canonicalizes line endings inside document text nodes to hard breaks', () 
     }),
     postContentDocumentFromText('a\nb\nc\nd'),
   );
+});
+
+test('preserves adjacent repeated Custom Emoji shortcode text through metadata roundtrip', () => {
+  const document = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      attrs: {
+        customEmojis: [{ shortcode: ':cat:', url: 'https://emoji.example/cat.png' }],
+      },
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: ':cat::cat:' }],
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(document.body.content[0], {
+    type: 'paragraph',
+    content: [{ type: 'text', text: ':cat::cat:' }],
+  });
+  assert.deepEqual(document.body.attrs, {
+    customEmojis: [{ shortcode: ':cat:', url: 'https://emoji.example/cat.png' }],
+  });
+  assert.deepEqual(readPostContentDocumentV1(document), document);
+  assert.equal(postContentDocumentToText(document), ':cat::cat:');
 });
 
 test('projects paragraph boundaries, hard breaks and link labels to Plain Text', () => {
@@ -1224,6 +1313,33 @@ test('keeps document metadata in a read projection when every body node is unkno
   assert.deepEqual(document?.body.content, []);
   assert.equal(document?.summary, 'warning');
   assert.equal(document?.body.attrs?.sensitiveMedia, true);
+});
+
+test('drops unusable Custom Emoji metadata without dropping Sensitive Media or body nodes', () => {
+  const document = readPostContentDocumentV1({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      attrs: {
+        customEmojis: [{ shortcode: ':broken:', url: 'http://emoji.example/broken.png' }],
+        sensitiveMedia: true,
+      },
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: ':broken:' }] },
+        { type: 'media', attrs: { mediaId: 'media-1' } },
+      ],
+    },
+  });
+
+  assert.deepEqual(document?.body, {
+    type: 'doc',
+    attrs: { sensitiveMedia: true },
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: ':broken:' }] },
+      { type: 'media', attrs: { mediaId: 'media-1' } },
+    ],
+  });
 });
 
 test('read projection rejects malformed known nodes and unsupported document versions', () => {

@@ -2,6 +2,7 @@ import { ValidationError } from '../error';
 import { postBodyMaxLength } from '../validation/post-policy';
 import {
   isPostContentMentionHandleUsernameWithinLimit,
+  normalizePostContentCustomEmojis,
   normalizePostContentHashtagId,
   normalizePostContentHashtagToken,
   normalizePostContentMentionHandle,
@@ -52,6 +53,7 @@ function canonicalizePostContentBody(
   assertPostContentJsonKeys(body);
   const parsed = postContentSchema.nodeFromJSON(canonicalizeDuplicateLinkMarks(body));
   parsed.check();
+  const customEmojis = normalizePostContentCustomEmojis(parsed.attrs.customEmojis ?? []);
 
   const blocks: ProseMirrorNode[] = [];
   let paragraphCount = 0;
@@ -102,12 +104,21 @@ function canonicalizePostContentBody(
   }
 
   const canonical = postContentSchema.nodes.doc.create(
-    { sensitiveMedia: parsed.attrs.sensitiveMedia },
+    {
+      ...(parsed.attrs.sensitiveMedia ? { sensitiveMedia: true } : {}),
+      ...(customEmojis.length > 0 ? { customEmojis } : {}),
+    },
     blocks,
   );
   canonical.check();
   const json = JSON.parse(JSON.stringify(canonical.toJSON())) as PostContentBodyDocumentV1;
-  return json.attrs?.sensitiveMedia ? json : { type: json.type, content: json.content };
+  const attrs = {
+    ...(json.attrs?.sensitiveMedia ? { sensitiveMedia: true } : {}),
+    ...(customEmojis.length > 0 ? { customEmojis } : {}),
+  };
+  return Object.keys(attrs).length > 0
+    ? { type: json.type, attrs, content: json.content }
+    : { type: json.type, content: json.content };
 }
 
 export function postContentDocumentToText(
@@ -234,9 +245,24 @@ function assertPostContentJsonKeys(value: unknown): void {
       if (!isRecord(value.attrs)) {
         throw new TypeError('Node attrs must be an object');
       }
-      assertOnlyKeys(value.attrs, ['sensitiveMedia']);
-      if (typeof value.attrs.sensitiveMedia !== 'boolean') {
+      assertOnlyKeys(value.attrs, ['customEmojis', 'sensitiveMedia']);
+      if ('sensitiveMedia' in value.attrs && typeof value.attrs.sensitiveMedia !== 'boolean') {
         throw new TypeError('Sensitive Media must be a boolean');
+      }
+      if (
+        value.attrs.customEmojis !== undefined &&
+        value.attrs.customEmojis !== null &&
+        !Array.isArray(value.attrs.customEmojis)
+      ) {
+        throw new TypeError('Custom Emojis must be an array');
+      }
+      if (Array.isArray(value.attrs.customEmojis)) {
+        for (const emoji of value.attrs.customEmojis) {
+          if (!isRecord(emoji)) {
+            throw new TypeError('Custom Emoji must be an object');
+          }
+          assertOnlyKeys(emoji, ['shortcode', 'url']);
+        }
       }
     }
     if (value.content !== undefined && !Array.isArray(value.content)) {
@@ -332,19 +358,16 @@ function canonicalizeDuplicateLinkMarks(value: unknown): unknown {
     return value;
   }
 
-  const hrefs = new Set(
-    value.marks.map((mark) => {
-      const parsed = postContentSchema.markFromJSON(mark);
-      return normalizeLinkHref(parsed.attrs.href);
-    }),
-  );
+  const parsedMarks = value.marks.map((mark) => postContentSchema.markFromJSON(mark));
+  const linkMarks = parsedMarks.filter((mark) => mark.type === postContentSchema.marks.link);
+  const hrefs = new Set(linkMarks.map((mark) => normalizeLinkHref(mark.attrs.href)));
   if (hrefs.size > 1) {
     throw new TypeError('Text cannot contain different nested links');
   }
   const href = hrefs.values().next().value;
   return {
     ...value,
-    marks: href ? [postContentSchema.marks.link.create({ href }).toJSON()] : [],
+    marks: [...(href ? [postContentSchema.marks.link.create({ href }).toJSON()] : [])],
   };
 }
 
