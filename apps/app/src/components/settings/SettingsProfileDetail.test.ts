@@ -52,6 +52,7 @@ let mutationConfigs: Array<{
 
 mock.module('react-native', {
   exports: {
+    Platform: { OS: 'web' },
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',

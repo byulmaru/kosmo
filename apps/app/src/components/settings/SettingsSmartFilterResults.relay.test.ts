@@ -38,6 +38,7 @@ mockModule('react-relay', {
 });
 mockModule('expo-router', { useIsFocused: () => focused });
 mockModule('react-native', {
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => undefined }) },
   Platform: { OS: 'ios' },
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',

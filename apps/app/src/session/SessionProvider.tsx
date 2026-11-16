@@ -17,7 +17,6 @@ import {
 } from '@/auth/selectedProfileStorage';
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { Splash } from '@/components/Splash';
-import { useNativeStartupRecovery } from '@/relay/NativeStartupRecoveryContext';
 import {
   useRelayActor,
   useRelayActorLifecycleKey,
@@ -80,7 +79,7 @@ const SessionProviderQuery = graphql`
 `;
 
 export function SessionProvider({ children }: PropsWithChildren) {
-  const startupRecovery = useNativeStartupRecovery();
+  const [fetchKey, setFetchKey] = useState(0);
   const authLifecycleKey = useRelayAuthLifecycleKey();
   const actorLifecycleKey = useRelayActorLifecycleKey();
   const lifecycleKeysRef = useRef({ authLifecycleKey, actorLifecycleKey });
@@ -138,26 +137,22 @@ export function SessionProvider({ children }: PropsWithChildren) {
     },
     [],
   );
-  const setSessionError = useCallback(
-    (authKey: string, actorKey: string) => {
-      const currentKeys = lifecycleKeysRef.current;
-      if (authKey !== currentKeys.authLifecycleKey || actorKey !== currentKeys.actorLifecycleKey) {
-        return;
-      }
+  const setSessionError = useCallback((authKey: string, actorKey: string) => {
+    const currentKeys = lifecycleKeysRef.current;
+    if (authKey !== currentKeys.authLifecycleKey || actorKey !== currentKeys.actorLifecycleKey) {
+      return;
+    }
 
-      startupRecovery?.sessionReady();
-      setSessionState((previous) => ({
-        authLifecycleKey: authKey,
-        actorLifecycleKey: actorKey,
-        ready: true,
-        value:
-          previous.authLifecycleKey === authKey && previous.ready
-            ? { ...previous.value, selectedProfileId: null }
-            : errorSession,
-      }));
-    },
-    [startupRecovery],
-  );
+    setSessionState((previous) => ({
+      authLifecycleKey: authKey,
+      actorLifecycleKey: actorKey,
+      ready: true,
+      value:
+        previous.authLifecycleKey === authKey && previous.ready
+          ? { ...previous.value, selectedProfileId: null }
+          : errorSession,
+    }));
+  }, []);
   const visibleSession =
     sessionState.authLifecycleKey !== authLifecycleKey
       ? errorSession
@@ -169,6 +164,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     <AnalyticsIdentityAccountContext.Provider value={sessionState.value.accountId}>
       <SessionContext.Provider value={visibleSession}>
         <RelayFailOpenBoundary
+          onRetry={() => setFetchKey((key) => key + 1)}
           fallback={
             <SessionErrorReporter
               authLifecycleKey={authLifecycleKey}
@@ -179,6 +175,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         >
           <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
             <SessionQuery
+              fetchKey={fetchKey}
               authLifecycleKey={authLifecycleKey}
               actorLifecycleKey={actorLifecycleKey}
               onSessionChange={setSession}
@@ -193,11 +190,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
 }
 
 function SessionQuery({
+  fetchKey,
   authLifecycleKey,
   actorLifecycleKey,
   onSessionChange,
   restoreRef,
 }: {
+  fetchKey: number;
   authLifecycleKey: string;
   actorLifecycleKey: string;
   restoreRef: { current: ProfileRestoreState | null };
@@ -214,14 +213,10 @@ function SessionQuery({
     resetRejectedCurrentActor,
     selectedProfileId: actorSelectedProfileId,
   } = useRelayActor();
-  const startupRecovery = useNativeStartupRecovery();
   const data = useLazyLoadQuery<SessionProviderQueryType>(
     SessionProviderQuery,
     {},
-    {
-      fetchPolicy: 'store-and-network',
-      networkCacheConfig: { metadata: { nativeStartup: true } },
-    },
+    { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const sessionId = data.currentSession?.id ?? null;
   const accountId = data.me?.id ?? null;
@@ -256,7 +251,6 @@ function SessionQuery({
 
     const confirmedGuest = sessionId === null && accountId === null;
     if (confirmedGuest) {
-      startupRecovery?.sessionReady();
       if (actorSelectedProfileId !== null) {
         resetActor(null);
       }
@@ -264,7 +258,6 @@ function SessionQuery({
     }
 
     if (!sessionId || !accountId) {
-      startupRecovery?.sessionReady();
       return deactivate;
     }
 
@@ -301,8 +294,6 @@ function SessionQuery({
             resetRejectedCurrentActor();
           }
         });
-      } else {
-        startupRecovery?.sessionReady();
       }
 
       return deactivate;
@@ -329,8 +320,6 @@ function SessionQuery({
           void writeSelectedProfile(serverSelectedProfileId);
           resetActor(serverSelectedProfileId);
         });
-      } else {
-        startupRecovery?.sessionReady();
       }
       return deactivate;
     }
@@ -346,8 +335,6 @@ function SessionQuery({
       } else if (serverSelectedProfileId) {
         void writeSelectedProfile(serverSelectedProfileId);
         resetActor(serverSelectedProfileId);
-      } else {
-        startupRecovery?.sessionReady();
       }
     });
 
@@ -363,7 +350,6 @@ function SessionQuery({
     serverSelectedProfileId,
     session,
     sessionId,
-    startupRecovery,
   ]);
 
   return null;

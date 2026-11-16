@@ -8,14 +8,12 @@ import {
   useRef,
   useState,
 } from 'react';
-import { AppState, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import { deleteSelectedProfile, writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { deleteSessionToken, readSessionToken, writeSessionToken } from '@/auth/tokenStorage';
 import { Splash } from '@/components/Splash';
 import { initialActorState, reduceActorState } from './actorState';
 import { createRelayEnvironment } from './environment';
-import { NativeStartupRecovery } from './nativeStartupRecovery';
-import { NativeStartupRecoveryContext } from './NativeStartupRecoveryContext';
 import { RelayEnvironmentBoundary } from './RelayEnvironmentBoundary';
 import type { PropsWithChildren } from 'react';
 import type { Environment } from 'relay-runtime';
@@ -42,17 +40,10 @@ export function RelayActorProvider({
   children,
   createEnvironment = createRelayEnvironment,
 }: PropsWithChildren<{
-  createEnvironment?: (
-    token: string | null,
-    selectedProfileId: string | null,
-    startupRecovery?: NativeStartupRecovery | null,
-  ) => Environment;
+  createEnvironment?: (token: string | null, selectedProfileId: string | null) => Environment;
 }>) {
   const [nativeToken, setNativeToken] = useState<string | null | undefined>(
     Platform.OS === 'web' ? null : undefined,
-  );
-  const [startupRecovery] = useState(() =>
-    Platform.OS === 'web' ? null : new NativeStartupRecovery(AppState),
   );
   const [actor, dispatchActor] = useReducer(reduceActorState, initialActorState);
   const environmentGenerationRef = useRef(0);
@@ -69,11 +60,10 @@ export function RelayActorProvider({
   const environmentGeneration = environmentGenerationRef.current;
   const transitionActor = useCallback(
     (profileId?: string | null, remainingFallbackProfileIds?: readonly string[]) => {
-      startupRecovery?.changeActor();
       environmentGenerationRef.current += 1;
       dispatchActor({ type: 'profile-selected', profileId, remainingFallbackProfileIds });
     },
-    [startupRecovery],
+    [],
   );
 
   const resetActor = useCallback(
@@ -105,10 +95,9 @@ export function RelayActorProvider({
   }, [actor.remainingFallbackProfileIds, environmentGeneration, transitionActor]);
 
   const resetSession = useCallback(() => {
-    startupRecovery?.finish();
     authLifecycleGenerationRef.current += 1;
     resetActor(null);
-  }, [resetActor, startupRecovery]);
+  }, [resetActor]);
 
   const setNativeSession = useCallback(
     async (token: string) => {
@@ -139,31 +128,10 @@ export function RelayActorProvider({
   );
 
   const environment = useMemo(
-    () =>
-      createEnvironment(
-        nativeToken ?? null,
-        actor.id === 'session' ? null : actor.id,
-        startupRecovery,
-      ),
+    () => createEnvironment(nativeToken ?? null, actor.id === 'session' ? null : actor.id),
     // Actor state identity intentionally invalidates selected-profile-scoped cached fields. Route
     // retries are owned by RouteBoundary and must not replace this Environment or Store.
-    [actor, createEnvironment, nativeToken, startupRecovery],
-  );
-  const startupLifecycle = useMemo(
-    () =>
-      startupRecovery && {
-        complete: () => {
-          if (environmentGenerationRef.current === environmentGeneration) {
-            startupRecovery.complete();
-          }
-        },
-        sessionReady: () => {
-          if (environmentGenerationRef.current === environmentGeneration) {
-            startupRecovery.sessionReady();
-          }
-        },
-      },
-    [environmentGeneration, startupRecovery],
+    [actor, createEnvironment, nativeToken],
   );
   const value = useMemo(
     () => ({
@@ -198,20 +166,18 @@ export function RelayActorProvider({
   const authLifecycleKey = `auth:${authLifecycleGenerationRef.current}`;
 
   return (
-    <NativeStartupRecoveryContext.Provider value={startupLifecycle}>
-      <RelayActorContext.Provider value={value}>
-        <RelayActorLifecycleContext.Provider value={actorLifecycleKey}>
-          <RelayAuthLifecycleContext.Provider value={authLifecycleKey}>
-            <RelayEnvironmentBoundary
-              environment={environment}
-              generationRef={environmentGenerationRef}
-            >
-              {children}
-            </RelayEnvironmentBoundary>
-          </RelayAuthLifecycleContext.Provider>
-        </RelayActorLifecycleContext.Provider>
-      </RelayActorContext.Provider>
-    </NativeStartupRecoveryContext.Provider>
+    <RelayActorContext.Provider value={value}>
+      <RelayActorLifecycleContext.Provider value={actorLifecycleKey}>
+        <RelayAuthLifecycleContext.Provider value={authLifecycleKey}>
+          <RelayEnvironmentBoundary
+            environment={environment}
+            generationRef={environmentGenerationRef}
+          >
+            {children}
+          </RelayEnvironmentBoundary>
+        </RelayAuthLifecycleContext.Provider>
+      </RelayActorLifecycleContext.Provider>
+    </RelayActorContext.Provider>
   );
 }
 

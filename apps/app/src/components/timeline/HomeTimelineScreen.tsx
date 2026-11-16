@@ -243,11 +243,7 @@ function HomeContent({
   const data = useLazyLoadQuery<HomePageQuery>(
     HomeQuery,
     {},
-    {
-      fetchKey,
-      fetchPolicy: 'store-or-network',
-      networkCacheConfig: { metadata: { nativeStartup: true } },
-    },
+    { fetchKey, fetchPolicy: 'store-or-network' },
   );
   const [refreshing, setRefreshing] = useState(false);
   const [postRequestRefreshKey, setPostRequestRefreshKey] = useState(0);

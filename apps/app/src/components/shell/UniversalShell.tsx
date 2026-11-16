@@ -17,7 +17,6 @@ import { NotificationReadAllProvider } from '@/components/notification/Notificat
 import { NotificationStreamUpdates } from '@/components/notification/NotificationStreamUpdates';
 import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMediaViewerHost';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
-import { useNativeStartupRecovery } from '@/relay/NativeStartupRecoveryContext';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -105,7 +104,6 @@ export function UniversalShell({ children }: { children?: ReactNode }) {
 
 function UniversalShellContent({ children }: { children?: ReactNode }) {
   const theme = useTheme();
-  const startupRecovery = useNativeStartupRecovery();
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const routeSegments = useSegments();
@@ -164,16 +162,8 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const data = useLazyLoadQuery<UniversalShellQuery>(
     ShellQuery,
     {},
-    {
-      fetchPolicy: 'store-and-network',
-      networkCacheConfig: { metadata: { nativeStartup: true } },
-    },
+    { fetchPolicy: 'store-and-network' },
   );
-  useEffect(() => {
-    if (pathname !== '/home') {
-      startupRecovery?.complete();
-    }
-  }, [pathname, startupRecovery]);
   const profile = data.currentSession?.selectedProfile ?? null;
   const web = Platform.OS === 'web';
   const publicContentRoute =
