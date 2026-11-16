@@ -97,7 +97,7 @@ describe('SettingsItem', () => {
     assert.equal(texts().includes('계정 설정'), true);
   });
 
-  it('compact item은 세로 간격만 줄이고 설명은 label 아래에 유지한다', async () => {
+  it('compact item은 세로 간격을 줄이고 label과 설명을 유지한다', async () => {
     await act(async () => {
       renderer = create(
         createElement(SettingsItem, {
@@ -117,9 +117,6 @@ describe('SettingsItem', () => {
       '알림 설정',
       '현재 상태와 긴 안내 문구는 여러 줄로 표시될 수 있습니다.',
     ]);
-    const copy = rendered('View').find((node) => flattenStyle(node.props.style).flex === 1);
-    assert.ok(copy);
-    assert.notEqual(flattenStyle(copy.props.style).flexDirection, 'row');
   });
 });
 

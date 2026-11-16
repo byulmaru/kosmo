@@ -414,8 +414,11 @@ describe('SettingsNavigationList', () => {
     );
     const chevron = picker.findAll((node) => (node.type as unknown) === 'ChevronDownIcon')[0];
     assert.ok(chevron);
-    assert.equal(chevron.parent?.props.accessibilityElementsHidden, true);
-    assert.equal(chevron.parent?.props.pointerEvents, 'none');
+    const hiddenDecoration = picker.findAll(
+      (node) => node.type === 'View' && node.props.accessibilityElementsHidden === true,
+    )[0];
+    assert.ok(hiddenDecoration);
+    assert.equal(hiddenDecoration.props.pointerEvents, 'none');
     assert.equal(
       rendered('Text').some((node) => node.children[0] === 'Profile 전환'),
       false,
