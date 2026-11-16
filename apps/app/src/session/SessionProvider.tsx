@@ -5,8 +5,8 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
-  useState,
 } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
@@ -18,6 +18,14 @@ import {
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { Splash } from '@/components/Splash';
 import {
+  errorSession,
+  guestSession,
+  projectVisibleSession,
+  reduceProfileRestoreState,
+  reduceSessionState,
+} from './sessionState';
+import type { ProfileRestoreState, SessionState, SessionValue } from './sessionState';
+import {
   useRelayActor,
   useRelayActorLifecycleKey,
   useRelayAuthLifecycleKey,
@@ -25,41 +33,11 @@ import {
 import type { PropsWithChildren } from 'react';
 import type { SessionProviderQuery as SessionProviderQueryType } from './__generated__/SessionProviderQuery.graphql';
 
-type SessionValue = {
-  accountId: string | null;
-  accountName: string | null;
-  selectedProfileId: string | null;
-  sessionId: string | null;
-  status: 'error' | 'guest' | 'valid';
-};
-
-type SessionState = {
-  authLifecycleKey: string;
-  actorLifecycleKey: string;
-  ready: boolean;
-  value: SessionValue;
-};
-
 type SessionChange = {
   accountChanged: boolean;
   cleanupPromise: Promise<void>;
 };
 
-type ProfileRestoreState = {
-  authKey: string;
-  accountId: string;
-  promise: Promise<string | null>;
-  applied: boolean;
-};
-
-const guestSession: SessionValue = {
-  accountId: null,
-  accountName: null,
-  selectedProfileId: null,
-  sessionId: null,
-  status: 'guest',
-};
-const errorSession: SessionValue = { ...guestSession, status: 'error' };
 const SessionContext = createContext<SessionValue>(guestSession);
 const AnalyticsIdentityAccountContext = createContext<string | null>(null);
 
@@ -83,12 +61,12 @@ export function SessionProvider({ children }: PropsWithChildren) {
   const actorLifecycleKey = useRelayActorLifecycleKey();
   const lifecycleKeysRef = useRef({ authLifecycleKey, actorLifecycleKey });
   lifecycleKeysRef.current = { authLifecycleKey, actorLifecycleKey };
-  const [sessionState, setSessionState] = useState<SessionState>(() => ({
+  const [sessionState, dispatchSessionState] = useReducer(reduceSessionState, {
+    phase: 'initializing',
     authLifecycleKey,
     actorLifecycleKey,
-    ready: false,
     value: guestSession,
-  }));
+  } satisfies SessionState);
   const confirmedIdentityRef = useRef<{
     authKey: string;
     accountId: string | null;
@@ -126,10 +104,10 @@ export function SessionProvider({ children }: PropsWithChildren) {
         confirmedIdentityRef.current = { authKey, accountId: value.accountId, cleanupPromise };
       }
 
-      setSessionState({
+      dispatchSessionState({
+        type: 'session-resolved',
         authLifecycleKey: authKey,
         actorLifecycleKey: actorKey,
-        ready: true,
         value,
       });
       return { accountChanged, cleanupPromise };
@@ -142,22 +120,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    setSessionState((previous) => ({
+    dispatchSessionState({
+      type: 'session-failed',
       authLifecycleKey: authKey,
       actorLifecycleKey: actorKey,
-      ready: true,
-      value:
-        previous.authLifecycleKey === authKey && previous.ready
-          ? { ...previous.value, selectedProfileId: null }
-          : errorSession,
-    }));
+    });
   }, []);
-  const visibleSession =
-    sessionState.authLifecycleKey !== authLifecycleKey
-      ? errorSession
-      : sessionState.actorLifecycleKey === actorLifecycleKey
-        ? sessionState.value
-        : { ...sessionState.value, selectedProfileId: null };
+  const visibleSession = projectVisibleSession(sessionState, authLifecycleKey, actorLifecycleKey);
 
   return (
     <AnalyticsIdentityAccountContext.Provider value={sessionState.value.accountId}>
@@ -180,7 +149,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
             />
           </Suspense>
         </RelayFailOpenBoundary>
-        {sessionState.ready ? children : null}
+        {sessionState.phase === 'ready' ? children : null}
       </SessionContext.Provider>
     </AnalyticsIdentityAccountContext.Provider>
   );
@@ -272,20 +241,11 @@ function SessionQuery({
             void writeSelectedProfile(serverSelectedProfileId);
             resetActor(serverSelectedProfileId);
           } else {
-            const currentRestore = restoreRef.current;
-            if (
-              currentRestore?.authKey === authLifecycleKey &&
-              currentRestore.accountId === accountId
-            ) {
-              currentRestore.applied = true;
-            } else {
-              restoreRef.current = {
-                authKey: authLifecycleKey,
-                accountId,
-                promise: Promise.resolve(null),
-                applied: true,
-              };
-            }
+            restoreRef.current = reduceProfileRestoreState(restoreRef.current, {
+              type: 'restore-server-rejected',
+              authKey: authLifecycleKey,
+              accountId,
+            });
             resetRejectedCurrentActor();
           }
         });
@@ -296,16 +256,19 @@ function SessionQuery({
 
     let restore = restoreRef.current;
     if (restore?.authKey !== authLifecycleKey || restore.accountId !== accountId) {
-      restore = {
+      const promise = identityChange.cleanupPromise
+        .then(() => readSelectedProfile())
+        .catch(() => null);
+      restore = reduceProfileRestoreState(restoreRef.current, {
+        type: 'restore-started',
         authKey: authLifecycleKey,
         accountId,
-        promise: identityChange.cleanupPromise.then(() => readSelectedProfile()).catch(() => null),
-        applied: false,
-      };
+        promise,
+      });
       restoreRef.current = restore;
     }
 
-    if (restore.applied) {
+    if (restore.phase === 'applied') {
       if (serverSelectedProfileId) {
         void identityChange.cleanupPromise.then(() => {
           if (!active || restoreRef.current !== restore) {
@@ -324,7 +287,14 @@ function SessionQuery({
         return;
       }
 
-      restore.applied = true;
+      const completedRestore = reduceProfileRestoreState(restoreRef.current, {
+        type: 'restore-read-completed',
+        authKey: authLifecycleKey,
+        accountId,
+      });
+      if (completedRestore) {
+        restoreRef.current = completedRestore;
+      }
       if (persistedProfileId) {
         resetActor(persistedProfileId);
       } else if (serverSelectedProfileId) {

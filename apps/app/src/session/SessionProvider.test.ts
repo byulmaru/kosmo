@@ -12,6 +12,8 @@ let actorProfileId: string | null = null;
 let persistedProfileId: string | null = null;
 let pendingProfileRead: Promise<string | null> | null = null;
 let pendingProfileDelete: Promise<void> | null = null;
+let profileReadFails = false;
+let onProfileRead: (() => void) | null = null;
 let readCalls = 0;
 let deleteCalls = 0;
 let serverSelectedProfileId: string | null = 'profile-server';
@@ -89,6 +91,12 @@ mockModule('@/auth/selectedProfileStorage', {
   },
   readSelectedProfile: () => {
     readCalls += 1;
+    const readStarted = onProfileRead;
+    onProfileRead = null;
+    readStarted?.();
+    if (profileReadFails) {
+      return Promise.reject(new Error('selected profile read failed'));
+    }
     return pendingProfileRead ?? Promise.resolve(persistedProfileId);
   },
   writeSelectedProfile: async (profileId: string) => {
@@ -123,6 +131,8 @@ beforeEach(() => {
   persistedProfileId = null;
   pendingProfileRead = null;
   pendingProfileDelete = null;
+  profileReadFails = false;
+  onProfileRead = null;
   readCalls = 0;
   deleteCalls = 0;
   serverSelectedProfileId = 'profile-server';
@@ -461,6 +471,61 @@ describe('SessionProvider selected profile bootstrap', () => {
     await act(async () => latestSessionErrorReporter?.props.onError('stale-auth', 'stale-actor'));
     await updateProvider();
     assert.equal(deleteCalls, 0);
+  });
+
+  it('ignores a pending prior-account restore and falls back after cleanup and storage reads fail', async () => {
+    let resolveOldRead!: (profileId: string | null) => void;
+    const oldRead = new Promise<string | null>((resolve) => {
+      resolveOldRead = resolve;
+    });
+    let signalOldReadStarted!: () => void;
+    const oldReadStarted = new Promise<void>((resolve) => {
+      signalOldReadStarted = resolve;
+    });
+    pendingProfileRead = oldRead;
+    onProfileRead = signalOldReadStarted;
+    serverSelectedProfileId = null;
+
+    await renderProvider();
+    await oldReadStarted;
+
+    let rejectDelete!: (error: Error) => void;
+    const deletion = new Promise<void>((_resolve, reject) => {
+      rejectDelete = reject;
+    });
+    pendingProfileDelete = deletion;
+    pendingProfileRead = null;
+    serverAccountId = 'account-2';
+    serverAccountName = 'Second account';
+    serverSessionId = 'session-2';
+    serverSelectedProfileId = 'profile-server-b';
+    authLifecycleKey = 'auth-2';
+    actorLifecycleKey = 'actor-2';
+
+    await updateProvider();
+
+    await act(async () => {
+      resolveOldRead('profile-old-account');
+      await oldRead;
+    });
+    assert.deepEqual(resetActorCalls, []);
+
+    profileReadFails = true;
+    await act(async () => {
+      rejectDelete(new Error('selected profile cleanup failed'));
+      await deletion.catch(() => undefined);
+    });
+    await updateProvider();
+
+    assert.deepEqual(readSession(), {
+      accountId: 'account-2',
+      accountName: 'Second account',
+      selectedProfileId: 'profile-server-b',
+      sessionId: 'session-2',
+      status: 'valid',
+    });
+    assert.deepEqual(resetActorCalls, ['profile-server-b']);
+    assert.deepEqual(writes, ['profile-server-b']);
   });
 });
 

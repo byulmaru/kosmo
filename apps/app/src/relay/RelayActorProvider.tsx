@@ -32,6 +32,10 @@ type RelayActorValue = {
   setNativeSession: (token: string) => Promise<void>;
 };
 
+type NativeTokenState =
+  | { phase: 'restoring' }
+  | { phase: 'ready'; token: string | null };
+
 const RelayActorContext = createContext<RelayActorValue | null>(null);
 const RelayActorLifecycleContext = createContext<string | null>(null);
 const RelayAuthLifecycleContext = createContext<string | null>(null);
@@ -42,9 +46,10 @@ export function RelayActorProvider({
 }: PropsWithChildren<{
   createEnvironment?: (token: string | null, selectedProfileId: string | null) => Environment;
 }>) {
-  const [nativeToken, setNativeToken] = useState<string | null | undefined>(
-    Platform.OS === 'web' ? null : undefined,
+  const [nativeTokenState, setNativeTokenState] = useState<NativeTokenState>(
+    Platform.OS === 'web' ? { phase: 'ready', token: null } : { phase: 'restoring' },
   );
+  const nativeToken = nativeTokenState.phase === 'ready' ? nativeTokenState.token : null;
   const [actor, dispatchActor] = useReducer(reduceActorState, initialActorState);
   const environmentGenerationRef = useRef(0);
   const authLifecycleGenerationRef = useRef(0);
@@ -54,7 +59,10 @@ export function RelayActorProvider({
       return;
     }
 
-    void readSessionToken().then(setNativeToken, () => setNativeToken(null));
+    void readSessionToken().then(
+      (token) => setNativeTokenState({ phase: 'ready', token }),
+      () => setNativeTokenState({ phase: 'ready', token: null }),
+    );
   }, []);
 
   const environmentGeneration = environmentGenerationRef.current;
@@ -104,7 +112,7 @@ export function RelayActorProvider({
       await writeSessionToken(token);
       await deleteSelectedProfile();
       resetSession();
-      setNativeToken(token);
+      setNativeTokenState({ phase: 'ready', token });
     },
     [resetSession],
   );
@@ -112,7 +120,7 @@ export function RelayActorProvider({
   const clearNativeSession = useCallback(async () => {
     await deleteSessionToken();
     resetSession();
-    setNativeToken(null);
+    setNativeTokenState({ phase: 'ready', token: null });
   }, [resetSession]);
 
   const resetCurrentActor = useCallback(
@@ -131,7 +139,7 @@ export function RelayActorProvider({
     () => createEnvironment(nativeToken ?? null, actor.id === 'session' ? null : actor.id),
     // Actor state identity intentionally invalidates selected-profile-scoped cached fields. Route
     // retries are owned by RouteBoundary and must not replace this Environment or Store.
-    [actor, createEnvironment, nativeToken],
+    [actor, createEnvironment, nativeToken, nativeTokenState.phase],
   );
   const value = useMemo(
     () => ({
@@ -156,7 +164,7 @@ export function RelayActorProvider({
     ],
   );
 
-  if (nativeToken === undefined) {
+  if (nativeTokenState.phase === 'restoring') {
     return <Splash label="세션을 복원하는 중입니다." />;
   }
 

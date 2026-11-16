@@ -38,6 +38,7 @@ let stableSubtreeMountCount = 0;
 let renderer: ReactTestRenderer | null = null;
 let snapshot: RelayActorSnapshot | null = null;
 let storedToken: string | null = null;
+let pendingTokenRead: Promise<string | null> | null = null;
 let storedSelectedProfile: string | null = null;
 const environmentInputs: Array<{ selectedProfileId: string | null; token: string | null }> = [];
 const platform = { OS: 'native' };
@@ -67,8 +68,13 @@ mockModule('expo-secure-store', {
     }
     storedToken = null;
   },
-  getItemAsync: async (key: string) =>
-    key === 'kosmo.selected-profile' ? storedSelectedProfile : storedToken,
+  getItemAsync: async (key: string) => {
+    if (key === 'kosmo.selected-profile') {
+      return storedSelectedProfile;
+    }
+
+    return pendingTokenRead ?? storedToken;
+  },
   isAvailableAsync: async () => true,
   setItemAsync: async (key: string, value: string) => {
     if (writeFailure) {
@@ -82,7 +88,7 @@ mockModule('expo-secure-store', {
   },
 });
 mockModule(new URL('../components/Splash.tsx', import.meta.url), {
-  Splash: () => null,
+  Splash: ({ label }: { label: string }) => createElement('Splash', { label }),
 });
 
 let RelayActorProvider: ComponentType<
@@ -116,6 +122,7 @@ beforeEach(() => {
   stableSubtreeMountCount = 0;
   snapshot = null;
   storedToken = null;
+  pendingTokenRead = null;
   storedSelectedProfile = null;
   environmentInputs.length = 0;
 });
@@ -167,15 +174,88 @@ function StableProbe() {
 }
 
 async function renderProvider() {
+  await mountProvider();
+  assert.ok(snapshot);
+}
+
+async function mountProvider() {
   await act(async () => {
     renderer = create(
       createElement(RelayActorProvider, { createEnvironment }, createElement(StableProbe)),
     );
   });
-  assert.ok(snapshot);
+}
+
+function currentSnapshot(): RelayActorSnapshot {
+  const current = snapshot;
+  assert.ok(current);
+  return current;
+}
+
+function currentRenderer(): ReactTestRenderer {
+  const current = renderer;
+  assert.ok(current);
+  return current;
 }
 
 describe('RelayActorProvider session cleanup', () => {
+  it('keeps the native session hidden while its saved credential is restoring', async () => {
+    await renderProvider();
+    await act(async () => snapshot?.setNativeSession('restored-session-token'));
+
+    assert.ok(snapshot);
+    const savedToken = storedToken;
+    assert.ok(savedToken);
+
+    await act(async () => renderer?.unmount());
+    renderer = null;
+    snapshot = null;
+
+    let resolveTokenRead!: (token: string | null) => void;
+    const tokenRead = new Promise<string | null>((resolve) => {
+      resolveTokenRead = resolve;
+    });
+    pendingTokenRead = tokenRead;
+
+    await mountProvider();
+
+    assert.equal(snapshot, null);
+    const restoringRenderer = currentRenderer();
+    assert.equal(restoringRenderer.root.findAllByType('Splash').length, 1);
+
+    await act(async () => {
+      resolveTokenRead(savedToken);
+      await tokenRead;
+    });
+
+    const restoredSnapshot = currentSnapshot();
+    assert.equal(restoredSnapshot.nativeToken, 'restored-session-token');
+    assert.equal(environmentInputs.at(-1)?.token, 'restored-session-token');
+  });
+
+  it('continues through the guest token path when native credential restoration fails', async () => {
+    let rejectTokenRead!: (error: Error) => void;
+    const tokenRead = new Promise<string | null>((_resolve, reject) => {
+      rejectTokenRead = reject;
+    });
+    pendingTokenRead = tokenRead;
+
+    await mountProvider();
+
+    assert.equal(snapshot, null);
+    const restoringRenderer = currentRenderer();
+    assert.equal(restoringRenderer.root.findAllByType('Splash').length, 1);
+
+    await act(async () => {
+      rejectTokenRead(new Error('SecureStore read failed'));
+      await tokenRead.catch(() => undefined);
+    });
+
+    const guestSnapshot = currentSnapshot();
+    assert.equal(guestSnapshot.nativeToken, null);
+    assert.equal(environmentInputs.at(-1)?.token, null);
+  });
+
   it('각 actor Environment는 immutable selected profile ID를 캡처한다', async () => {
     await renderProvider();
 
