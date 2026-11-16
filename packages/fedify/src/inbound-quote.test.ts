@@ -887,7 +887,10 @@ for (const representation of ['embedded', 'url'] as const) {
       postId: quote.post.id,
       receivedAt,
     };
-    await handleInboundQuote(input);
+    assert.deepEqual(await handleInboundQuote(input), {
+      retryable: false,
+      status: PostQuoteConsentStatus.PENDING,
+    });
 
     assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, targetUri.href)), 0);
     assert.equal(await db.$count(Posts), 1);
@@ -900,7 +903,7 @@ for (const representation of ['embedded', 'url'] as const) {
     assert.equal(withoutSource.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
     assert.equal(withoutSource.repostSourceId, null);
     assert.equal(withoutSource.currentContentId, quote.post.currentContentId);
-    assert.equal(lookupObject.mock.callCount(), representation === 'url' ? 1 : 0);
+    assert.equal(lookupObject.mock.callCount(), 0);
 
     const storedSource = await createPost({
       document: postContentDocumentFromText('previously delivered followers-only source'),
@@ -926,7 +929,7 @@ for (const representation of ['embedded', 'url'] as const) {
     assert.equal(connected.currentContentId, quote.post.currentContentId);
     assert.equal(await db.$count(ActivityPubPosts), 2);
     assert.equal(await db.$count(PostContents), 2);
-    assert.equal(lookupObject.mock.callCount(), representation === 'url' ? 1 : 0);
+    assert.equal(lookupObject.mock.callCount(), 0);
     assert.equal(
       (await db.select().from(Posts).where(eq(Posts.id, storedSource.post.id)).then(firstOrThrow))
         .visibility,

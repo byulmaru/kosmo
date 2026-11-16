@@ -747,9 +747,10 @@ export const prepareStoredInboundQuote = async (
   ) {
     return { kind: 'NOOP', retryable: false };
   }
+  let privatePrepared: PreparedInboundQuote | null = null;
   if (!source && phase === 'VERIFY') {
-    const privatePrepared = await preparePrivateQuoteSource(input, context, quote, expectation);
-    if (privatePrepared) {
+    privatePrepared = await preparePrivateQuoteSource(input, context, quote, expectation);
+    if (privatePrepared && privatePrepared.kind !== 'NOOP') {
       return privatePrepared;
     }
   }
@@ -778,7 +779,7 @@ export const prepareStoredInboundQuote = async (
         expectedApprovalUri: expectation.expectedApprovalUri,
         approvalUri: input.approvalUri,
       },
-      retryable: !!input.targetUri,
+      retryable: privatePrepared?.retryable ?? !!input.targetUri,
     };
   }
   if (input.authorizationUpdate && input.format === ActivityPubQuoteFormat.LEGACY) {

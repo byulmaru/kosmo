@@ -700,7 +700,12 @@ test(
           const outcome = await deleted;
           assert.deepEqual(outcome, {
             ok: true,
-            result: { postId: winnerId, sourcePostId: null, revokedQuoteIds: [f.quote.id] },
+            result: {
+              postId: winnerId,
+              replyParentId: null,
+              sourcePostId: null,
+              revokedQuoteIds: [f.quote.id],
+            },
           });
           await deletion.result();
           const quote = await db
