@@ -247,6 +247,9 @@ export const ChildOverlayKeyboardOwnership: Story = {
     await expectPosition(dialog, '1 / 3');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(menu).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: '메뉴 열기' })).toHaveFocus(),
+    );
     expect(dialog).toBeInTheDocument();
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '2 / 3');
@@ -258,6 +261,9 @@ export const ChildOverlayKeyboardOwnership: Story = {
     await expectPosition(dialog, '2 / 3');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(popup).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: '반응 선택 창 열기' })).toHaveFocus(),
+    );
     expect(dialog).toBeInTheDocument();
     await userEvent.keyboard('{ArrowLeft}');
     await expectPosition(dialog, '1 / 3');
@@ -270,6 +276,9 @@ export const ChildOverlayKeyboardOwnership: Story = {
     await expectPosition(dialog, '2 / 3');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(child).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: '대화상자 열기' })).toHaveFocus(),
+    );
     expect(dialog).toBeInTheDocument();
     await userEvent.keyboard('{ArrowLeft}');
     await expectPosition(dialog, '1 / 3');
@@ -283,6 +292,9 @@ export const ChildOverlayKeyboardOwnership: Story = {
     await expectPosition(dialog, '1 / 3');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(nestedDialog).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: '다른 이미지 뷰어 열기' })).toHaveFocus(),
+    );
     expect(dialog).toBeInTheDocument();
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '2 / 3');
