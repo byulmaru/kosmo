@@ -1734,7 +1734,7 @@ describe('PostComposer Reply visibility seed', () => {
       ]),
     );
     assert.deepEqual(toastCalls[0], [
-      '게시글을 작성하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
       { tone: 'danger' },
     ]);
     assert.equal(targetProps?.body, '확정 거절');
