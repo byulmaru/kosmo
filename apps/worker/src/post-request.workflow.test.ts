@@ -2126,7 +2126,7 @@ test(
     const args: PostRequestWorkflowArgs = {
       ...withoutPostId(createPostRequest()),
       input: {
-        ...createPostRequest().input,
+        ...createPostRequest(true).input,
         admissionId: `${Date.now()}:${randomUUID()}`,
         repostSourceId: randomUUID(),
       },
