@@ -64,6 +64,7 @@ import type { Context, Federation } from '@fedify/fedify';
 
 const federationOrigin = process.env.PUBLIC_ORIGIN;
 export const localInstanceActorIdentifier = '~instance';
+const localInstanceDiagnosticActorIdentifier = 'instance';
 const localInstanceActorHandle = 'kosmo.instance';
 const commonFederationOptions = {
   allowPrivateAddress: false,
@@ -138,15 +139,18 @@ federation
       return null;
     }
 
-    if (identifier === localInstanceActorIdentifier) {
-      const keyPairs = await ctx.getActorKeyPairs(localInstanceActorIdentifier);
+    if (
+      identifier === localInstanceActorIdentifier ||
+      identifier === localInstanceDiagnosticActorIdentifier
+    ) {
+      const keyPairs = await ctx.getActorKeyPairs(identifier);
       const rsaKeyPair = keyPairs.find(
         (keyPair) => keyPair.publicKey.algorithm.name === 'RSASSA-PKCS1-v1_5',
       );
       if (rsaKeyPair == null) {
         throw new Error(`Local Instance actor ${identifier} is missing an RSA key pair.`);
       }
-      const actorUri = ctx.getActorUri(localInstanceActorIdentifier);
+      const actorUri = ctx.getActorUri(identifier);
       return new Application({
         id: actorUri,
         inbox: new URL('/inbox', ctx.canonicalOrigin),
@@ -188,7 +192,10 @@ federation
       : resolveLocalActorIdentifierByHandle(username);
   })
   .setKeyPairsDispatcher(async (ctx, identifier) => {
-    if (identifier === localInstanceActorIdentifier) {
+    if (
+      identifier === localInstanceActorIdentifier ||
+      identifier === localInstanceDiagnosticActorIdentifier
+    ) {
       if (!hasCanonicalHost(ctx)) {
         return [];
       }
