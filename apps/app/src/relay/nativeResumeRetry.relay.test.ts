@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement } from 'react';
+import { createElement, Suspense } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { commitLocalUpdate, commitMutation } from 'relay-runtime';
@@ -293,7 +293,15 @@ describe('Native 복귀 시 실패한 조회의 기존 재시도 경로', () => 
         createElement(
           GraphQLErrorBoundary,
           null,
-          createElement(RelayActorProvider, null, createElement(RootQueryResult)),
+          createElement(
+            RelayActorProvider,
+            null,
+            createElement(
+              Suspense,
+              { fallback: createElement('Loading') },
+              createElement(RootQueryResult),
+            ),
+          ),
         ),
       );
     });
