@@ -91,7 +91,7 @@ Wide Web의 오른쪽 thread rail은 fullscreen modal 안의 별도 elevation su
 - 2장 이상이면 시각적 `현재 위치/전체`를 표시하고, 1장이면 시각 counter를 생략한다. Screen Reader에는 장수와 관계없이 현재 위치와 전체 개수를 알린다.
 - 현재 이미지의 nullable Alt Text를 accessible name으로 사용하고, 없으면 document 순서 기반의 `N번째 첨부 이미지`를 사용한다. 현재 위치 안내는 이미지 이름과 별도로 전달해 내용을 위치 정보로 대체하거나 중복 낭독하지 않는다.
 - 이전·다음 control은 document 순서를 따르며 첫 장의 이전과 마지막 장의 다음은 비활성화한다. 끝에서 반대편으로 순환하지 않는다.
-- Web은 이전·다음 control과 `ArrowLeft`·`ArrowRight` keyboard 입력을 제공한다.
+- Web·iOS·Android는 키보드로 기존 이전·다음 control을 실행할 수 있다. Web은 `ArrowLeft`·`ArrowRight`로도 탐색하며 이미지 클릭 뒤에도 이어갈 수 있다. Native image stage는 포커스를 받을 수 있고 플랫폼의 기본 키보드 스크롤을 차단하지 않는다.
 - iOS·Android는 이전·다음 control과 수평 swipe를 제공한다. Gesture가 성립하지 않으면 현재 이미지에 머문다.
 - Native image stage는 플랫폼의 수평 paging을 사용한다. 이미지는 손가락을 따라 움직이고 손을 놓으면 페이지에 안착하며 첫·마지막에서 순환하지 않는다. 이전·다음 버튼도 같은 페이지 이동을 사용하고, reduced motion에서는 버튼 이동 애니메이션을 생략한다. 최초 선택 위치와 화면 폭 변경은 애니메이션 없이 정렬한다. 수평 paging은 image stage에만 적용해 원문의 세로 스크롤을 유지한다.
 - 이전·다음 control은 48×48 hit target과 keyboard focus ring을 유지하며, 공용 inverse 원형 surface로 hover·pressed 상태를 표시한다. 화살표 glyph는 idle·hover·pressed에서 opacity `1`을 유지하고, disabled에서는 공통 disabled opacity를 사용한다. 기존 control의 shadow와 focus 표시를 유지한다.

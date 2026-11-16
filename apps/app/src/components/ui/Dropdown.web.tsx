@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { spacing } from '@/theme/tokens';
 import { OverlayPortal } from './OverlayPortal';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { DropdownProps } from './Dropdown';
 
 export function Dropdown({
@@ -161,6 +162,13 @@ export function Dropdown({
     <OverlayPortal>
       <View
         ref={contentRef}
+        {...{
+          onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.stopPropagation();
+            }
+          },
+        }}
         {...{ dataSet: { dropdownOpen: active ? 'true' : undefined } }}
         testID={testID}
         style={[

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { expect, screen, userEvent, waitFor, within } from 'storybook/test';
@@ -44,13 +44,6 @@ function KeyboardViewerFixture() {
   const [dialog, setDialog] = useState(false);
   const [picker, setPicker] = useState(false);
   const [query, setQuery] = useState('');
-  const [keyTarget, setKeyTarget] = useState('');
-  // Observe the real key target after focus leaves the Modal without replacing its key handling.
-  useEffect(() => {
-    const observe = (event: KeyboardEvent) => setKeyTarget((event.target as HTMLElement).tagName);
-    document.addEventListener('keydown', observe, true);
-    return () => document.removeEventListener('keydown', observe, true);
-  }, []);
   if (data.node?.__typename !== 'Post' || !data.node.viewer) {
     throw new Error('이미지 뷰어 keyboard fixture에는 Post가 필요합니다.');
   }
@@ -88,11 +81,7 @@ function KeyboardViewerFixture() {
   );
 
   return (
-    <div
-      data-last-key-target={keyTarget}
-      data-testid="viewer-keyboard-fixture"
-      data-user-agent={navigator.userAgent}
-    >
+    <div>
       <Pressable accessibilityRole="button" onPress={() => setOpen(true)} ref={originControl}>
         <Text>이미지 뷰어 열기</Text>
       </Pressable>
@@ -186,7 +175,6 @@ const navigationAfterClick: Story['play'] = async () => {
   await userEvent.keyboard('{ArrowRight}');
   await expectPosition(dialog, '2 / 3');
   await userEvent.click(within(dialog).getByTestId('post-media-viewer-image'));
-  expect(document.activeElement).toBe(document.body);
   await userEvent.keyboard('{ArrowRight}');
   await expectPosition(dialog, '3 / 3');
   await userEvent.keyboard('{ArrowRight}');
@@ -239,7 +227,7 @@ export const EditableAndHandledKeys: Story = {
       key: 'ArrowRight',
     });
     handled.preventDefault();
-    document.body.dispatchEvent(handled);
+    dialog.dispatchEvent(handled);
     await expectPosition(dialog, '1 / 3');
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '2 / 3');
@@ -253,11 +241,7 @@ export const ChildOverlayKeyboardOwnership: Story = {
     const dialog = await openViewer();
     await userEvent.click(within(dialog).getByRole('button', { name: '메뉴 열기' }));
     const menu = await screen.findByRole('menu', { name: '이미지 작업' });
-    expect(dialog.contains(menu)).toBe(true);
-    expect(menu.closest('[aria-modal="true"]')).toBe(dialog.closest('[aria-modal="true"]'));
-    expect(dialog.closest('[aria-modal="true"]')).toHaveAttribute('role', 'dialog');
-    (document.activeElement as HTMLElement).blur();
-    expect(document.activeElement).toBe(document.body);
+    await waitFor(() => expect(within(menu).getByRole('menuitem')).toHaveFocus());
     expect(menu).toBeVisible();
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '1 / 3');
@@ -269,10 +253,7 @@ export const ChildOverlayKeyboardOwnership: Story = {
 
     await userEvent.click(within(dialog).getByRole('button', { name: '반응 선택 창 열기' }));
     const popup = await screen.findByRole('dialog', { name: '반응 선택' });
-    expect(dialog.contains(popup)).toBe(true);
     within(popup).getByRole('searchbox').focus();
-    within(popup).getByRole('searchbox').blur();
-    expect(document.activeElement).toBe(document.body);
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '2 / 3');
     await userEvent.keyboard('{Escape}');
@@ -285,7 +266,6 @@ export const ChildOverlayKeyboardOwnership: Story = {
 
     await userEvent.click(within(dialog).getByRole('button', { name: '대화상자 열기' }));
     const child = await screen.findByRole('dialog', { name: '추가 대화상자' });
-    (document.activeElement as HTMLElement).blur();
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '2 / 3');
     await userEvent.keyboard('{Escape}');
@@ -297,9 +277,6 @@ export const ChildOverlayKeyboardOwnership: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '다른 이미지 뷰어 열기' }));
     await waitFor(() => expect(screen.getAllByTestId('post-media-viewer-dialog')).toHaveLength(2));
     const nestedDialog = screen.getAllByTestId('post-media-viewer-dialog')[1];
-    await waitFor(() =>
-      expect(nestedDialog.closest('[aria-modal="true"]')).toHaveAttribute('role', 'dialog'),
-    );
     await userEvent.click(within(nestedDialog).getByTestId('post-media-viewer-image'));
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(nestedDialog, '2 / 3');

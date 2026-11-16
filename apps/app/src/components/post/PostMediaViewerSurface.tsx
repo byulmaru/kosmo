@@ -487,6 +487,7 @@ function NativeMediaPager({
       ref={scroll}
       horizontal
       pagingEnabled
+      tabIndex={0}
       bounces={false}
       directionalLockEnabled
       disableIntervalMomentum
