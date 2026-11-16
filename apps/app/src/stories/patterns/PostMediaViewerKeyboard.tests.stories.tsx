@@ -236,13 +236,12 @@ export const EditableAndHandledKeys: Story = {
   },
 };
 
-export const ChildOverlayKeyboardOwnership: Story = {
+export const MenuKeyboardOwnership: Story = {
   play: async () => {
     const dialog = await openViewer();
     await userEvent.click(within(dialog).getByRole('button', { name: '메뉴 열기' }));
     const menu = await screen.findByRole('menu', { name: '이미지 작업' });
     await waitFor(() => expect(within(menu).getByRole('menuitem')).toHaveFocus());
-    expect(menu).toBeVisible();
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '1 / 3');
     await userEvent.keyboard('{Escape}');
@@ -250,42 +249,61 @@ export const ChildOverlayKeyboardOwnership: Story = {
     await waitFor(() =>
       expect(within(dialog).getByRole('button', { name: '메뉴 열기' })).toHaveFocus(),
     );
-    expect(dialog).toBeInTheDocument();
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '2 / 3');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+  },
+};
 
+export const ReactionKeyboardOwnership: Story = {
+  play: async () => {
+    const dialog = await openViewer();
     await userEvent.click(within(dialog).getByRole('button', { name: '반응 선택 창 열기' }));
     const popup = await screen.findByRole('dialog', { name: '반응 선택' });
     within(popup).getByRole('searchbox').focus();
     await userEvent.keyboard('{ArrowRight}');
-    await expectPosition(dialog, '2 / 3');
+    await expectPosition(dialog, '1 / 3');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(popup).not.toBeInTheDocument());
     await waitFor(() =>
       expect(within(dialog).getByRole('button', { name: '반응 선택 창 열기' })).toHaveFocus(),
     );
-    expect(dialog).toBeInTheDocument();
-    await userEvent.keyboard('{ArrowLeft}');
-    await expectPosition(dialog, '1 / 3');
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '2 / 3');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+  },
+};
 
+export const DialogKeyboardOwnership: Story = {
+  play: async () => {
+    const dialog = await openViewer();
     await userEvent.click(within(dialog).getByRole('button', { name: '대화상자 열기' }));
     const child = await screen.findByRole('dialog', { name: '추가 대화상자' });
     await userEvent.keyboard('{ArrowRight}');
-    await expectPosition(dialog, '2 / 3');
+    await expectPosition(dialog, '1 / 3');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(child).not.toBeInTheDocument());
     await waitFor(() =>
       expect(within(dialog).getByRole('button', { name: '대화상자 열기' })).toHaveFocus(),
     );
-    expect(dialog).toBeInTheDocument();
-    await userEvent.keyboard('{ArrowLeft}');
-    await expectPosition(dialog, '1 / 3');
+    await userEvent.keyboard('{ArrowRight}');
+    await expectPosition(dialog, '2 / 3');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+  },
+};
 
+export const NestedViewerKeyboardOwnership: Story = {
+  play: async () => {
+    const dialog = await openViewer();
     await userEvent.click(within(dialog).getByRole('button', { name: '다른 이미지 뷰어 열기' }));
     await waitFor(() => expect(screen.getAllByTestId('post-media-viewer-dialog')).toHaveLength(2));
     const nestedDialog = screen.getAllByTestId('post-media-viewer-dialog')[1];
+    await waitFor(() =>
+      expect(within(nestedDialog).getByTestId('post-media-viewer-close')).toHaveFocus(),
+    );
     await userEvent.click(within(nestedDialog).getByTestId('post-media-viewer-image'));
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(nestedDialog, '2 / 3');
@@ -295,7 +313,6 @@ export const ChildOverlayKeyboardOwnership: Story = {
     await waitFor(() =>
       expect(within(dialog).getByRole('button', { name: '다른 이미지 뷰어 열기' })).toHaveFocus(),
     );
-    expect(dialog).toBeInTheDocument();
     await userEvent.keyboard('{ArrowRight}');
     await expectPosition(dialog, '2 / 3');
     await userEvent.keyboard('{Escape}');
