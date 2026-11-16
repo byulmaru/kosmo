@@ -118,6 +118,7 @@ export function PostMediaViewer({
   const moveByRef = useRef<((delta: number) => void) | null>(null);
   const [currentIndex, setCurrentIndex] = useState(selectedIndex);
   const [expanded, setExpanded] = useState(false);
+  const [shown, setShown] = useState(false);
   const [lastContentId, setLastContentId] = useState<string | null>(null);
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
   const safeAreaStyle = useSafeAreaPadding();
@@ -128,6 +129,15 @@ export function PostMediaViewer({
   useEffect(() => {
     setCurrentIndex(selectedIndex);
   }, [selectedIndex]);
+
+  useEffect(() => {
+    if (!shown) {
+      return;
+    }
+    // Modal's child focus-trap effects must commit before focusing its content.
+    const focusFrame = requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef));
+    return () => globalThis.cancelAnimationFrame?.(focusFrame);
+  }, [shown]);
 
   const syncContentId = useCallback(
     (contentId: string | null) => {
@@ -208,8 +218,7 @@ export function PostMediaViewer({
       animationType="fade"
       navigationBarTranslucent
       onRequestClose={handlePlatformRequestClose}
-      // Wait for the newly active Modal's focus trap to replace its parent's trap.
-      onShow={() => requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef))}
+      onShow={() => setShown(true)}
       presentationStyle="overFullScreen"
       statusBarTranslucent
       transparent
