@@ -27,9 +27,50 @@ jobs:
             command: |
               set -euo pipefail
               helm lint apps/helm --set env=dev
-              helm template kosmo apps/helm --namespace kosmo-dev --set env=dev >/dev/null
+              dev_manifest="$(mktemp)"
+              prod_manifest="$(mktemp)"
+              trap 'rm -f "$dev_manifest" "$prod_manifest"' EXIT
+              helm template kosmo apps/helm --namespace kosmo-dev --set env=dev > "$dev_manifest"
               helm lint apps/helm --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-              helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
+              helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "$prod_manifest"
+              ruby -r psych - "$dev_manifest" "$prod_manifest" <<'RUBY'
+              dev_manifest_path, prod_manifest_path = ARGV
+
+              def worker_database_environment(path)
+                documents = Psych.load_stream(File.read(path))
+                deployment = documents.find do |document|
+                  document.is_a?(Hash) &&
+                    document['kind'] == 'Deployment' &&
+                    document.dig('metadata', 'name') == 'kosmo-worker'
+                end
+                raise "Worker Deployment was not rendered from #{path}" unless deployment
+
+                container = deployment.dig('spec', 'template', 'spec', 'containers')&.find do |entry|
+                  entry['name'] == 'worker'
+                end
+                raise "Worker container was not rendered from #{path}" unless container
+
+                container.fetch('env').to_h do |entry|
+                  [entry.fetch('name'), entry['value']]
+                end
+              end
+
+              def assert_worker_environment_value(environment, name, expected, deployment)
+                actual = environment.fetch(name)
+                return if actual == expected
+
+                raise "#{deployment} Worker #{name} must be #{expected.inspect}, got #{actual.inspect}"
+              end
+
+              dev = worker_database_environment(dev_manifest_path)
+              prod = worker_database_environment(prod_manifest_path)
+              expected_read_write_host = 'kosmo-postgres-pooler-rw'
+
+              assert_worker_environment_value(dev, 'PGHOST', expected_read_write_host, 'Dev')
+              assert_worker_environment_value(prod, 'PGHOST', expected_read_write_host, 'Production')
+              assert_worker_environment_value(dev, 'PGREADHOST', '', 'Dev')
+              assert_worker_environment_value(prod, 'PGREADHOST', 'kosmo-postgres-pooler-ro', 'Production')
+              RUBY
               ruby apps/helm/temporal-namespace.test.rb
               ruby scripts/production-release.test.rb
           - name: Admin Image

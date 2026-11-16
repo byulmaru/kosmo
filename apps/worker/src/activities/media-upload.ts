@@ -1,6 +1,6 @@
 import '@kosmo/core/polyfill';
 
-import { db, first, Media as MediaTable } from '@kosmo/core/db';
+import { db, first, Media as MediaTable, withPrimaryDatabase } from '@kosmo/core/db';
 import { MediaSource, MediaState, MediaUsePermission } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import {
@@ -116,19 +116,21 @@ export async function prepareMediaUploadActivity(input: MediaUploadPreparationIn
   const requestedValue = 'publicationMetadata' in input ? input.publicationMetadata : undefined;
   const requestedMetadata =
     requestedValue === undefined ? undefined : parsePublicationMetadata(requestedValue);
-  const media = await db
-    .select({
-      accountId: MediaTable.accountId,
-      publicationMetadata: MediaTable.publicationMetadata,
-      source: MediaTable.source,
-      state: MediaTable.state,
-      storageReference: MediaTable.storageReference,
-      thumbhash: MediaTable.thumbhash,
-    })
-    .from(MediaTable)
-    .where(eq(MediaTable.id, mediaId))
-    .limit(1)
-    .then(first);
+  const media = await withPrimaryDatabase(() =>
+    db
+      .select({
+        accountId: MediaTable.accountId,
+        publicationMetadata: MediaTable.publicationMetadata,
+        source: MediaTable.source,
+        state: MediaTable.state,
+        storageReference: MediaTable.storageReference,
+        thumbhash: MediaTable.thumbhash,
+      })
+      .from(MediaTable)
+      .where(eq(MediaTable.id, mediaId))
+      .limit(1)
+      .then(first),
+  );
 
   if (
     !media ||
@@ -171,18 +173,20 @@ export async function prepareMediaUploadActivity(input: MediaUploadPreparationIn
       if (stored?.publicationMetadata) {
         appliedMetadata = parsePublicationMetadata(stored.publicationMetadata);
       } else {
-        const current = await db
-          .select({
-            accountId: MediaTable.accountId,
-            publicationMetadata: MediaTable.publicationMetadata,
-            source: MediaTable.source,
-            state: MediaTable.state,
-            storageReference: MediaTable.storageReference,
-          })
-          .from(MediaTable)
-          .where(eq(MediaTable.id, mediaId))
-          .limit(1)
-          .then(first);
+        const current = await withPrimaryDatabase(() =>
+          db
+            .select({
+              accountId: MediaTable.accountId,
+              publicationMetadata: MediaTable.publicationMetadata,
+              source: MediaTable.source,
+              state: MediaTable.state,
+              storageReference: MediaTable.storageReference,
+            })
+            .from(MediaTable)
+            .where(eq(MediaTable.id, mediaId))
+            .limit(1)
+            .then(first),
+        );
         if (
           !current ||
           current.accountId !== accountId ||
@@ -259,12 +263,9 @@ export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInpu
     );
   }
 
-  const media = await db
-    .select()
-    .from(MediaTable)
-    .where(eq(MediaTable.id, input.mediaId))
-    .limit(1)
-    .then(first);
+  const media = await withPrimaryDatabase(() =>
+    db.select().from(MediaTable).where(eq(MediaTable.id, input.mediaId)).limit(1).then(first),
+  );
   if (!media || media.accountId !== input.accountId || media.source !== MediaSource.LOCAL) {
     throw invalidSession();
   }
@@ -325,19 +326,21 @@ export async function finalizeMediaUploadActivity(input: FinalizeMediaUploadInpu
     return result.data;
   }
 
-  const current = await db
-    .select()
-    .from(MediaTable)
-    .where(
-      and(
-        eq(MediaTable.id, input.mediaId),
-        eq(MediaTable.accountId, input.accountId),
-        eq(MediaTable.source, MediaSource.LOCAL),
-        eq(MediaTable.state, MediaState.READY),
-      ),
-    )
-    .limit(1)
-    .then(first);
+  const current = await withPrimaryDatabase(() =>
+    db
+      .select()
+      .from(MediaTable)
+      .where(
+        and(
+          eq(MediaTable.id, input.mediaId),
+          eq(MediaTable.accountId, input.accountId),
+          eq(MediaTable.source, MediaSource.LOCAL),
+          eq(MediaTable.state, MediaState.READY),
+        ),
+      )
+      .limit(1)
+      .then(first),
+  );
   if (current?.url === result.data.url && current.mediaType === result.data.mediaType) {
     return result.data;
   }

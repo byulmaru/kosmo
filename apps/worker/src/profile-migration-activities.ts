@@ -7,6 +7,7 @@ import {
   ProfileFollows,
   ProfileMigrations,
   Profiles,
+  withPrimaryDatabase,
 } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
@@ -80,36 +81,40 @@ export const prepareProfileMigrationMoveActivity = async (
   const sourceActorUri = new URL(input.sourceActorUri);
   const targetActorUri = new URL(input.targetActorUri);
 
-  const localInstance = await resolveConfiguredLocalInstance();
+  const localInstance = await withPrimaryDatabase(() => resolveConfiguredLocalInstance());
   const localOrigin = new URL(localInstance.canonicalOrigin).origin;
-  const storedSource = await findStoredRemoteProfileActorByUri(sourceActorUri);
+  const storedSource = await withPrimaryDatabase(() =>
+    findStoredRemoteProfileActorByUri(sourceActorUri),
+  );
   let targetProfileId: string | undefined;
 
   if (storedSource) {
-    const preparedTarget = await db
-      .select({
-        profileId: Profiles.id,
-      })
-      .from(ActivityPubActors)
-      .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
-      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-      .innerJoin(
-        ProfileMigrations,
-        and(
-          eq(ProfileMigrations.sourceProfileId, storedSource.profile.id),
-          eq(ProfileMigrations.targetProfileId, Profiles.id),
-        ),
-      )
-      .where(
-        and(
-          eq(ActivityPubActors.uri, targetActorUri.href),
-          eq(Instances.kind, InstanceKind.LOCAL),
-          eq(Instances.state, InstanceState.ACTIVE),
-          eq(Profiles.state, ProfileState.ACTIVE),
-        ),
-      )
-      .limit(1)
-      .then(first);
+    const preparedTarget = await withPrimaryDatabase(() =>
+      db
+        .select({
+          profileId: Profiles.id,
+        })
+        .from(ActivityPubActors)
+        .innerJoin(Profiles, eq(Profiles.id, ActivityPubActors.profileId))
+        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+        .innerJoin(
+          ProfileMigrations,
+          and(
+            eq(ProfileMigrations.sourceProfileId, storedSource.profile.id),
+            eq(ProfileMigrations.targetProfileId, Profiles.id),
+          ),
+        )
+        .where(
+          and(
+            eq(ActivityPubActors.uri, targetActorUri.href),
+            eq(Instances.kind, InstanceKind.LOCAL),
+            eq(Instances.state, InstanceState.ACTIVE),
+            eq(Profiles.state, ProfileState.ACTIVE),
+          ),
+        )
+        .limit(1)
+        .then(first),
+    );
     targetProfileId = preparedTarget?.profileId;
   }
 
@@ -139,10 +144,12 @@ export const prepareProfileMigrationMoveActivity = async (
     }
 
     try {
-      const target = await findOrMaterializeRemoteProfileActorByUri({
-        actorUri: targetActorUri,
-        contextOrigin,
-      });
+      const target = await withPrimaryDatabase(() =>
+        findOrMaterializeRemoteProfileActorByUri({
+          actorUri: targetActorUri,
+          contextOrigin,
+        }),
+      );
       targetProfileId = target.profile.id;
     } catch (error) {
       if (!isExpectedRemoteActorRejection(error)) {
@@ -154,10 +161,12 @@ export const prepareProfileMigrationMoveActivity = async (
   }
 
   try {
-    const source = await findOrMaterializeRemoteProfileActorByUri({
-      actorUri: sourceActorUri,
-      contextOrigin,
-    });
+    const source = await withPrimaryDatabase(() =>
+      findOrMaterializeRemoteProfileActorByUri({
+        actorUri: sourceActorUri,
+        contextOrigin,
+      }),
+    );
     return { sourceProfileId: source.profile.id, targetProfileId };
   } catch (error) {
     if (!isExpectedRemoteActorRejection(error)) {
@@ -232,32 +241,34 @@ const findEligibleTarget = async ({
 export const loadProfileMigrationMoveFollowerBatchActivity = async (
   input: LoadProfileMigrationMoveFollowerBatchInput,
 ): Promise<ProfileMigrationMoveFollower[]> => {
-  if (!(await findEligibleTarget(input))) {
-    return [];
-  }
+  return withPrimaryDatabase(async () => {
+    if (!(await findEligibleTarget(input))) {
+      return [];
+    }
 
-  const limit = input.limit ?? PROFILE_MIGRATION_MOVE_BATCH_SIZE;
-  return db
-    .select({
-      followerProfileId: Profiles.id,
-      sourceFollowId: ProfileFollows.id,
-    })
-    .from(ProfileFollows)
-    .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followerProfileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(ProfileFollows.followeeProfileId, input.sourceProfileId),
-        input.afterSourceFollowId === undefined
-          ? undefined
-          : gt(ProfileFollows.id, input.afterSourceFollowId),
-        eq(Instances.kind, InstanceKind.LOCAL),
-        eq(Instances.state, InstanceState.ACTIVE),
-        eq(Profiles.state, ProfileState.ACTIVE),
-      ),
-    )
-    .orderBy(asc(ProfileFollows.id))
-    .limit(limit);
+    const limit = input.limit ?? PROFILE_MIGRATION_MOVE_BATCH_SIZE;
+    return db
+      .select({
+        followerProfileId: Profiles.id,
+        sourceFollowId: ProfileFollows.id,
+      })
+      .from(ProfileFollows)
+      .innerJoin(Profiles, eq(Profiles.id, ProfileFollows.followerProfileId))
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(
+        and(
+          eq(ProfileFollows.followeeProfileId, input.sourceProfileId),
+          input.afterSourceFollowId === undefined
+            ? undefined
+            : gt(ProfileFollows.id, input.afterSourceFollowId),
+          eq(Instances.kind, InstanceKind.LOCAL),
+          eq(Instances.state, InstanceState.ACTIVE),
+          eq(Profiles.state, ProfileState.ACTIVE),
+        ),
+      )
+      .orderBy(asc(ProfileFollows.id))
+      .limit(limit);
+  });
 };
 
 /**
@@ -272,30 +283,34 @@ export const executeProfileMigrationMoveFollowerActivity = async (
     return;
   }
 
-  if (!(await findEligibleTarget(input))) {
-    return;
-  }
-
   const targetPair = {
     followerProfileId: input.followerProfileId,
     followeeProfileId: input.targetProfileId,
   };
-  const targetFollow = await db
-    .select({ id: ProfileFollows.id })
-    .from(ProfileFollows)
-    .where(profileFollowPairCondition(ProfileFollows, targetPair))
-    .limit(1)
-    .then(first);
-  const targetRequest = targetFollow
-    ? undefined
-    : await db
-        .select({ id: ProfileFollowRequests.id })
-        .from(ProfileFollowRequests)
-        .where(profileFollowPairCondition(ProfileFollowRequests, targetPair))
-        .limit(1)
-        .then(first);
+  const shouldTransfer = await withPrimaryDatabase(async () => {
+    if (!(await findEligibleTarget(input))) {
+      return false;
+    }
 
-  if (targetFollow || targetRequest) {
+    const targetFollow = await db
+      .select({ id: ProfileFollows.id })
+      .from(ProfileFollows)
+      .where(profileFollowPairCondition(ProfileFollows, targetPair))
+      .limit(1)
+      .then(first);
+    const targetRequest = targetFollow
+      ? undefined
+      : await db
+          .select({ id: ProfileFollowRequests.id })
+          .from(ProfileFollowRequests)
+          .where(profileFollowPairCondition(ProfileFollowRequests, targetPair))
+          .limit(1)
+          .then(first);
+
+    return !targetFollow && !targetRequest;
+  });
+
+  if (!shouldTransfer) {
     return;
   }
 
@@ -319,12 +334,14 @@ export const executeProfileMigrationMoveFollowerActivity = async (
     origin: 'LOCAL',
   });
   if (!removal.changed) {
-    const sourceFollow = await db
-      .select({ id: ProfileFollows.id })
-      .from(ProfileFollows)
-      .where(eq(ProfileFollows.id, input.sourceFollowId))
-      .limit(1)
-      .then(first);
+    const sourceFollow = await withPrimaryDatabase(() =>
+      db
+        .select({ id: ProfileFollows.id })
+        .from(ProfileFollows)
+        .where(eq(ProfileFollows.id, input.sourceFollowId))
+        .limit(1)
+        .then(first),
+    );
     if (sourceFollow) {
       throw new Error('Source Profile Follow removal did not converge');
     }

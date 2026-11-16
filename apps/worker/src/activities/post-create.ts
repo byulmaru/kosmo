@@ -12,6 +12,7 @@ import {
   Posts,
   Profiles,
   uuidv7,
+  withPrimaryDatabase,
 } from '@kosmo/core/db';
 import {
   AccountProfileRole,
@@ -213,13 +214,15 @@ const createPostTransaction = async (
   });
 
 const duplicateActivityPubPost = async (objectUri: string): Promise<PostCreateActivityResult> => {
-  const existing = await db
-    .select({ authorProfileId: Posts.profileId, postId: ActivityPubPosts.postId })
-    .from(ActivityPubPosts)
-    .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
-    .where(eq(ActivityPubPosts.uri, objectUri))
-    .limit(1)
-    .then(first);
+  const existing = await withPrimaryDatabase(() =>
+    db
+      .select({ authorProfileId: Posts.profileId, postId: ActivityPubPosts.postId })
+      .from(ActivityPubPosts)
+      .innerJoin(Posts, eq(Posts.id, ActivityPubPosts.postId))
+      .where(eq(ActivityPubPosts.uri, objectUri))
+      .limit(1)
+      .then(first),
+  );
   if (!existing) {
     throw new Error('ActivityPub Post not found after URI conflict');
   }

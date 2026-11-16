@@ -204,21 +204,23 @@ export const reconcilePostRequestActivity = async ({
   postId,
   profileId,
 }: ReconcilePostRequestActivityInput): Promise<ReconcilePostRequestActivityResult> => {
-  const existing = await db
-    .select({
-      actorAccountId: Posts.actorAccountId,
-      contentPostId: PostContents.postId,
-      currentContentId: Posts.currentContentId,
-      id: Posts.id,
-      mappedUri: ActivityPubPosts.uri,
-      profileId: Posts.profileId,
-    })
-    .from(Posts)
-    .leftJoin(PostContents, eq(PostContents.id, Posts.currentContentId))
-    .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
-    .where(eq(Posts.id, postId))
-    .limit(1)
-    .then(first);
+  const existing = await withPrimaryDatabase(() =>
+    db
+      .select({
+        actorAccountId: Posts.actorAccountId,
+        contentPostId: PostContents.postId,
+        currentContentId: Posts.currentContentId,
+        id: Posts.id,
+        mappedUri: ActivityPubPosts.uri,
+        profileId: Posts.profileId,
+      })
+      .from(Posts)
+      .leftJoin(PostContents, eq(PostContents.id, Posts.currentContentId))
+      .leftJoin(ActivityPubPosts, eq(ActivityPubPosts.postId, Posts.id))
+      .where(eq(Posts.id, postId))
+      .limit(1)
+      .then(first),
+  );
 
   if (!existing) {
     return { status: 'ABSENT' };

@@ -3,6 +3,10 @@
 ## Activity Registration And Adapters
 
 - `apps/worker/src/activities.ts`는 production Activity registry다.
+- Production Worker ordinary SELECT는 `PGREADHOST`의 read-only Pooler를 사용하며 replica lag가 보일 수 있다.
+  Committed state에 따라 Activity effect나 control outcome을 결정하는 read는 기존 `withPrimaryDatabase` 경계를
+  사용한다. Writes와 transaction-bound queries는 계속 `PGHOST`의 primary를 사용하며, `PGREADHOST`가 비어 있는
+  dev와 local은 기존 primary fallback을 유지한다.
 - 새 Temporal-first mutation의 domain policy, state transition과 commit 시점 재검증은 Worker Activity가 소유한다.
   Activity가 transaction, persistence와 retry/idempotency 판정을 수행하고, GraphQL·HTTP·ActivityPub caller는
   capability별 `mode`·conflict·reuse 옵션과 함께 exported `WorkflowDefinition`, serializable input을 generic

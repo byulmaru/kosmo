@@ -1,3 +1,4 @@
+import { withPrimaryDatabase } from '@kosmo/core/db';
 import { NotificationKind } from '@kosmo/core/enums';
 import { publishNotificationAdded } from '@kosmo/core/notification/events';
 import {
@@ -62,7 +63,7 @@ export const createReactionNotificationActivity = (sourceId: string): Promise<st
 
 export const createRepostNotificationActivity = (sourceId: string): Promise<string[]> =>
   materializeWithNotificationEvents((eventCollector) =>
-    createRepostNotification(sourceId, undefined, eventCollector),
+    withPrimaryDatabase(() => createRepostNotification(sourceId, undefined, eventCollector)),
   );
 
 export const createReplyNotificationActivity = (sourceId: string): Promise<string[]> =>

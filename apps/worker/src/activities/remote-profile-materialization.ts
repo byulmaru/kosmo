@@ -1,6 +1,13 @@
 import '@kosmo/core/polyfill';
 
-import { ActivityPubActors, db, first, Instances, Profiles } from '@kosmo/core/db';
+import {
+  ActivityPubActors,
+  db,
+  first,
+  Instances,
+  Profiles,
+  withPrimaryDatabase,
+} from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
@@ -213,27 +220,34 @@ export const fetchRemoteProfileActorActivity = async (
 
   try {
     const actorUri = new URL(input.actorUri);
-    await readUsableRemoteProfileActor(input.actorUri);
-    await ensureRemoteProfileLookupAllowed(actorUri);
+    await withPrimaryDatabase(async () => {
+      await readUsableRemoteProfileActor(input.actorUri);
+      await ensureRemoteProfileLookupAllowed(actorUri);
+    });
 
     let origin: string;
     let signingProfileId: string | undefined;
 
     if (!input.profileId) {
-      origin = input.contextOrigin ?? (await resolveConfiguredLocalInstance()).canonicalOrigin;
+      origin =
+        input.contextOrigin ??
+        (await withPrimaryDatabase(() => resolveConfiguredLocalInstance())).canonicalOrigin;
     } else {
-      const selected = await db
-        .select({
-          actorUri: ActivityPubActors.uri,
-          instanceCanonicalOrigin: Instances.canonicalOrigin,
-          instanceKind: Instances.kind,
-        })
-        .from(Profiles)
-        .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-        .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
-        .where(eq(Profiles.id, input.profileId))
-        .limit(1)
-        .then(first);
+      const profileId = input.profileId;
+      const selected = await withPrimaryDatabase(() =>
+        db
+          .select({
+            actorUri: ActivityPubActors.uri,
+            instanceCanonicalOrigin: Instances.canonicalOrigin,
+            instanceKind: Instances.kind,
+          })
+          .from(Profiles)
+          .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+          .leftJoin(ActivityPubActors, eq(ActivityPubActors.profileId, Profiles.id))
+          .where(eq(Profiles.id, profileId))
+          .limit(1)
+          .then(first),
+      );
 
       if (!selected) {
         throw new InitiatorOriginMaterializationError(
@@ -249,7 +263,7 @@ export const fetchRemoteProfileActorActivity = async (
           );
         }
         origin = localOrigin;
-        signingProfileId = input.profileId;
+        signingProfileId = profileId;
       } else {
         if (selected.instanceKind !== InstanceKind.ACTIVITYPUB || !selected.actorUri) {
           throw new InitiatorOriginMaterializationError(
@@ -282,7 +296,7 @@ export const fetchRemoteProfileActorActivity = async (
     const context = federation.createContext(new URL(origin), undefined);
     let signingContext = context;
     if (!signingProfileId) {
-      const localInstance = await resolveConfiguredLocalInstance();
+      const localInstance = await withPrimaryDatabase(() => resolveConfiguredLocalInstance());
       if (new URL(origin).origin !== localInstance.canonicalOrigin) {
         signingContext = federation.createContext(
           new URL(localInstance.canonicalOrigin),
@@ -324,10 +338,12 @@ export const recoverRemoteProfileActorActivity = async (
   input: RemoteProfileActorStateInput,
 ): Promise<void> => {
   try {
-    const stored = await readUsableRemoteProfileActor(input.actorUri);
-    if (stored) {
-      await reactivateStoredRemoteProfileActor(stored);
-    }
+    await withPrimaryDatabase(async () => {
+      const stored = await readUsableRemoteProfileActor(input.actorUri);
+      if (stored) {
+        await reactivateStoredRemoteProfileActor(stored);
+      }
+    });
   } catch (error) {
     return rethrowRemoteProfileMaterializationError(error);
   }

@@ -2,7 +2,7 @@ import '@kosmo/core/polyfill';
 
 import { randomUUID } from 'node:crypto';
 import { Note, Object as ActivityObject } from '@fedify/vocab';
-import { db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { db, first, Instances, Posts, Profiles, withPrimaryDatabase } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import {
@@ -44,48 +44,50 @@ const rejectedLookup = (
 });
 
 const resolveContext = async (signingProfileId?: string) => {
-  const localInstance = await resolveConfiguredLocalInstance({
-    publicOrigin: process.env.PUBLIC_ORIGIN,
-  });
+  return withPrimaryDatabase(async () => {
+    const localInstance = await resolveConfiguredLocalInstance({
+      publicOrigin: process.env.PUBLIC_ORIGIN,
+    });
 
-  if (!signingProfileId) {
+    if (!signingProfileId) {
+      return {
+        context: federation.createContext(new URL(localInstance.canonicalOrigin), undefined),
+      };
+    }
+
+    const signer = await db
+      .select({
+        profileState: Profiles.state,
+        instanceId: Instances.id,
+        instanceKind: Instances.kind,
+        instanceState: Instances.state,
+        canonicalOrigin: Instances.canonicalOrigin,
+      })
+      .from(Profiles)
+      .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
+      .where(eq(Profiles.id, signingProfileId))
+      .limit(1)
+      .then(first);
+
+    if (
+      !signer ||
+      signer.profileState !== ProfileState.ACTIVE ||
+      signer.instanceKind !== InstanceKind.LOCAL ||
+      signer.instanceState !== InstanceState.ACTIVE ||
+      signer.instanceId !== localInstance.id ||
+      signer.canonicalOrigin !== localInstance.canonicalOrigin
+    ) {
+      throw ApplicationFailure.nonRetryable(
+        'Signing Profile must be active on the configured local instance',
+        'RemotePostSigningProfileInvalid',
+      );
+    }
+
     return {
       context: federation.createContext(new URL(localInstance.canonicalOrigin), undefined),
+      signingProfileId,
     };
-  }
-
-  const signer = await db
-    .select({
-      profileState: Profiles.state,
-      instanceId: Instances.id,
-      instanceKind: Instances.kind,
-      instanceState: Instances.state,
-      canonicalOrigin: Instances.canonicalOrigin,
-    })
-    .from(Profiles)
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(eq(Profiles.id, signingProfileId))
-    .limit(1)
-    .then(first);
-
-  if (
-    !signer ||
-    signer.profileState !== ProfileState.ACTIVE ||
-    signer.instanceKind !== InstanceKind.LOCAL ||
-    signer.instanceState !== InstanceState.ACTIVE ||
-    signer.instanceId !== localInstance.id ||
-    signer.canonicalOrigin !== localInstance.canonicalOrigin
-  ) {
-    throw ApplicationFailure.nonRetryable(
-      'Signing Profile must be active on the configured local instance',
-      'RemotePostSigningProfileInvalid',
-    );
-  }
-
-  return {
-    context: federation.createContext(new URL(localInstance.canonicalOrigin), undefined),
-    signingProfileId,
-  };
+  });
 };
 
 const fetchRemotePostNote = async (
@@ -248,12 +250,14 @@ export const lookupRemotePostActivity = async (
     };
   }
 
-  const post = await db
-    .select({ authorProfileId: Posts.profileId })
-    .from(Posts)
-    .where(eq(Posts.id, materialized.postId))
-    .limit(1)
-    .then(first);
+  const post = await withPrimaryDatabase(() =>
+    db
+      .select({ authorProfileId: Posts.profileId })
+      .from(Posts)
+      .where(eq(Posts.id, materialized.postId))
+      .limit(1)
+      .then(first),
+  );
   if (!post) {
     throw new Error('Remote Note Post not found after materialization');
   }

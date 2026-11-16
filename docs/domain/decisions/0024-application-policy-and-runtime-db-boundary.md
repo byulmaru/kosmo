@@ -34,14 +34,17 @@ Accepted
   기존 `selectProfile` 쓰기와 Profile 비활성화 시 저장값을 비우는 동작은 그 전환 전까지 호환성을 위해 남을 수
   있지만 새 소비자나 쓰기를 추가하지 않는다. 기존 `selectProfile`이 바꾼 actor는 같은 Mutation의 이후 직렬
   top-level field에 반영되며, 클라이언트가 현재 선택 상태를 보유한다.
-- API, Web, Worker, Fedify consumer와 Admin application runtime은 표준 `PGHOST`, `PGPORT`, `PGUSER`,
-  `PGDATABASE`, `PGPASSWORD`와 하나의 shared non-owner runtime role을 사용하며, `PGHOST`는 transaction-mode
-  read-write CloudNativePG Pooler를 가리킨다. API, Web, Admin의 ordinary SELECT는 인증과 ACL 조회를 포함해
-  replica lag를 관찰할 수 있다. 모든 write와 transaction-bound query, GraphQL Mutation의 즉시 nested response,
-  durable effect가 의존하는 조회는 primary의 최신 상태를 사용한다. Fedify MessageQueue의 별도
-  `FEDIFY_QUEUE_DATABASE_URL`은 direct read-write
-  Service를 사용해 session 기반 `LISTEN`/`NOTIFY`를 유지하고, migration owner의 `PGHOST`도 같은 direct
-  Service를 사용한다. Fedify queue와 migration의 별도 database/role 경계는 유지한다.
+- API, Web, Worker, Fedify consumer와 Admin application runtime은 표준 `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE`,
+  `PGPASSWORD`와 하나의 shared non-owner runtime role을 사용하며, `PGHOST`는 transaction-mode read-write
+  CloudNativePG Pooler를 가리킨다. Production API, Web, Admin과 Worker의 ordinary SELECT는 read-only
+  CloudNativePG Pooler를 사용해 replica lag를 관찰할 수 있다. API, Web, Admin의 인증과 ACL 조회를 포함한
+  ordinary SELECT 정책은 기존과 같다. Worker에서 committed state가 Activity effect 또는 control outcome을
+  결정하는 조회는 primary의 최신 상태를 사용하며, 모든 write와 transaction-bound query도 primary에 남는다.
+  GraphQL Mutation의 즉시 nested response와 durable effect가 의존하는 조회 역시 primary의 최신 상태를 사용한다.
+  Fedify consumer의 `PGREADHOST`는 계속 비어 있고, Fedify MessageQueue의 별도
+  `FEDIFY_QUEUE_DATABASE_URL`은 direct read-write Service를 사용해 session 기반 `LISTEN`/`NOTIFY`를 유지한다.
+  Migration owner의 `PGHOST`도 같은 direct Service를 사용한다. `PGREADHOST`가 비어 있는 dev와 local에서는 Worker
+  ordinary read도 `PGHOST`의 primary를 사용한다. Fedify queue와 migration의 별도 database/role 경계는 유지한다.
 - 이 전환은 hidden/deleted Post owner cleanup, `DELETE RETURNING` mutation payload, Notification cleanup,
   viewer-independent Reaction count를 변경하지 않는다.
 
