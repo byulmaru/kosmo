@@ -5,7 +5,6 @@ import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
 import { deleteSelectedProfile, writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -159,7 +158,6 @@ function SettingsProfileDetailContents() {
   return (
     <SettingsProfileEditor
       key={`${profileForEditor.id}:${profileForEditor.viewerState?.membership?.role ?? 'NONE'}`}
-      openProfileSwitcher={shellChrome?.openProfileSwitcher}
       profile={profileForEditor}
     />
   );
@@ -172,13 +170,7 @@ type SettingsProfileEditorProfile = NonNullable<
   followPolicy: string;
 };
 
-function SettingsProfileEditor({
-  openProfileSwitcher,
-  profile,
-}: {
-  openProfileSwitcher?: () => void;
-  profile: SettingsProfileEditorProfile;
-}) {
+function SettingsProfileEditor({ profile }: { profile: SettingsProfileEditorProfile }) {
   const editable = profile.viewerState?.membership?.role === 'OWNER';
   const theme = useTheme();
   const baseline = getPostingSettings(profile);
@@ -258,18 +250,6 @@ function SettingsProfileEditor({
   return (
     <ProfileSettingsScreen
       embedded
-      identityAction={
-        openProfileSwitcher ? (
-          <Button
-            accessibilityLabel="다른 Profile 선택"
-            onPress={openProfileSwitcher}
-            size="compact"
-            tone="secondary"
-          >
-            Profile 전환
-          </Button>
-        ) : null
-      }
       deletion={
         editable
           ? {

@@ -23,7 +23,7 @@ describe('Settings detail back navigation', () => {
       ['/settings/muted-profiles', '/settings/mute-and-block'],
       ['/settings/blocked-profiles', '/settings/mute-and-block'],
       ['/settings/labs', '/settings'],
-      ['/settings/natural-language-mute', '/settings/labs'],
+      ['/settings/natural-language-mute', '/settings'],
       ['/settings/info', '/settings'],
       ['/settings/theme', '/settings'],
       ['/settings/developer', '/settings/info'],

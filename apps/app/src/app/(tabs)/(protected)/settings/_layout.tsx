@@ -40,7 +40,7 @@ export function SettingsRouteLayout({ children }: { children?: ReactNode }) {
             testID="settings-master-pane"
           >
             <PageHeader title="설정" />
-            <SettingsNavigationList pathname={pathname} selected={selected} />
+            <SettingsNavigationList density="compact" pathname={pathname} selected={selected} />
           </View>
           <View style={styles.detailPane} testID="settings-detail-pane">
             {children}

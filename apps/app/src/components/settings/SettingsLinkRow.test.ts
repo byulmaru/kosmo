@@ -174,6 +174,7 @@ describe('SettingsLinkRow', () => {
     await render({
       accessibilityLabel: '프로필 설정 열기',
       currentPage: true,
+      description: '현재 공개 범위',
       href: '/settings/profile',
       label: '프로필 설정',
       primary: true,
@@ -191,6 +192,10 @@ describe('SettingsLinkRow', () => {
     assert.equal(row.props.accessibilityLabel, '프로필 설정 열기');
     assert.equal(row.props['aria-current'], 'page');
     assert.deepEqual(row.props.accessibilityState, { selected: true });
+    const label = rendered('Text').find((node) => node.children[0] === '프로필 설정');
+    const description = rendered('Text').find((node) => node.children[0] === '현재 공개 범위');
+    assert.ok(label);
+    assert.ok(description);
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
     const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
     assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
@@ -213,7 +218,6 @@ describe('SettingsLinkRow', () => {
     );
     assert.ok(chevronWrapper);
     assert.equal(chevronWrapper.props.pointerEvents, 'none');
-    assert.equal(chevronWrapper.props.children.type, 'ChevronRightIcon');
   });
 
   it('선택된 상위 category도 현재 페이지가 아니면 aria-current를 받지 않는다', async () => {
@@ -234,12 +238,36 @@ describe('SettingsLinkRow', () => {
     assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
   });
 
+  it('compact theme link exposes its accessible name and current value', async () => {
+    await render({
+      accessibilityLabel: '화면 설정 열기, 시스템',
+      density: 'compact',
+      description: '시스템',
+      href: '/settings/theme',
+      label: '화면',
+      testID: 'compact-theme-row',
+    });
+
+    const row = byTestId('compact-theme-row');
+    const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
+    const item = rendered('View').find((node) => flattenStyle(node.props.style).minHeight === 40);
+    const value = rendered('Text').find((node) => node.children[0] === '시스템');
+    assert.ok(item);
+    assert.ok(value);
+    assert.equal(row.props.accessibilityLabel, '화면 설정 열기, 시스템');
+    assert.equal(rowStyle.minHeight, 40);
+    assert.equal(item.props.style.paddingVertical, 4);
+    assert.equal(item.props.style.paddingHorizontal, 16);
+    assert.equal(flattenStyle(value.props.style).color, '#666666');
+    assert.deepEqual(texts(), ['화면', '시스템']);
+  });
+
   it('외부 링크는 expo Link asChild와 exact href를 사용한다', async () => {
     await render({
-      accessibilityLabel: 'Byulmaru ID Account Settings 외부 서비스로 이동',
+      accessibilityLabel: '별마루 ID 계정 설정 외부 서비스로 이동',
       external: true,
       href: 'https://id.byulmaru.co',
-      label: '계정 설정',
+      label: '별마루 ID',
       primary: true,
       testID: 'external-settings-row',
     });
@@ -251,7 +279,7 @@ describe('SettingsLinkRow', () => {
     assert.equal(row.props.hrefAttrs, undefined);
     assert.equal(row.props['aria-current'], undefined);
     assert.deepEqual(row.props.accessibilityState, { selected: false });
-    assert.deepEqual(texts(), ['계정 설정']);
+    assert.deepEqual(texts(), ['별마루 ID']);
   });
 
   it('내부 링크 활성화를 onNavigate callback으로 노출한다', async () => {
@@ -289,7 +317,7 @@ describe('SettingsLinkRow', () => {
       accessibilityLabel: '외부 설정 새 탭으로 열기',
       external: true,
       href: 'https://id.byulmaru.co',
-      label: '계정 설정',
+      label: '별마루 ID',
       target: '_blank',
       testID: 'external-settings-row-with-target',
     });

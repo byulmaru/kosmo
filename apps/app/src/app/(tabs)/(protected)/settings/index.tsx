@@ -15,7 +15,7 @@ export default function SettingsRoute() {
   const content =
     layout === 'full' ? (
       <>
-        <PageHeader title="프로필 설정" />
+        <PageHeader title="일반" />
         <SettingsProfileDetail />
       </>
     ) : (

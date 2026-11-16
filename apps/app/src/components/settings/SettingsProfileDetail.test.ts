@@ -201,12 +201,6 @@ describe('SettingsProfileDetail', () => {
     assert.equal(screen.props.embedded, true);
     assert.equal(rendered('ProfilePostingSettings')[0].props.editable, true);
     await act(async () =>
-      rendered('Button')
-        .find((node) => node.props.accessibilityLabel === '다른 Profile 선택')
-        ?.props.onPress(),
-    );
-    assert.equal(openProfileSwitcherCalls, 1);
-    await act(async () =>
       rendered('ProfilePostingSettings')[0].props.onChange({
         defaultPostVisibility: 'FOLLOWERS',
         followPolicy: 'OPEN',
