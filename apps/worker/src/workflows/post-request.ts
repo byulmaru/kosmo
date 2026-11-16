@@ -3,6 +3,7 @@ import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
 import { postCreateWorkflowV2 } from '@kosmo/core/temporal/post-create';
 import {
   POST_REQUEST_CANCEL_UPDATE,
+  POST_REQUEST_QUOTE_ADMIT_UPDATE,
   POST_REQUEST_SEARCH_ATTRIBUTES,
   POST_REQUEST_STATE_QUERY,
   PostRequestStatus,
@@ -43,6 +44,7 @@ const workflowArgsSchema = z
   .object({
     analyticsPlatform: z.enum(['web', 'native']).optional(),
     input: z.object({
+      admissionId: z.string().optional(),
       accountId: z.uuid(),
       bodyText: z.string(),
       contentWarning: z.string().nullable().optional(),
@@ -83,6 +85,7 @@ const workflowArgsSchema = z
       .optional(),
     postId: z.uuid().optional(),
     requestId: z.uuid(),
+    quoteContentId: z.uuid().optional(),
     submissionFingerprint: z
       .string()
       .regex(/^[a-f0-9]{64}$/)
@@ -196,6 +199,9 @@ const parseInput = (
     ...(parsed.data.submissionFingerprint === undefined
       ? {}
       : { submissionFingerprint: parsed.data.submissionFingerprint }),
+    ...(parsed.data.quoteContentId === undefined
+      ? {}
+      : { quoteContentId: parsed.data.quoteContentId }),
     submittedAt: parsed.data.submittedAt,
   };
 
@@ -433,7 +439,13 @@ const createPost = async (
           : {}),
         postId: snapshot.postId,
         revalidateAuthorization: true,
-        requestId: workflowInfo().runId,
+        requestId:
+          snapshot.input.admissionId === undefined
+            ? workflowInfo().runId
+            : snapshot.quoteContentId!,
+        ...(snapshot.input.admissionId === undefined
+          ? {}
+          : { quoteAdmittedAt: workflowInfo().startTime.toISOString() }),
       },
     ],
     mode: 'execute',
@@ -445,6 +457,25 @@ export async function postRequestWorkflow(
   input: PostRequestWorkflowArgs,
 ): Promise<PostRequestState> {
   const { snapshot: parsedSnapshot, uploadMediaIds } = parseInput(input);
+  if (parsedSnapshot.input.admissionId !== undefined) {
+    const admission = /^(\d{13}):(.+)$/.exec(parsedSnapshot.input.admissionId);
+    const startedAt = workflowInfo().startTime.getTime();
+    if (
+      !admission ||
+      !z.uuid().safeParse(admission[2]).success ||
+      Number(admission[1]) > startedAt + 30_000 ||
+      startedAt - Number(admission[1]) > 5 * 60_000 ||
+      !parsedSnapshot.submissionFingerprint ||
+      !parsedSnapshot.quoteContentId ||
+      parsedSnapshot.input.repostSourceId === undefined
+    ) {
+      throw ApplicationFailure.nonRetryable(
+        'Quote admission is invalid or expired',
+        'VALIDATION',
+        'admissionId',
+      );
+    }
+  }
   let snapshot = parsedSnapshot;
   let state: PostRequestState = { snapshot, status: PostRequestStatus.QUEUED };
   let activeMediaCancellationScope: CancellationScope | undefined;
@@ -456,6 +487,21 @@ export async function postRequestWorkflow(
     upsertPostRequestSearchAttributes(snapshot, status);
   };
 
+  if (snapshot.input.admissionId !== undefined) {
+    setHandler(
+      defineUpdate<PostRequestState, [string]>(POST_REQUEST_QUOTE_ADMIT_UPDATE),
+      (fingerprint) => {
+        if (fingerprint !== snapshot.submissionFingerprint) {
+          throw ApplicationFailure.nonRetryable(
+            'Quote admission payload does not match its original submission',
+            'VALIDATION',
+            'admissionId',
+          );
+        }
+        return state;
+      },
+    );
+  }
   setHandler(queryState, () => state);
   setHandler(cancelRequest, () => {
     if (
@@ -498,7 +544,11 @@ export async function postRequestWorkflow(
   try {
     publishSnapshot = {
       ...snapshot,
-      postId: snapshot.postId ?? (await generatePostIdActivity()),
+      postId:
+        snapshot.postId ??
+        (snapshot.input.admissionId === undefined
+          ? await generatePostIdActivity()
+          : await generatePostIdActivity(snapshot.input)),
     };
   } catch (error) {
     setStatus(PostRequestStatus.FAILED, { error: failureDetails(error) });

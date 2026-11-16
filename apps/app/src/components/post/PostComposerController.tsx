@@ -16,6 +16,7 @@ import { useSession } from '@/session/SessionProvider';
 import { spacing } from '@/theme/tokens';
 import { ComposerMediaEditor } from './ComposerMediaEditor';
 import { MobileFullscreenComposerShellCandidate, PostComposer } from './PostComposer';
+import { createPostComposerAdmissionId } from './postComposerAdmission';
 import {
   emptyPostComposerMediaValue,
   PostComposerMediaControls,
@@ -75,6 +76,31 @@ function postRequestSubmissionError(error: unknown): { code: string; field?: str
       : {}),
   };
 }
+const quoteSubmitUncertainMessage =
+  '인용 게시 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.';
+const quoteAdmissionConflictMessage =
+  '인용 게시 시도가 만료되었거나 내용이 바뀌어 다시 게시할 수 없습니다. 현재 인용을 폐기하고 새로 작성해 주세요.';
+
+type PostComposerMutationError = Readonly<{
+  message: string;
+  extensions?: Readonly<{
+    code?: unknown;
+    field?: unknown;
+  }>;
+}>;
+
+const hasQuoteAdmissionError = (
+  errors: readonly PostComposerMutationError[] | null | undefined,
+): boolean =>
+  Boolean(
+    errors?.some(({ extensions, message }) => {
+      const code = extensions?.code;
+      if (code !== 'VALIDATION' && code !== 'CONFLICT') {
+        return false;
+      }
+      return extensions?.field === 'admissionId' || /\badmission(?:\s+id|id)?\b/i.test(message);
+    }),
+  );
 
 const PostComposerFragment = graphql`
   fragment PostComposer_profile on Profile {
@@ -292,6 +318,8 @@ function PostComposerContents({
   const [selectedProfileKey, setSelectedProfileKey] = useState<PostComposerProfileRef | null>(null);
   const globalProfile = useFragment(PostComposerFragment, profileKey);
   const profile = useFragment(PostComposerFragment, selectedProfileKey ?? profileKey);
+  const replyMode = Boolean(replyParentId);
+  const quoteMode = Boolean(repostSourceId);
   const onSelectProfile = useCallback((_id: string, profileRef: PostComposerProfileRef) => {
     setSelectedProfileKey(profileRef);
   }, []);
@@ -400,9 +428,8 @@ function PostComposerContents({
   }, []);
   const [mediaGeneration, setMediaGeneration] = useState(0);
   const [commit, submitting] = useMutation<PostComposerCreatePostMutation>(CreatePostMutation);
+  const quoteAdmissionIdRef = useRef<string | null>(null);
   const { showToast } = useToast();
-  const replyMode = Boolean(replyParentId);
-  const quoteMode = Boolean(repostSourceId);
   const mountedRef = useRef(true);
   const { bodyText, mentions } = normalizePostComposerMentionDraft(body, mentionRanges);
   const contentWarningText = normalizePostContentPlainText(contentWarning);
@@ -474,6 +501,9 @@ function PostComposerContents({
       return;
     }
     const submissionOwnerAccountId = accountId;
+    const submissionAdmissionId = quoteMode
+      ? (quoteAdmissionIdRef.current ??= createPostComposerAdmissionId())
+      : undefined;
     const submissionGeneration = contextGenerationRef.current;
     const submissionEnvironmentGeneration = environmentGenerationRef?.current ?? null;
     const submissionGuardGeneration = contextGuard?.current;
@@ -505,6 +535,7 @@ function PostComposerContents({
         actorProfileId: profile.id,
         media: submittedMedia,
         sensitiveMedia: media.sensitiveMedia,
+        ...(submissionAdmissionId ? { admissionId: submissionAdmissionId } : {}),
       };
     } catch {
       if (isCurrentSubmission()) {
@@ -552,6 +583,7 @@ function PostComposerContents({
               }
             });
           }
+          quoteAdmissionIdRef.current = null;
           onBodyReset();
           setContentWarning('');
           setContentWarningExpanded(false);
@@ -608,13 +640,24 @@ function PostComposerContents({
           }
         }
 
-        showToast(submitFailureMessage, { tone: 'danger' });
+        showToast(
+          quoteMode
+            ? hasQuoteAdmissionError(errors)
+              ? quoteAdmissionConflictMessage
+              : definiteDenial
+                ? submitFailureMessage
+                : quoteSubmitUncertainMessage
+            : submitFailureMessage,
+          { tone: 'danger' },
+        );
       },
       onError: () => {
         if (!isCurrentSubmission()) {
           return;
         }
-        showToast(submitFailureMessage, { tone: 'danger' });
+        showToast(quoteMode ? quoteSubmitUncertainMessage : submitFailureMessage, {
+          tone: 'danger',
+        });
       },
     });
   };
@@ -623,6 +666,7 @@ function PostComposerContents({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      quoteAdmissionIdRef.current = null;
     };
   }, []);
 

@@ -57,6 +57,12 @@ type RunWorkflowOptions<T extends Workflow, Mode extends 'start' | 'execute'> = 
     ? { readonly mode: 'execute'; readonly returnExistingResult?: boolean }
     : { readonly mode: 'start'; readonly returnExistingResult?: never });
 
+type RunWorkflowUpdateResultOptions<T extends Workflow> = {
+  readonly args: Parameters<T>;
+  readonly mode: 'update-result';
+  readonly updateId: string;
+};
+
 type RunWorkflowUpdateOptions<T extends Workflow, Args extends unknown[]> = Omit<
   WorkflowStartOptions<T>,
   'workflowId' | 'taskQueue'
@@ -109,16 +115,21 @@ export function runWorkflow<T extends Workflow, Ret, Args extends unknown[]>(
   definition: WorkflowUpdateDefinition<T, Ret, Args>,
   options: RunWorkflowExistingUpdateOptions<T, Args>,
 ): Promise<Ret>;
+export function runWorkflow<T extends Workflow, Ret, Args extends unknown[]>(
+  definition: WorkflowUpdateDefinition<T, Ret, Args>,
+  options: RunWorkflowUpdateResultOptions<T>,
+): Promise<Ret>;
 export function runWorkflow<T extends Workflow>(
   definition: WorkflowDefinition<T>,
-  options: RunWorkflowOptions<T, 'start' | 'execute'>,
+  options: RunWorkflowOptions<T, 'start' | 'execute'> | RunWorkflowUpdateResultOptions<T>,
 ): Promise<WorkflowHandleWithStartDetails<T> | WorkflowResultType<T>>;
 export async function runWorkflow<T extends Workflow>(
   definition: WorkflowDefinition<T>,
   options:
     | RunWorkflowOptions<T, 'start' | 'execute'>
     | RunWorkflowUpdateImplementationOptions<T>
-    | RunWorkflowExistingUpdateImplementationOptions<T>,
+    | RunWorkflowExistingUpdateImplementationOptions<T>
+    | RunWorkflowUpdateResultOptions<T>,
 ): Promise<WorkflowHandleWithStartDetails<T> | WorkflowResultType<T> | unknown> {
   const args = (options.args ?? []) as Parameters<T>;
   const workflowId = definition.workflowIdFromArgs(...args);
@@ -140,6 +151,15 @@ export async function runWorkflow<T extends Workflow>(
               updateId,
             });
       });
+    }
+
+    if (options.mode === 'update-result') {
+      const { mode, updateId } = options;
+      void mode;
+      const handle = temporalClient.workflow.getHandle<T>(workflowId);
+      return await temporalClient.withDeadline(deadline, () =>
+        handle.getUpdateHandle<unknown>(updateId).result(),
+      );
     }
 
     if (options.mode === 'update-with-start') {

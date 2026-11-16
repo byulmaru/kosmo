@@ -1,5 +1,9 @@
 import { temporalClient } from '@kosmo/core/temporal/client';
-import { POST_REQUEST_STATE_QUERY, postRequestWorkflowId } from '@kosmo/core/temporal/post-request';
+import {
+  POST_REQUEST_STATE_QUERY,
+  postQuoteRequestWorkflowId,
+  postRequestWorkflowId,
+} from '@kosmo/core/temporal/post-request';
 import { WorkflowNotFoundError } from '@temporalio/client';
 import type { PostRequestState } from '@kosmo/core/temporal/post-request';
 
@@ -12,16 +16,21 @@ export const loadPostRequestStateForAccount = async ({
   readonly profileId?: string;
   readonly requestId: string;
 }): Promise<PostRequestState | null> => {
-  const handle = temporalClient.workflow.getHandle(postRequestWorkflowId(accountId, requestId));
-
-  let state: PostRequestState | null;
-  try {
-    state = await handle.query<PostRequestState | null>(POST_REQUEST_STATE_QUERY);
-  } catch (error) {
-    if (error instanceof WorkflowNotFoundError) {
-      return null;
+  let state: PostRequestState | null = null;
+  for (const workflowId of [
+    postRequestWorkflowId(accountId, requestId),
+    postQuoteRequestWorkflowId(requestId),
+  ]) {
+    try {
+      state = await temporalClient.workflow
+        .getHandle(workflowId)
+        .query<PostRequestState | null>(POST_REQUEST_STATE_QUERY);
+      break;
+    } catch (error) {
+      if (!(error instanceof WorkflowNotFoundError)) {
+        throw error;
+      }
     }
-    throw error;
   }
 
   if (

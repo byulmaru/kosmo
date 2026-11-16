@@ -50,6 +50,7 @@ builder.mutationField('createPost', (t) =>
     type: CreatePostPayload,
     typeOptions: { validate: localPostCreateInputSchema },
     input: {
+      admissionId: t.input.string({ required: false }),
       bodyText: t.input.string({ validate: postBodyTextOrEmptySchema }),
       contentWarning: t.input.string({ required: false }),
       media: t.input.field({

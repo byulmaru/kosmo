@@ -9,6 +9,7 @@ import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
 import { POST_CREATE_WORKFLOW_V2_TYPE } from '@kosmo/core/temporal/post-create';
 import {
   POST_REQUEST_CANCEL_UPDATE,
+  POST_REQUEST_QUOTE_ADMIT_UPDATE,
   POST_REQUEST_STATE_QUERY,
   POST_REQUEST_WORKFLOW_TYPE,
   PostRequestStatus,
@@ -2111,6 +2112,68 @@ test(
       assert.equal(effectCalls, 1);
       assert.equal(effectsCompleted, true);
       assert.deepEqual(analyticsCalls, [{ analyticsPlatform: 'native', postId }]);
+    });
+  },
+);
+
+test(
+  'Quote request keeps its first payload while repeated submissions join processing',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createPostRequestTestEnvironment();
+    t.after(() => environment.teardown());
+    const taskQueue = `quote-request-admission-${randomUUID()}`;
+    const args: PostRequestWorkflowArgs = {
+      ...withoutPostId(createPostRequest()),
+      input: {
+        ...createPostRequest().input,
+        admissionId: `${Date.now()}:${randomUUID()}`,
+        repostSourceId: randomUUID(),
+      },
+      submissionFingerprint: 'a'.repeat(64),
+      quoteContentId: randomUUID(),
+    };
+    const mediaRead = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const worker = await createWorker(environment, taskQueue, {
+      getPostRequestMediaStateActivity: async () => {
+        mediaRead.resolve();
+        await release.promise;
+        return { readyMediaIds: [] };
+      },
+    });
+    await worker.runUntil(async () => {
+      const handle = await startPostRequest(environment, taskQueue, args);
+      await mediaRead.promise;
+      try {
+        const joined = await handle.executeUpdate<PostRequestState, [string]>(
+          POST_REQUEST_QUOTE_ADMIT_UPDATE,
+          { args: [args.submissionFingerprint!] },
+        );
+        assert.equal(joined.snapshot.input.admissionId, args.input.admissionId);
+        assert.equal(joined.snapshot.input.bodyText, args.input.bodyText);
+        assert.equal(joined.status, PostRequestStatus.PROCESSING);
+        await assert.rejects(
+          handle.executeUpdate(POST_REQUEST_QUOTE_ADMIT_UPDATE, { args: ['b'.repeat(64)] }),
+          (error: unknown) => {
+            let cause: unknown = error;
+            while (cause instanceof Error && !(cause instanceof ApplicationFailure)) {
+              cause = cause.cause;
+            }
+            return (
+              cause instanceof ApplicationFailure &&
+              cause.type === 'VALIDATION' &&
+              cause.details?.[0] === 'admissionId'
+            );
+          },
+        );
+        const state = await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY);
+        assert.equal(state.snapshot.submissionFingerprint, args.submissionFingerprint);
+        await handle.executeUpdate(POST_REQUEST_CANCEL_UPDATE, { args: [] });
+      } finally {
+        release.resolve();
+      }
+      assert.equal((await handle.result()).status, PostRequestStatus.CANCELLED);
     });
   },
 );

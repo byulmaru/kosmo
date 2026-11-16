@@ -795,3 +795,59 @@ test(
     });
   },
 );
+
+test(
+  'Quote publication uses its original admitted time after a long media wait',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createTestWorkflowEnvironment();
+    t.after(() => environment.teardown());
+    const taskQueue = `quote-delayed-publish-${randomUUID()}`;
+    const issuedAt = Date.now() - 10 * 60_000;
+    const args: PostCreateWorkflowArgs = {
+      input: {
+        ...localPostInput('delayed Quote'),
+        admissionId: `${issuedAt}:${randomUUID()}`,
+        repostSourceId: randomUUID(),
+      },
+      quoteAdmittedAt: new Date(issuedAt + 1_000).toISOString(),
+      postId: randomUUID(),
+      revalidateAuthorization: true,
+      requestId: randomUUID(),
+    };
+    let observed: PostCreateActivityInput | undefined;
+    const worker = await Worker.create({
+      ...testWorkflowSource,
+      connection: environment.nativeConnection,
+      namespace: environment.namespace,
+      taskQueue,
+      activities: {
+        createPostActivityV2: async (input: PostCreateActivityInput) => {
+          observed = input;
+          return {
+            ok: true,
+            result: {
+              authorProfileId: input.input.profileId,
+              postId: input.postId,
+              status: 'duplicate',
+            },
+          };
+        },
+      },
+    });
+    await worker.runUntil(async () => {
+      const result = await runPostCreate(environment, taskQueue, args);
+      assert.equal(result.status, 'duplicate');
+      assert.equal(result.postId, args.postId);
+      assert.equal(observed?.revalidateAuthorization, true);
+      await assert.rejects(
+        runPostCreate(environment, taskQueue, {
+          ...args,
+          quoteAdmittedAt: undefined,
+          requestId: randomUUID(),
+        }),
+        (error: unknown) => isWorkflowFailureType(error, 'VALIDATION'),
+      );
+    });
+  },
+);
