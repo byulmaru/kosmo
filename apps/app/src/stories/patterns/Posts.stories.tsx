@@ -9525,7 +9525,7 @@ export const QuoteModalFailureLifecycle: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: '인용 게시' }));
 
     await expect(within(dialog).findByRole('alert')).resolves.toHaveTextContent(
-      '인용 게시 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(quoteMutationRequestObserver).toHaveBeenCalledTimes(1);
     expect(quoteMutationRequestObserver).toHaveBeenNthCalledWith(
@@ -9564,7 +9564,7 @@ export const QuoteModalFailureLifecycle: Story = {
       }),
     );
     expect(within(dialog).getByRole('alert')).toHaveTextContent(
-      '인용 게시 결과를 확인하지 못했습니다. 같은 내용으로 다시 시도해 주세요.',
+      '게시 요청을 접수하지 못했어요. 내용을 확인하고 다시 시도해 주세요.',
     );
     expect(body).toHaveValue('실패 뒤 유지할 인용\n둘째 줄\n셋째 줄');
     expect(within(dialog).getByRole('button', { name: '공개 범위: 팔로워만' })).toBeVisible();
