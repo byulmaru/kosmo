@@ -1019,6 +1019,8 @@ describe('PostMediaViewer', () => {
       current: { focus: () => originFocused++ } as unknown as NativeView,
     };
     await render({ onClose: () => closed++, originControl });
+    assert.equal(closeFocused, 0);
+    await act(async () => rendered('Modal')[0]!.props.onShow());
     assert.equal(closeFocused, 1);
     assert.equal(byTestId('post-media-viewer-backdrop-dismiss').props.tabIndex, -1);
     assert.equal(

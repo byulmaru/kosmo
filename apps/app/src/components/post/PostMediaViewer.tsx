@@ -161,11 +161,6 @@ export function PostMediaViewer({
     [currentIndex, expanded, lastContentId, requestClose, selectedIndex, syncContentId],
   );
 
-  useEffect(() => {
-    const focusFrame = requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef));
-    return () => globalThis.cancelAnimationFrame?.(focusFrame);
-  }, []);
-
   const handlePlatformRequestClose = useCallback(() => {
     if (Platform.OS === 'web' && ignoreNextPlatformClose.current) {
       ignoreNextPlatformClose.current = false;
@@ -213,6 +208,8 @@ export function PostMediaViewer({
       animationType="fade"
       navigationBarTranslucent
       onRequestClose={handlePlatformRequestClose}
+      // Wait for the newly active Modal's focus trap to replace its parent's trap.
+      onShow={() => requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef))}
       presentationStyle="overFullScreen"
       statusBarTranslucent
       transparent
