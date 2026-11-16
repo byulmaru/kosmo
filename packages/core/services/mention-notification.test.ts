@@ -31,6 +31,7 @@ import {
   ProfileState,
 } from '../enums';
 import {
+  canonicalizePostContentDocument,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
@@ -97,7 +98,25 @@ const createTestPost = async ({
   readonly visibility?: PostVisibility;
 }) => {
   const result = await persistPost({
-    document: postContentDocumentFromText(`mention ${crypto.randomUUID()}`),
+    document: canonicalizePostContentDocument({
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: `mention ${crypto.randomUUID()}` },
+              ...mentionProfileIds.map((profileId) => ({
+                type: 'mention',
+                attrs: { profileId },
+              })),
+            ],
+          },
+        ],
+      },
+    }),
     mentionProfileIds,
     objectUri: `https://remote.example/notes/${crypto.randomUUID()}`,
     origin: 'ACTIVITYPUB',
@@ -925,13 +944,23 @@ test('stored Direct mentions remain eligible while unavailable, muted, and block
   );
 });
 
-test('availability follows the exact current typed relation and excludes Recipient-only downtime from cleanup', async () => {
+test('availability follows Post Mention identity and excludes Recipient-only downtime from cleanup', async () => {
   const author = await createProfile(InstanceKind.ACTIVITYPUB);
   const recipient = await createProfile();
   const post = await createTestPost({
     authorProfileId: author.id,
     mentionProfileIds: [recipient.id],
   });
+  assert.ok(post.currentContentId);
+  await db
+    .update(PostMentions)
+    .set({ postId: post.id })
+    .where(
+      and(
+        eq(PostMentions.postContentId, post.currentContentId),
+        eq(PostMentions.profileId, recipient.id),
+      ),
+    );
   const notification = await db
     .insert(Notifications)
     .values({
@@ -971,6 +1000,58 @@ test('availability follows the exact current typed relation and excludes Recipie
     .set({ currentContentId: replacementContent.id })
     .where(eq(Posts.id, post.id));
 
-  assert.equal(await isAvailable(notification.id, true), false);
-  assert.equal(await isAvailable(notification.id, false), false);
+  assert.equal(await isAvailable(notification.id, true), true);
+  assert.equal(await isAvailable(notification.id, false), true);
+  await db.insert(PostMentions).values({
+    postContentId: replacementContent.id,
+    postId: null,
+    profileId: recipient.id,
+  });
+  assert.equal(await isAvailable(notification.id, true), true);
+  assert.equal(await isAvailable(notification.id, false), true);
+});
+
+test('a Post mention marker survives content changes and suppresses a duplicate legacy fallback', async () => {
+  const author = await createProfile(InstanceKind.ACTIVITYPUB);
+  const recipient = await createProfile();
+  const post = await createTestPost({ authorProfileId: author.id });
+  assert.ok(post.currentContentId);
+  await db.insert(PostMentions).values({
+    postContentId: post.currentContentId,
+    postId: null,
+    profileId: recipient.id,
+  });
+
+  const legacyNotificationIds = await createMentionNotification(post.id);
+  assert.equal(legacyNotificationIds.length, 1);
+
+  await db
+    .update(PostMentions)
+    .set({ postId: post.id })
+    .where(
+      and(
+        eq(PostMentions.postContentId, post.currentContentId),
+        eq(PostMentions.profileId, recipient.id),
+      ),
+    );
+  const replacementContent = await db
+    .insert(PostContents)
+    .values({
+      document: postContentDocumentFromText(`replacement ${crypto.randomUUID()}`),
+      postId: post.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+  await db
+    .update(Posts)
+    .set({ currentContentId: replacementContent.id })
+    .where(eq(Posts.id, post.id));
+  await db.insert(PostMentions).values({
+    postContentId: replacementContent.id,
+    postId: null,
+    profileId: recipient.id,
+  });
+
+  assert.deepEqual(await createMentionNotification(post.id), legacyNotificationIds);
+  assert.equal((await readSourceNotifications(post.id)).length, 1);
 });

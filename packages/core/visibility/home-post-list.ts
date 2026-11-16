@@ -2,7 +2,7 @@ import { and, eq, exists, isNotNull, isNull, not, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Instances, PostMentions, Posts, ProfileFollows, ProfileMutes, Profiles } from '../db';
 import { ProfileState } from '../enums';
-import { visiblePostWhere } from './post';
+import { currentPostMentionWhere, visiblePostWhere } from './post';
 import { activeViewerProfileWhere, visibleProfileWhere } from './profile';
 import { profileBlockVisibilityWhere } from './profile-block';
 import type { SQL } from 'drizzle-orm';
@@ -133,7 +133,12 @@ export const homePostListWhere = ({
         db
           .select({ postContentId: PostMentions.postContentId })
           .from(PostMentions)
-          .where(eq(PostMentions.postContentId, Posts.currentContentId)),
+          .where(
+            currentPostMentionWhere({
+              postId: Posts.id,
+              postContentId: Posts.currentContentId,
+            }),
+          ),
       ),
     ),
     exists(
@@ -142,7 +147,10 @@ export const homePostListWhere = ({
         .from(PostMentions)
         .where(
           and(
-            eq(PostMentions.postContentId, Posts.currentContentId),
+            currentPostMentionWhere({
+              postId: Posts.id,
+              postContentId: Posts.currentContentId,
+            }),
             or(
               eq(PostMentions.profileId, viewerProfileId),
               exists(

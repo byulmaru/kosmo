@@ -318,12 +318,16 @@ describe('ActivityPub Local Post delivery', () => {
     }
   });
 
-  test('DIRECT Create/Delete는 현재 Content의 remote Mention만 대상으로 하고 follower와 Parent를 제외한다', async () => {
+  test('DIRECT Create/Delete는 현재 Post의 remote Mention 관계를 대상으로 하고 follower와 Parent를 제외한다', async () => {
     const author = await createProfile({ kind: InstanceKind.LOCAL });
     const follower = await createRemoteActor({ handle: 'direct-follower' });
     const parentAuthor = await createRemoteActor({ handle: 'direct-parent' });
     const staleMention = await createRemoteActor({ handle: 'stale-direct-mention' });
     const firstTarget = await createRemoteActor({ handle: 'direct-target-one', sharedInbox: true });
+    const relationOnlyTarget = await createRemoteActor({
+      handle: 'relation-only-target',
+      sharedInbox: true,
+    });
     const secondTarget = await createRemoteActor({
       handle: 'direct-target-two',
       instanceId: firstTarget.profile.instanceId,
@@ -340,9 +344,21 @@ describe('ActivityPub Local Post delivery', () => {
     });
     assert.ok(post.currentContentId);
     await addPostMentions(post.currentContentId, [staleMention.profile.id]);
+    await db.insert(PostMentions).values({
+      postContentId: post.currentContentId,
+      postId: post.id,
+      profileId: firstTarget.profile.id,
+    });
     const currentContentId = await createPostContentWithMentions(post.id, [
-      firstTarget.profile.id,
       secondTarget.profile.id,
+    ]);
+    await db
+      .update(PostContents)
+      .set({ document: mentionDocument([firstTarget.profile.id, secondTarget.profile.id]) })
+      .where(eq(PostContents.id, currentContentId));
+    await db.insert(PostMentions).values([
+      { postContentId: currentContentId, profileId: firstTarget.profile.id },
+      { postContentId: currentContentId, profileId: relationOnlyTarget.profile.id },
     ]);
     await db.update(Posts).set({ currentContentId }).where(eq(Posts.id, post.id));
     const fixture = createContextFixture();
@@ -350,7 +366,11 @@ describe('ActivityPub Local Post delivery', () => {
 
     await sendLocalPostCreate(post.id);
 
-    const expectedActorUris = [firstTarget.actorUri, secondTarget.actorUri].sort();
+    const expectedActorUris = [
+      firstTarget.actorUri,
+      relationOnlyTarget.actorUri,
+      secondTarget.actorUri,
+    ].sort();
     assert.equal(fixture.calls.length, 1);
     assert.ok(fixture.calls[0]?.activity instanceof Create);
     assert.deepEqual(
@@ -358,8 +378,14 @@ describe('ActivityPub Local Post delivery', () => {
       expectedActorUris,
     );
     assert.deepEqual(
-      fixture.calls[0]?.recipients.map((recipient) => recipient.endpoints?.sharedInbox?.href),
-      [firstTarget.sharedInboxUri, secondTarget.sharedInboxUri],
+      fixture.calls[0]?.recipients
+        .map((recipient) => recipient.endpoints?.sharedInbox?.href)
+        .sort(),
+      [
+        firstTarget.sharedInboxUri,
+        relationOnlyTarget.sharedInboxUri,
+        secondTarget.sharedInboxUri,
+      ].sort(),
     );
     assert.deepEqual(
       fixture.calls[0]?.activity.toIds.map((uri) => uri.href).sort(),
@@ -370,6 +396,7 @@ describe('ActivityPub Local Post delivery', () => {
     assert.ok(note instanceof Note);
     assert.deepEqual(note.toIds.map((uri) => uri.href).sort(), expectedActorUris);
     assert.deepEqual(note.ccIds, []);
+    assert.doesNotMatch(note.content?.toString() ?? '', /relation-only-target/u);
 
     await db
       .update(Posts)
@@ -1115,7 +1142,7 @@ const createPostContentWithMentions = async (postId: string, profileIds: readonl
     .then(firstOrThrow);
   await db
     .insert(PostMentions)
-    .values(profileIds.map((profileId) => ({ postContentId: content.id, profileId })));
+    .values(profileIds.map((profileId) => ({ postContentId: content.id, postId, profileId })));
   return content.id;
 };
 

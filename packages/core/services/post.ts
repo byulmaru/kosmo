@@ -33,6 +33,7 @@ import {
   applyRemotePostContentHashtags,
   canonicalizePostContentDocument,
   findRemotePostContentHashtags,
+  getPostContentMentionProfileIds,
   postContentDocumentFromTextAndMedia,
   postContentHashtagCandidatesFromText,
   validateLocalPostContentDocument,
@@ -258,6 +259,7 @@ const findVisiblePost = async (
               ne(Instances.state, InstanceState.SUSPENDED),
             )!,
             postContentId: Posts.currentContentId,
+            postId: Posts.id,
             postState: Posts.state,
             postVisibility: Posts.visibility,
           },
@@ -319,6 +321,7 @@ const findVisibleQuoteSource = async (
               ne(Instances.state, InstanceState.SUSPENDED),
             )!,
             postContentId: Posts.currentContentId,
+            postId: Posts.id,
             postState: Posts.state,
             postVisibility: Posts.visibility,
           },
@@ -722,11 +725,6 @@ export const createPostInTransaction = async (
     document = resolved.document;
     postContentHashtagIds = resolved.hashtagIds;
   }
-  const mentionProfileIds = new Set(
-    input.origin === 'ACTIVITYPUB'
-      ? input.mentionProfileIds
-      : (input.mentions ?? []).map(({ profileId }) => profileId),
-  );
   if (
     input.origin === 'LOCAL' &&
     input.replyParentId !== undefined &&
@@ -830,6 +828,14 @@ export const createPostInTransaction = async (
     }
   }
 
+  const bodyMentionProfileIds = getPostContentMentionProfileIds(document);
+  const bodyMentionProfileIdSet = new Set(bodyMentionProfileIds);
+  const mentionProfileIds = new Set(
+    input.origin === 'ACTIVITYPUB'
+      ? input.mentionProfileIds.filter((profileId) => bodyMentionProfileIdSet.has(profileId))
+      : bodyMentionProfileIds,
+  );
+
   const content = await tx
     .insert(PostContents)
     .values({
@@ -897,6 +903,7 @@ export const createPostInTransaction = async (
     await tx.insert(PostMentions).values(
       [...mentionProfileIds].map((profileId) => ({
         postContentId: content.id,
+        postId: post.id,
         profileId,
       })),
     );

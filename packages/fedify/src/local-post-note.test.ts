@@ -517,6 +517,7 @@ describe('ActivityPub Local Post Note', () => {
         unsupportedLocalTarget.id,
       ].map((profileId) => ({
         postContentId: currentContent.id,
+        postId: post.id,
         profileId,
       })),
     );

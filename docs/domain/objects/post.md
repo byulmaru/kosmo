@@ -2,9 +2,10 @@
 
 ## 정의
 
-Post는 Profile이 작성하고 배포하는 짧은 게시 단위다. 현재 Post Content, Post Visibility, Reply Parent와
-Repost Source 관계, Tombstone, Post Eligibility 정책을 소유한다. 작성 내용의 revision과 그 안의 Content
-Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 소유한다.
+Post는 Profile이 작성하고 배포하는 짧은 게시 단위다. 현재 Post Content, 현재 Mentioned Profile 집합,
+Post Visibility, Reply Parent와 Repost Source 관계, Tombstone, Post Eligibility 정책을 소유한다. 작성 내용의
+revision과 그 안의 Content Warning, 본문 Mention identity, Sensitive Media, Media 구성은
+[Post Content](./post-content.md)가 소유한다.
 
 ## 상태
 
@@ -17,12 +18,12 @@ Warning, Sensitive Media, Media 구성은 [Post Content](./post-content.md)가 �
 
 ### Post Visibility
 
-| 값                 | 의미                                                                                   |
-| ------------------ | -------------------------------------------------------------------------------------- |
-| Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다                            |
-| Unlisted           | 모든 viewer가 볼 수 있고 Hashtag Post List 후보가 되지만 검색 후보는 아니다            |
-| Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다                         |
-| Mentioned Profiles | 작성자와 현재 Content의 canonical Mentioned Profile 관계에 포함된 Profile만 볼 수 있다 |
+| 값                 | 의미                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다                                         |
+| Unlisted           | 모든 viewer가 볼 수 있고 Hashtag Post List 후보가 되지만 검색 후보는 아니다                         |
+| Followers Only     | 작성자, 작성자를 팔로우한 Profile, 현재 Post의 Mentioned Profile 관계에 포함된 Profile이 볼 수 있다 |
+| Mentioned Profiles | 작성자와 현재 Post의 Mentioned Profile 관계에 포함된 Profile만 볼 수 있다                           |
 
 이 조회 규칙에서 Author Profile과 Mentioned Profile의 `Origin`은 조건이 아니다. Local Post 작성에서
 `Mentioned Profiles`는 작성자가 명시적으로 선택하는 Visibility이며, Mentioned Profile 관계는 선택 사항이다. 관계가
@@ -54,20 +55,25 @@ QuoteAuthorization을 대신하지 않는다. 정책 변경 뒤에는 같은 Not
 
 ## 관계
 
-| 관계              | 대상                              | 방향                                  | cardinality | 존재 조건                                             | 조회 조건                                             | 조회 권한        |
-| ----------------- | --------------------------------- | ------------------------------------- | ----------- | ----------------------------------------------------- | ----------------------------------------------------- | ---------------- |
-| Author Profile    | [Profile](./profile.md)           | Post -> Profile                       | 1 -> 1      | 항상                                                  | Post 조회 정책 통과                                   | 없음             |
-| Current Content   | [Post Content](./post-content.md) | Post -> Post Content                  | 1 -> 0..1   | Repost가 아닐 때                                      | Post 조회 정책 통과                                   | 없음             |
-| Reply Parent      | [Post](./post.md)                 | Post -> Post                          | 1 -> 0..1   | Post와 Parent에 Content가 있을 때                     | Post와 Parent가 각각 조회 정책을 통과할 때 표시       | 없음             |
-| Repost Source     | [Post](./post.md)                 | Post -> Post                          | 1 -> 0..1   | Source에 Content가 있고 Post가 Repost 또는 Quote일 때 | Post와 Source를 독립 판정해 조회 가능한 Source만 표시 | 없음             |
-| Mentioned Profile | [Profile](./profile.md)           | Post -> Profile                       | 1 -> 0..N   | Post에 Content가 있을 때                              | Post 조회 정책 통과                                   | 없음             |
-| Hashtag           | [Hashtag](./hashtag.md)           | Post -> Hashtag (via Current Content) | 1 -> 0..N   | Current Post Content에 Hashtag가 있을 때              | Post 조회 정책 통과                                   | 없음             |
-| Reaction          | [Reaction](./reaction.md)         | Post <- Reaction                      | 1 -> 0..N   | Reaction이 존재할 때                                  | Post 조회 정책 통과                                   | 없음             |
-| Bookmark          | [Bookmark](./bookmark.md)         | Post <- Bookmark                      | 1 -> 0..N   | Bookmark가 존재할 때                                  | 저장한 Profile의 개인 조회                            | `Bookmark.Owner` |
+| 관계              | 대상                              | 방향                                  | cardinality | 존재 조건                                                                            | 조회 조건                                             | 조회 권한        |
+| ----------------- | --------------------------------- | ------------------------------------- | ----------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------- | ---------------- |
+| Author Profile    | [Profile](./profile.md)           | Post -> Profile                       | 1 -> 1      | 항상                                                                                 | Post 조회 정책 통과                                   | 없음             |
+| Current Content   | [Post Content](./post-content.md) | Post -> Post Content                  | 1 -> 0..1   | Repost가 아닐 때                                                                     | Post 조회 정책 통과                                   | 없음             |
+| Reply Parent      | [Post](./post.md)                 | Post -> Post                          | 1 -> 0..1   | Post와 Parent에 Content가 있을 때                                                    | Post와 Parent가 각각 조회 정책을 통과할 때 표시       | 없음             |
+| Repost Source     | [Post](./post.md)                 | Post -> Post                          | 1 -> 0..1   | Source에 Content가 있고 Post가 Repost 또는 Quote일 때                                | Post와 Source를 독립 판정해 조회 가능한 Source만 표시 | 없음             |
+| Mentioned Profile | [Profile](./profile.md)           | Post -> Profile                       | 1 -> 0..N   | 새 Local 작성 또는 Remote Note의 본문에 해당 Profile의 검증된 Mention node가 있을 때 | Post 조회 정책 통과                                   | 없음             |
+| Hashtag           | [Hashtag](./hashtag.md)           | Post -> Hashtag (via Current Content) | 1 -> 0..N   | Current Post Content에 Hashtag가 있을 때                                             | Post 조회 정책 통과                                   | 없음             |
+| Reaction          | [Reaction](./reaction.md)         | Post <- Reaction                      | 1 -> 0..N   | Reaction이 존재할 때                                                                 | Post 조회 정책 통과                                   | 없음             |
+| Bookmark          | [Bookmark](./bookmark.md)         | Post <- Bookmark                      | 1 -> 0..N   | Bookmark가 존재할 때                                                                 | 저장한 Profile의 개인 조회                            | `Bookmark.Owner` |
 
 Reply Parent가 Tombstone으로 전이되어도 저장된 직접 관계를 유지한다. 현재 Parent Post row를 물리적으로
 제거하는 행동은 제공하지 않지만, Reply Parent FK는 향후 실제 row 제거 시 Reply Post를 cascade 삭제하지 않고
 관계만 `null`로 만드는 참조 동작을 가진다.
+
+Post의 현재 Mentioned Profile 집합은 Post가 소유한다. 새 Local Post·Reply·Quote, 새 Remote Note 수신과 향후 작성자 수정은 실제 검증된
+Mention node가 가리키는 `profileId`만 현재 집합에 포함한다. 반복 node는 본문에 각각 남고 현재 집합에서는 중복을 제거한다.
+기존 Post의 현재 집합은 저장된 관계 그대로 유지하며 기존 본문에서 다시 계산하지 않는다. 세부 계약은
+[ADR 0032](../decisions/0032-current-post-mentions-from-body-nodes.md)를 따른다.
 
 Post에서 조회되는 Hashtag는 Current Post Content가 소유한 revision 관계의 projection이다. Post가 새로 작성될 때는 첫
 Post Content와 그 Hashtag 관계를 함께 확정한다.
@@ -96,17 +102,17 @@ Author Profile/Repost Source 조합에는 Lifecycle State가 Active이고 Conten
 
 ## 행동
 
-| 행동                                | 행동 주체 Profile     | 대상 객체   | 입력값                                                                                                           | 권한                               | 조건                                                                                                                                                                                                                                                                                                                                           | 결과                                                                                                                                                                                                                                                           |
-| ----------------------------------- | --------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Post 작성                           | Profile               | Post        | 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록, typed handle·선택 Mention 대상              | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이며 이 행동은 Session의 active Profile을 변경하지 않는다. 본문과 Media가 모두 비어 있을 수 없으며 Media는 최대 4개다                                                                                                                                                                                  | Lifecycle=Active이고 Current Content가 있으며 Reply Parent와 Repost Source가 없는 Post, 첫 Post Content, Author 관계와 첫 revision의 Hashtag·Mentioned Profile 관계가 원자적으로 생성된다                                                                      |
-| Reply 작성                          | Profile               | Post        | Parent Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록, typed handle·선택 Mention 대상 | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Parent를 볼 수 있다. Post Visibility는 Parent와 독립적으로 선택한다. 본문/Media 조건은 Post 작성과 같다                                                                                                                                                                            | Lifecycle=Active이고 Current Content와 입력 Reply Parent가 있으며 Repost Source가 없는 Post, 첫 Post Content, Author 관계와 첫 revision의 Hashtag·Mentioned Profile 관계가 원자적으로 생성된다                                                                 |
-| Quote 작성                          | Profile               | Post        | Source Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록, typed handle·선택 Mention 대상 | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Source를 볼 수 있다. Source는 아래 Quote Source 조건을 통과하며, 인용 정책이 자동 승인하거나 원격 승인 요청을 허용한다. 원격 승인 대기는 작성 거부 조건이 아니다. Post Visibility는 Source와 독립적으로 선택하되 원문 접근 범위를 넓히지 않으며 본문/Media 조건은 Post 작성과 같다 | Lifecycle=Active이고 Current Content와 입력 Source의 인용 정보를 기록하며 Reply Parent가 없는 Post, 첫 Post Content, Author 관계와 첫 revision의 Hashtag·Mentioned Profile 관계가 원자적으로 생성된다. 승인이 필요한 Source 관계는 승인 전까지 표시하지 않는다 |
-| 인용 허용 정책 변경                 | Author Profile        | Post        | 모두, 팔로워 또는 본인만                                                                                         | `Account.Active`, `Post.Author`    | Content가 있는 Active Local Post다                                                                                                                                                                                                                                                                                                             | 이후 요청에 적용할 정책이 변경된다. 기존 QuoteAuthorization은 유지한다                                                                                                                                                                                         |
-| 인용 승인 철회                      | Source Author Profile | Source Post | 승인을 철회할 Quote                                                                                              | `Account.Active`, `Post.Author`    | 해당 Source를 대상으로 발급한 인용 승인이 존재한다                                                                                                                                                                                                                                                                                             | 해당 승인을 무효로 만들고 Quote 자체 Content를 유지한 채 Source를 비노출한다. 원격에는 승인 철회를 전달한다                                                                                                                                                    |
-| Post Content 수정                   | Author Profile        | Post        | 본문, Content Warning, Sensitive Media, Media 목록                                                               | `Account.Active`, `Post.Author`    | Lifecycle State가 Active이고 Content가 있다. 새 document와 참조 Media가 [Post Content](./post-content.md)의 검증을 통과한다                                                                                                                                                                                                                    | 새 immutable Post Content revision이 생성되고 Current Content가 같은 transaction에서 새 revision을 가리킨다. Post Visibility와 구조 관계는 바뀌지 않는다                                                                                                       |
-| Repost 작성                         | Profile               | Post        | Source Post                                                                                                      | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 입력 Source를 볼 수 있다. Source Visibility는 Public, Unlisted, Followers Only 중 하나이며 같은 Author Profile/Source 조합의 Active Repost가 없다. Followers Only Source는 Source Author만 Repost할 수 있다                                                                        | Lifecycle=Active이고 Content와 Reply Parent 없이 입력 Repost Source를 직접 참조하는 Post와 Author 관계가 생성된다. Visibility는 Public/Unlisted Source이면 Unlisted, Followers Only Source이면 Followers Only가 된다                                           |
-| Post 삭제 (Account 요청)            | Author Profile        | Post        | 없음                                                                                                             | `Account.Active`, `Post.Author`    | Lifecycle State가 Active다                                                                                                                                                                                                                                                                                                                     | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                                                                        |
-| Post 삭제 (검증된 ActivityPub 요청) | Author Profile        | Post        | 없음                                                                                                             | `Post.Author`                      | Lifecycle State가 Active이고 Author Profile Origin이 Remote다. 서명 검증된 요청 Actor가 Author Profile에 연결된 저장 Actor와 같고, 요청 object가 Current Content를 가진 Post의 저장된 ActivityPub identity와 정확히 일치한다                                                                                                                   | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                                                                        |
+| 행동                                | 행동 주체 Profile     | 대상 객체   | 입력값                                                                                                           | 권한                               | 조건                                                                                                                                                                                                                                                                                                                                           | 결과                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------- | --------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Post 작성                           | Profile               | Post        | 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록, typed handle·선택 Mention 대상              | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이며 이 행동은 Session의 active Profile을 변경하지 않는다. 본문과 Media가 모두 비어 있을 수 없으며 Media는 최대 4개다                                                                                                                                                                                  | Lifecycle=Active이고 Current Content가 있으며 Reply Parent와 Repost Source가 없는 Post, 첫 Post Content, Author 관계와 첫 revision의 Hashtag 관계, 본문 Mention node에서 파생된 현재 Mentioned Profile 집합이 원자적으로 생성된다                                                                      |
+| Reply 작성                          | Profile               | Post        | Parent Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록, typed handle·선택 Mention 대상 | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Parent를 볼 수 있다. Post Visibility는 Parent와 독립적으로 선택한다. 본문/Media 조건은 Post 작성과 같다                                                                                                                                                                            | Lifecycle=Active이고 Current Content와 입력 Reply Parent가 있으며 Repost Source가 없는 Post, 첫 Post Content, Author 관계와 첫 revision의 Hashtag 관계, 본문 Mention node에서 파생된 현재 Mentioned Profile 집합이 원자적으로 생성된다                                                                 |
+| Quote 작성                          | Profile               | Post        | Source Post, 본문, Post Visibility, Content Warning, Sensitive Media, Media 목록, typed handle·선택 Mention 대상 | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 Source를 볼 수 있다. Source는 아래 Quote Source 조건을 통과하며, 인용 정책이 자동 승인하거나 원격 승인 요청을 허용한다. 원격 승인 대기는 작성 거부 조건이 아니다. Post Visibility는 Source와 독립적으로 선택하되 원문 접근 범위를 넓히지 않으며 본문/Media 조건은 Post 작성과 같다 | Lifecycle=Active이고 Current Content와 입력 Source의 인용 정보를 기록하며 Reply Parent가 없는 Post, 첫 Post Content, Author 관계와 첫 revision의 Hashtag 관계, 본문 Mention node에서 파생된 현재 Mentioned Profile 집합이 원자적으로 생성된다. 승인이 필요한 Source 관계는 승인 전까지 표시하지 않는다 |
+| 인용 허용 정책 변경                 | Author Profile        | Post        | 모두, 팔로워 또는 본인만                                                                                         | `Account.Active`, `Post.Author`    | Content가 있는 Active Local Post다                                                                                                                                                                                                                                                                                                             | 이후 요청에 적용할 정책이 변경된다. 기존 QuoteAuthorization은 유지한다                                                                                                                                                                                                                                 |
+| 인용 승인 철회                      | Source Author Profile | Source Post | 승인을 철회할 Quote                                                                                              | `Account.Active`, `Post.Author`    | 해당 Source를 대상으로 발급한 인용 승인이 존재한다                                                                                                                                                                                                                                                                                             | 해당 승인을 무효로 만들고 Quote 자체 Content를 유지한 채 Source를 비노출한다. 원격에는 승인 철회를 전달한다                                                                                                                                                                                            |
+| Post Content 수정                   | Author Profile        | Post        | 본문, Content Warning, Sensitive Media, Media 목록                                                               | `Account.Active`, `Post.Author`    | Lifecycle State가 Active이고 Content가 있다. 새 document와 참조 Media가 [Post Content](./post-content.md)의 검증을 통과한다                                                                                                                                                                                                                    | 새 immutable revision, 본문 node에서 파생한 현재 Mentioned Profile 집합, Current Content pointer가 같은 transaction에서 반영된다. Post Visibility와 구조 관계는 바뀌지 않는다                                                                                                                          |
+| Repost 작성                         | Profile               | Post        | Source Post                                                                                                      | `Account.Active`, `Profile.Member` | 행동 주체는 선택된 Active/Normal Profile이고 Content가 있는 입력 Source를 볼 수 있다. Source Visibility는 Public, Unlisted, Followers Only 중 하나이며 같은 Author Profile/Source 조합의 Active Repost가 없다. Followers Only Source는 Source Author만 Repost할 수 있다                                                                        | Lifecycle=Active이고 Content와 Reply Parent 없이 입력 Repost Source를 직접 참조하는 Post와 Author 관계가 생성된다. Visibility는 Public/Unlisted Source이면 Unlisted, Followers Only Source이면 Followers Only가 된다                                                                                   |
+| Post 삭제 (Account 요청)            | Author Profile        | Post        | 없음                                                                                                             | `Account.Active`, `Post.Author`    | Lifecycle State가 Active다                                                                                                                                                                                                                                                                                                                     | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                                                                                                                |
+| Post 삭제 (검증된 ActivityPub 요청) | Author Profile        | Post        | 없음                                                                                                             | `Post.Author`                      | Lifecycle State가 Active이고 Author Profile Origin이 Remote다. 서명 검증된 요청 Actor가 Author Profile에 연결된 저장 Actor와 같고, 요청 object가 Current Content를 가진 Post의 저장된 ActivityPub identity와 정확히 일치한다                                                                                                                   | Lifecycle State가 Tombstone이 되고 삭제 시각이 기록된다                                                                                                                                                                                                                                                |
 
 Post/Reply/Quote 작성과 Post Content 수정에서 Media node는 입력 순서를 유지한다. Post Content가 참조하는 Media는
 Source=Local, State=Ready이고 Media의 Upload Account가 행동을 요청한 Account와 같아야 한다. Media의 Profile은
@@ -142,6 +148,9 @@ Unknown, malformed, ineligible token은 일반 text로 남긴다.
 유지하고 `FOLLOWERS`는 기존 Mentioned Profile 조회 권한을 유지한다. `Mentioned Profiles` Post의 제한 조회 범위와 Local Post
 작성 시 최소 관계 조건은 위 Post Visibility 정의를 따른다. Local Mention은 outbound ActivityPub Mention이나
 Notification 정책을 바꾸지 않는다.
+
+새 Local 작성과 새 Remote Note 수신의 현재 Mentioned Profile 집합은 본문의 실제 검증된 Mention node에서만 파생한다. 입력 token이나
+ActivityPub typed Mention identity만으로는 집합에 추가하지 않는다. inbound identity 확인과 body 변환은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)의 기존 검증을 따르며, 현재 집합의 소유권과 DIRECT body node 조건은 [ADR 0032](../decisions/0032-current-post-mentions-from-body-nodes.md)를 따른다.
 
 Local 작성과 Remote 수신의 Quote는 direct Repost Source Author를 수신자로 하는
 [Quote Notification](./notification.md#quote-notification)의 원인이다. 알림의 생성 조건과 중복 처리는
@@ -194,12 +203,12 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
 
 ### Post Visibility
 
-| Visibility         | viewer 조건                                                        |
-| ------------------ | ------------------------------------------------------------------ |
-| Public             | 추가 관계 조건 없음                                                |
-| Unlisted           | 추가 관계 조건 없음                                                |
-| Followers Only     | Author, Mentioned Profile 또는 Author를 팔로우하는 Profile         |
-| Mentioned Profiles | Author 또는 현재 Content의 Mentioned Profile 관계에 포함된 Profile |
+| Visibility         | viewer 조건                                                     |
+| ------------------ | --------------------------------------------------------------- |
+| Public             | 추가 관계 조건 없음                                             |
+| Unlisted           | 추가 관계 조건 없음                                             |
+| Followers Only     | Author, Mentioned Profile 또는 Author를 팔로우하는 Profile      |
+| Mentioned Profiles | Author 또는 현재 Post의 Mentioned Profile 관계에 포함된 Profile |
 
 ### Post Eligibility
 
@@ -372,22 +381,24 @@ Notification이 소유하며, Quote·Reply Parent·Repost Source의 구조와 �
   Local Note 계약은 PostContent node, mark, canonicalization 또는 validation을 다시 정의하지 않는다. Custom
   emoji는 이 표현에 포함하지 않는다. Quote 전용 표현은 아래 Quote federation 정책을 따른다.
 - Local Note 역참조(`GET`), Featured collection, outbound `Create`는 같은 Current Content의 Mention body/tag projection을
-  사용한다. 해당 revision의 typed Mention node와 같은 revision의 저장된 Mentioned Profile 관계가 정확히 연결되고,
-  기존 Profile visibility 조건에서 Profile이 ACTIVE이며 연결 Instance가 SUSPENDED가 아닐 때만 본문 link와
+  사용한다. ActivityPub body/tag projection은 Current Content Mention node의 `profileId` 집합과 Post의 현재 Mentioned Profile
+  집합의 교집합 중 기존 Profile visibility 조건을 통과해 Profile이 ACTIVE이고 연결 Instance가 SUSPENDED가 아닌 Profile만 본문 link와
   ActivityPub `Mention` tag를 제공한다. Local Profile의 본문 label은 실제 `@handle`이고 link는 configured Local
   Instance의 Profile human URL을 사용한다. Remote Profile의 label은 실제 `@handle@domain`이며 link는 저장된
   `profileUrl`이 유효한 HTTP(S) URL일 때만 이를 사용하고, 아니면 canonical actor URI를 사용한다. `Mention.href`는
   항상 canonical actor URI이고 `Mention.name`은 본문 label과 같다. 본문에 같은 Profile이 여러 번 나타나면 각
   occurrence를 유지하고 tag는 target당 하나만 제공한다.
-- Mention relation이 없거나 target을 resolve할 수 없거나, visibility 조건을 통과하지 못하거나, target이
+- 그 교집합에 Profile이 없거나 target을 resolve할 수 없거나, visibility 조건을 통과하지 못하거나, target이
   지원되지 않거나 malformed이면 본문에는 비링크 `@알 수 없는 사용자`를 표시하고 ActivityPub `Mention` tag를
-  생략한다. Projection 중 Remote Profile을 fetch하거나 refresh하지 않는다. `DIRECT` Post의 outbound `Create(Note)`는
-  현재 Content의 eligible remote ActivityPub Mentioned Profile canonical actor URI만 `to`에 사용하고 `cc`, Public,
+  생략한다. 이는 ActivityPub projection의 fallback이다. API와 Web renderer는 표시 대상 revision의 document에서 identity를 해석하며
+  같은 revision의 관계를 요구하지 않는다. 기존 Profile visibility 조건은 적용하고 Post 접근은 현재 Post 정책을 따른다. 새 Local 작성과 새 Remote Note 수신에서는 body node identity와 현재 Post의 Mentioned Profile 집합이 일치한다.
+  Projection 중 Remote Profile을 fetch하거나 refresh하지 않는다. `DIRECT` Post의 outbound `Create(Note)`는
+  현재 Post의 Mentioned Profile 관계 중 eligible remote ActivityPub Profile canonical actor URI만 `to`에 사용하고 `cc`, Public,
   followers collection을 넣지 않는다. 해당 Post의 outbound `Delete`도 같은 remote Mentioned Profiles에게만 전달한다.
   eligible remote actor URI가 없으면 두 Activity 모두 delivery recipient가 없다. 이 규칙은 DIRECT Note 역참조, Featured
   membership, signed-fetch 권한, inbound DIRECT 처리나 Notification을 추가하지 않는다. Canonical Mention node는
   `profileId`만 저장한다. 기존 글 backfill과 remote `Update(Note)` projection은 이 계약에 포함하지 않는다.
-- Public·Unlisted Post의 게시·삭제는 멘션한 Remote Profile을 기존 수신자에 포함하며, 같은 수신자에는 중복 전달하지 않는다.
+- Public·Unlisted Post의 게시·삭제는 현재 Post의 Mentioned Profile 관계 중 eligible Remote Profile을 기존 수신자에 포함하며, 같은 수신자에는 중복 전달하지 않는다.
   Followers Only와 Mentioned Profiles의 수신 범위는 기존 정책을 유지한다.
 - Reply Parent 관계가 있으면 Parent의 ActivityPub Post identity를 `inReplyTo`로 제공한다. Local Parent는
   같은 local Note URI 규칙을 사용하고 remote Parent는 저장된 ActivityPub Post URI를 사용한다. `inReplyTo`는
@@ -427,9 +438,9 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   무시한다. raw malformed audience syntax는 기존 ActivityPub vocabulary hydration과 top-level Note 기본 검증에서
   처리하며, 이 무시 규칙은 구문상 유효하게 파싱된 extra IRI에만 적용한다.
 - Public marker와 author canonical followers marker가 모두 없으면 DIRECT 후보로 분류한다. 수신 `Create(Note)`와 remote source에서
-  fetch/hydrate해 공통 Note materializer로 전달한 Note는 inbox 종류와 `context.recipient`에 관계없이, verified typed Mention href가
-  ACTIVE Local Profile과 ACTIVE Local Instance를 하나 이상 가리킬 때 저장한다. Post의 기존 typed Mention 관계는 local/remote
-  Profile 모두 보존하며, DIRECT 조회 권한은 그 현재 관계에서만 나온다. Local Follow는 요구하지 않고, Mention되지 않은 inbox
+  fetch/hydrate해 공통 Note materializer로 전달한 Note는 inbox 종류와 `context.recipient`에 관계없이, 기존 대상 자격을 만족하는
+  실제 body Mention node가 하나 이상 ACTIVE Local Profile과 ACTIVE Local Instance를 가리킬 때 저장한다. verified typed Mention href만으로는
+  충분하지 않으며, Post의 현재 Mentioned Profile 집합은 실제 검증된 body node identity에서만 만든다. Local Follow는 요구하지 않고, Mention되지 않은 inbox
   recipient는 읽을 수 없다. `to`/`cc`는 기존 Public/Unlisted/Followers marker 우선순위 분류에만 사용하며,
   `to`/`cc`/`bto`/`bcc` 주소만으로 Mention 관계나 DIRECT 권한을 만들지 않는다. audience 주소가 없거나 Mention과 달라도 검증된
   Mention 수신을 허용한다. Note Update와 과거 Note 복구는 포함하지 않는다.
@@ -560,24 +571,25 @@ ActivityPub audience는 Post Visibility에서 다음과 같이 투영한다.
   바꾸는 도메인 방향은 정의되어 있지만 현재 사용자용 Post 수정 기능은 제공하지 않는다. 이 기능은 이미지가
   있는 새 Post 작성과 독립된 후속 계약이다. Post Visibility 변경도 현재 지원하지 않는다.
 - 본문의 canonical 표현은 schema version이 식별된 document다. Plain Text는 작성 입력과 읽기·검색·접근성 projection이며 별도 canonical 저장값이 아니다.
-- 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원하며, 검증된 inbound
+- 현재 document V1은 paragraph, text, hard break, 안전한 HTTP(S) link와 Media node를 지원하며, 기존 identity 및 body 검증을 통과한 inbound
   typed Mention은 V1에 additive한 node로 보존한다. Mention node는 저장된 Profile stable identity인 `profileId`만
   attrs로 가진다. inbound typed `Mention.href`는 기존 ActivityPub actor/Profile mapping을 먼저 확인하며, 알려진 Local/Remote
   Profile은 기존 mapping을 그대로 사용한다. 알려지지 않은 remote actor target은 Note당 최대 32개의 고유 remote actor URI까지 typed href로
   resolve해 materialize할 수 있다. 한도 내 target의 remote actor 조회는 모두 동시에 시작하며, 각 조회는 Note별 하나의 공통 30초 제한을
   공유한다. 제한시간이 끝나면 진행 중인 actor 조회를 중단한다. 이미 시작한 remote Profile 저장은 제한시간 뒤에도 완료될 수 있다.
-  이미 확인된 Mentioned Profile 관계와 Note 전체는 유지한다. 한도를 넘거나 개별 resolve가 실패한 target도 건너뛴다. 본문 anchor href나
-  `Mention.name`은 actor identity lookup/fetch 입력이 아니다. 확인된 typed identity는 본문 변환과 독립적으로 Mentioned Profile 관계
-  입력으로 보존한다. 본문 anchor href가 확인된 actor URI, 기존 정상 actor materialization·refresh가 저장한 Profile URL alias 또는
+  Note 전체는 기존 정책에 따라 유지한다. 한도를 넘거나 개별 resolve가 실패한 target도 건너뛴다. 본문 anchor href나
+  `Mention.name`은 actor identity lookup/fetch 입력이 아니다. 확인된 typed identity는 body node 생성을 위한 검증 근거일 뿐이며,
+  실제 검증된 node가 없으면 Post의 현재 Mentioned Profile 집합에 포함하지 않는다. 본문 anchor href가 확인된 actor URI, 기존 정상 actor materialization·refresh가 저장한 Profile URL alias 또는
   Local Profile의 trusted human URL과 정확히 일치할 때만 `profileId` node로 표현할 수 있다. 알 수 없거나 불일치한 anchor는 tag `name`,
-  handle 또는 visible label과 관계없이 안전한 일반 link 또는 표시 text로 보존하며, body anchor 불일치와 관계 저장은 독립적이다. 일반
+  handle 또는 visible label과 관계없이 안전한 일반 link 또는 표시 text로 보존한다. body anchor가 검증된 identity와 일치하지 않으면
+  Mention node와 현재 Post 관계를 만들지 않는다. 일반
   link/text와 `to`/`cc` audience는 Mention 관계를 만들지 않는다. 이미 알려진 Remote Profile URL alias가 없으면 body matching은 actor URI만
   사용하며 Mention receipt는 그 actor를 다시 fetch/refresh해 cached `profileUrl`을 채우지 않는다. 별도의 기존 정상 refresh는 alias를
   갱신·제거할 수 있다. 기존 Post Content 수정, 운영자 또는 일괄 backfill은 수행하지 않는다. 원문 anchor의 표시 문자열은 수신 중 resource
-  budget 계산에만 사용하고 저장하지 않는다. renderer는 같은 revision의 Profile `relativeHandle`에서 표시 문자열을 파생하며, Profile을
+  budget 계산에만 사용하고 저장하지 않는다. renderer는 표시 대상 revision의 body node `profileId`에서 Profile을 조회해 `relativeHandle`을 파생하며, Profile을
   조회할 수 없으면 비링크 `@알 수 없는 사용자`를 표시한다. `pre`와 일반 rich-text editor는 지원하지 않는다.
 - ActivityPub DIRECT/limited audience의 inbound Note materialization은 [PROD-359](https://linear.app/byulmaru/issue/PROD-359) 계약을 따른다.
-  Local Note Mention body/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
+  현재 Mentioned Profile 집합과 body node 조건은 [ADR 0032](../decisions/0032-current-post-mentions-from-body-nodes.md)를, Local Note Mention body/tag projection은 [ADR 0030](../decisions/0030-post-content-mention-identity.md)과
   [PROD-1102](https://linear.app/byulmaru/issue/PROD-1102)를 따르며, DIRECT outbound `Create(Note)` addressing은 위 규칙을
   따른다. Custom emoji는 후속 계약에 남기고, inbound
   Note의 typed Mention 보존은 별도 수신 계약을 따른다.

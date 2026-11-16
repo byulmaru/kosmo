@@ -221,7 +221,7 @@ test('createPost는 Local Mention node를 저장하고 반복 Profile relation�
   assert.deepEqual(result.content.document, document);
   assert.deepEqual(
     await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
-    [{ postContentId: result.content.id, postId: null, profileId: mentioned.id }],
+    [{ postContentId: result.content.id, postId: result.post.id, profileId: mentioned.id }],
   );
 });
 
@@ -954,7 +954,7 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
   assert.ok(result.created);
   assert.deepEqual(
     await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
-    [{ postContentId: result.content.id, postId: null, profileId: mentioned.id }],
+    [{ postContentId: result.content.id, postId: result.post.id, profileId: mentioned.id }],
   );
   assert.deepEqual(result.content.document.body.content, [
     {
@@ -975,7 +975,7 @@ test('createPost는 검증된 Mention occurrence를 revision 관계로 한 번�
   ]);
 });
 
-test('createPost는 ActivityPub relation을 document Mention node가 아닌 verified input ID에서 저장한다', async () => {
+test('createPost는 ActivityPub Mention relation을 body와 verified input ID의 교집합으로 저장한다', async () => {
   const author = await createProfile();
   const nodeOnlyProfile = await createProfile();
   const verifiedProfile = await createProfile();
@@ -992,6 +992,10 @@ test('createPost는 ActivityPub relation을 document Mention node가 아닌 veri
               {
                 type: 'mention',
                 attrs: { profileId: nodeOnlyProfile.id },
+              },
+              {
+                type: 'mention',
+                attrs: { profileId: verifiedProfile.id },
               },
             ],
           },
@@ -1010,7 +1014,7 @@ test('createPost는 ActivityPub relation을 document Mention node가 아닌 veri
   assert.ok(result.created);
   assert.deepEqual(
     await db.select().from(PostMentions).where(eq(PostMentions.postContentId, result.content.id)),
-    [{ postContentId: result.content.id, postId: null, profileId: verifiedProfile.id }],
+    [{ postContentId: result.content.id, postId: result.post.id, profileId: verifiedProfile.id }],
   );
 });
 
@@ -1101,7 +1105,7 @@ test('createPost는 변경된 Mention duplicate Create에서도 document·relati
   assert.equal(storedActivity.receivedAt.toString(), firstReceivedAt.toString());
   assert.deepEqual(
     await db.select().from(PostMentions).where(eq(PostMentions.postContentId, storedContent.id)),
-    [{ postContentId: storedContent.id, postId: null, profileId: firstMention.id }],
+    [{ postContentId: storedContent.id, postId: first.post.id, profileId: firstMention.id }],
   );
 });
 
@@ -1149,6 +1153,7 @@ test('createPost는 서로 다른 Profile의 Mention을 occurrence 순서와 함
     .from(PostMentions)
     .where(eq(PostMentions.postContentId, result.content.id));
   assert.equal(relationRows.length, 2);
+  assert.deepEqual(new Set(relationRows.map(({ postId }) => postId)), new Set([result.post.id]));
   assert.deepEqual(
     new Set(relationRows.map(({ profileId }) => profileId)),
     new Set([firstMention.id, secondMention.id]),

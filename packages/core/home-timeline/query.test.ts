@@ -23,6 +23,7 @@ import {
   ProfileState,
 } from '../enums';
 import { postContentDocumentFromText } from '../post-content/server';
+import { currentPostMentionWhere } from '../visibility/post';
 import { queryHomeTimeline } from './query';
 
 after(async () => pg.end());
@@ -111,7 +112,7 @@ test('Home query applies selected Profile candidate, mention, access, block, mut
         })),
       );
     }
-    return post;
+    return { ...post, currentContentId: content.id };
   };
 
   const follow = async (followerProfileId: string, followeeProfileId: string) => {
@@ -206,6 +207,49 @@ test('Home query applies selected Profile candidate, mention, access, block, mut
       replyParentId: parent.id,
       mentions: [outsider.id],
     });
+    assert.ok(viewerMentionReply.currentContentId);
+    await db
+      .update(PostMentions)
+      .set({ postId: viewerMentionReply.id })
+      .where(
+        and(
+          eq(PostMentions.postContentId, viewerMentionReply.currentContentId),
+          eq(PostMentions.profileId, viewer.id),
+        ),
+      );
+    const replacementMentionContent = await db
+      .insert(PostContents)
+      .values({
+        document: postContentDocumentFromText('reply after its mention marker'),
+        postId: viewerMentionReply.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    contentIds.push(replacementMentionContent.id);
+    await db
+      .update(Posts)
+      .set({ currentContentId: replacementMentionContent.id })
+      .where(eq(Posts.id, viewerMentionReply.id));
+    await db.insert(PostMentions).values([
+      { postContentId: replacementMentionContent.id, profileId: viewer.id },
+      { postContentId: replacementMentionContent.id, profileId: followedMentionTarget.id },
+    ]);
+    const currentMentionRows = await db
+      .select({ profileId: PostMentions.profileId })
+      .from(PostMentions)
+      .where(
+        and(
+          currentPostMentionWhere({
+            postId: viewerMentionReply.id,
+            postContentId: replacementMentionContent.id,
+          }),
+          inArray(PostMentions.profileId, [viewer.id, followedMentionTarget.id]),
+        ),
+      );
+    assert.deepEqual(
+      currentMentionRows.map(({ profileId }) => profileId).sort(),
+      [viewer.id, followedMentionTarget.id].sort(),
+    );
     const mutedRoot = await createPost({
       authorProfileId: mutedAuthor.id,
       bodyText: 'muted author',

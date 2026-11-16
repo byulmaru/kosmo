@@ -59,6 +59,7 @@ const postAccessWhere = (actorProfileId: string) =>
         ne(Instances.state, InstanceState.SUSPENDED),
       )!,
       postContentId: Posts.currentContentId,
+      postId: Posts.id,
       postState: Posts.state,
       postVisibility: Posts.visibility,
     },

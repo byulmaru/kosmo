@@ -18,6 +18,7 @@ vi.mock('../sentry', () => ({ captureUnexpectedError: vi.fn() }));
 
 const postId = '00000000-0000-8000-8000-000000000001';
 const mediaId = '00000000-0000-8000-8000-000000000002';
+const mentionProfileId = '00000000-0000-4000-8000-000000000111';
 const path = `/@alice/${encodeGlobalId('Post', postId)}`;
 let staticRoot: string;
 let routes: Hono;
@@ -153,6 +154,63 @@ test.each([
   expect(parseJsonLd(html)['@graph']).toEqual([
     { '@type': 'ImageObject', contentUrl: expectedJsonLdImage },
   ]);
+});
+
+test('uses visible Profile handles from the preview document nodes without consulting PostMentions', async () => {
+  vi.stubEnv('PUBLIC_ORIGIN', 'https://kos.moe');
+  vi.mocked(resolveConfiguredLocalInstance).mockResolvedValueOnce({ id: 'local' } as never);
+  const bodyText = 'hello @remote-target';
+  const relativeHandle = '@remote-target';
+  const rows = [
+    [
+      {
+        authorDisplayName: 'Alice',
+        authorHandle: 'alice',
+        authorInstanceId: 'local',
+        authorInstanceJoinedId: 'local',
+        authorInstanceDomain: 'kos.moe',
+        contentDocument: postContentDocumentFromTextAndMedia(bodyText, [], false, null, [
+          {
+            end: bodyText.length,
+            handle: relativeHandle,
+            profileId: mentionProfileId,
+            relativeHandle,
+            start: bodyText.indexOf(relativeHandle),
+          },
+        ]),
+        currentContentId: 'content',
+        postId,
+        replyParentId: null,
+        repostSourceId: null,
+      },
+    ],
+    [
+      {
+        domain: 'remote.example',
+        instanceId: 'remote-instance',
+        profileId: mentionProfileId,
+        handle: 'remote-target',
+        joinedInstanceId: 'remote-instance',
+      },
+    ],
+  ];
+  vi.spyOn(db, 'select').mockImplementation(() => {
+    const result = Promise.resolve(rows.shift());
+    const query = {
+      from: () => query,
+      innerJoin: () => query,
+      leftJoin: () => query,
+      where: () => query,
+      limit: () => result,
+      then: result.then.bind(result),
+    };
+    return query as unknown as ReturnType<typeof db.select>;
+  });
+
+  const response = await routes.request(path);
+  const html = await response.text();
+  expect(response.status).toBe(200);
+  expect(html).toContain('hello @remote-target@remote.example');
 });
 
 test('escapes hostile image alt text in share metadata attributes', async () => {

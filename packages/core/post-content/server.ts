@@ -26,6 +26,7 @@ import type {
 
 export {
   canonicalizePostContentDocument,
+  getPostContentMentionProfileIds,
   postContentDocumentToText,
   validateLocalPostContentDocument,
 } from './server-document';

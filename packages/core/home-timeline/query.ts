@@ -18,6 +18,7 @@ import {
 import { alias } from 'drizzle-orm/pg-core';
 import { db, Instances, PostMentions, Posts, Profiles } from '../db';
 import { homePostListWhere } from '../visibility/home-post-list';
+import { currentPostMentionWhere } from '../visibility/post';
 import { getCachedHomeTimelinePostIds } from './membership';
 import { filterHomeTimelinePosts } from './natural-language-mute';
 
@@ -44,7 +45,10 @@ const homeTimelineFollowCandidateWhere = (
     .from(PostMentions)
     .where(
       and(
-        eq(PostMentions.postContentId, Posts.currentContentId),
+        currentPostMentionWhere({
+          postId: Posts.id,
+          postContentId: Posts.currentContentId,
+        }),
         inArray(PostMentions.profileId, followeeProfileIds),
         isNotNull(Posts.replyParentId),
         ne(Posts.profileId, profileId),

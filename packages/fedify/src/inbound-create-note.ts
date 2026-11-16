@@ -10,7 +10,10 @@ import {
 } from '@kosmo/core/activitypub-note-content/server';
 import { PostVisibility } from '@kosmo/core/enums';
 import { ConflictError, NotFoundError, ValidationError } from '@kosmo/core/error';
-import { postContentDocumentToText } from '@kosmo/core/post-content/server';
+import {
+  getPostContentMentionProfileIds,
+  postContentDocumentToText,
+} from '@kosmo/core/post-content/server';
 import { createPost, ProfilePairBlockedError } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
@@ -129,6 +132,7 @@ const projectRemoteNote = async (
   context: RemoteNoteMaterializationContext,
   note: Note,
   activityType: 'Create' | 'Unknown',
+  requiresActiveLocalMention: boolean,
 ) => {
   const noteContent = {
     content: note.content?.toString() ?? null,
@@ -136,10 +140,23 @@ const projectRemoteNote = async (
     summary: note.summary?.toString() ?? null,
   };
   const targetHrefs = await collectInboundMentionTargetHrefs(note);
-  const { candidates: mentionCandidates, knownActorHrefs } =
-    await resolveStoredInboundMentionCandidates(targetHrefs);
-  const hashtagNames = await collectInboundHashtagNames(note);
+  const {
+    activeLocalProfileIds,
+    candidates: mentionCandidates,
+    knownActorHrefs,
+  } = await resolveStoredInboundMentionCandidates(targetHrefs);
   let document = projectRemoteNoteContent({ ...noteContent, mentions: mentionCandidates });
+  const activeLocalProfileIdSet = new Set(activeLocalProfileIds);
+  if (
+    requiresActiveLocalMention &&
+    !getPostContentMentionProfileIds(document).some((profileId) =>
+      activeLocalProfileIdSet.has(profileId),
+    )
+  ) {
+    return null;
+  }
+
+  const hashtagNames = await collectInboundHashtagNames(note);
   const media = await projectRemoteNoteMedia(note);
   const knownActorHrefSet = new Set(knownActorHrefs);
   const localOrigin = new URL(context.canonicalOrigin).origin;
@@ -188,11 +205,23 @@ const projectRemoteNote = async (
   });
 
   if (materializedActorHrefs.length > 0) {
-    const { candidates } = await resolveStoredInboundMentionCandidates(materializedActorHrefs);
+    const { activeLocalProfileIds: materializedActiveLocalProfileIds, candidates } =
+      await resolveStoredInboundMentionCandidates(materializedActorHrefs);
     if (candidates.length > 0) {
       mentionCandidates.push(...candidates);
       document = projectRemoteNoteContent({ ...noteContent, mentions: mentionCandidates });
     }
+    materializedActiveLocalProfileIds.forEach((profileId) =>
+      activeLocalProfileIdSet.add(profileId),
+    );
+  }
+  if (
+    requiresActiveLocalMention &&
+    !getPostContentMentionProfileIds(document).some((profileId) =>
+      activeLocalProfileIdSet.has(profileId),
+    )
+  ) {
+    return null;
   }
 
   return {
@@ -398,21 +427,17 @@ const prepareRemoteNote = async ({
   }
 
   const visibility = resolveNoteVisibility(note, storedActor.actor.followersUri);
-  if (visibility === PostVisibility.DIRECT) {
-    const targetHrefs = await collectInboundMentionTargetHrefs(note);
-    const { hasActiveLocalProfile } = await resolveStoredInboundMentionCandidates(targetHrefs);
-    if (!hasActiveLocalProfile) {
-      return { reason: 'no_active_local_mention', status: 'rejected' };
-    }
-  }
-
   let projection;
   try {
     projection = await projectRemoteNote(
       context,
       note,
       source.kind === 'create' ? 'Create' : 'Unknown',
+      visibility === PostVisibility.DIRECT,
     );
+    if (projection === null) {
+      return { reason: 'no_active_local_mention', status: 'rejected' };
+    }
   } catch (error) {
     if (error instanceof RemoteNoteContentLengthExceededError) {
       return { reason: 'note_content_length_exceeded', status: 'rejected' };

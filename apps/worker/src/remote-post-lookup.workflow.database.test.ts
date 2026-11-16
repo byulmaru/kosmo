@@ -642,8 +642,9 @@ test(
       const directObjectUri = new URL('https://objects.example/notes/signed-direct');
       const directNoteDocument = await new Note({
         attribution: authorUri,
-        content: 'Signed Mention-only Direct',
+        content: `<p>Signed <a href="${recipientActorUri.href}">@mention-recipient</a> Direct</p>`,
         id: directObjectUri,
+        mediaType: 'text/html',
         tags: [new Mention({ href: recipientActorUri, name: '@mention-recipient' })],
         to: new URL('https://unrelated.example/users/recipient'),
       }).toJsonLd({ format: 'expand' });
