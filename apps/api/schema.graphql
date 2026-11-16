@@ -568,6 +568,12 @@ type PostContentLinkPreview {
   url: String!
 }
 
+enum PostQuotePolicy {
+  AUTHOR
+  EVERYONE
+  FOLLOWERS
+}
+
 type PostRequest implements Node {
   authorProfile: Profile
   bodyText: String!
@@ -588,12 +594,6 @@ enum PostRequestStatus {
   PUBLISHED
   PUBLISHING
   QUEUED
-}
-
-enum PostQuotePolicy {
-  AUTHOR
-  EVERYONE
-  FOLLOWERS
 }
 
 enum PostState {
