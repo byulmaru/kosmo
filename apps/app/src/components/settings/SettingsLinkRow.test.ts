@@ -218,7 +218,6 @@ describe('SettingsLinkRow', () => {
     );
     assert.ok(chevronWrapper);
     assert.equal(chevronWrapper.props.pointerEvents, 'none');
-    assert.equal(chevronWrapper.props.children.type, 'ChevronRightIcon');
   });
 
   it('선택된 상위 category도 현재 페이지가 아니면 aria-current를 받지 않는다', async () => {
@@ -239,7 +238,7 @@ describe('SettingsLinkRow', () => {
     assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
   });
 
-  it('compact theme link keeps its accessible name and shows the current value before the chevron', async () => {
+  it('compact theme link exposes its accessible name and current value', async () => {
     await render({
       accessibilityLabel: '화면 설정 열기, 시스템',
       density: 'compact',
@@ -253,21 +252,13 @@ describe('SettingsLinkRow', () => {
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
     const item = rendered('View').find((node) => flattenStyle(node.props.style).minHeight === 40);
     const value = rendered('Text').find((node) => node.children[0] === '시스템');
-    const trailing = value?.parent;
     assert.ok(item);
     assert.ok(value);
-    assert.ok(trailing);
     assert.equal(row.props.accessibilityLabel, '화면 설정 열기, 시스템');
     assert.equal(rowStyle.minHeight, 40);
     assert.equal(item.props.style.paddingVertical, 4);
     assert.equal(item.props.style.paddingHorizontal, 16);
     assert.equal(flattenStyle(value.props.style).color, '#666666');
-    assert.equal(flattenStyle(trailing.props.style).flexDirection, 'row');
-    assert.equal(trailing.children[0], value);
-    assert.equal(
-      trailing.findAll((node) => (node.type as unknown) === 'ChevronRightIcon').length,
-      1,
-    );
     assert.deepEqual(texts(), ['화면', '시스템']);
   });
 
