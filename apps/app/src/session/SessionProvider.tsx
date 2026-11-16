@@ -18,20 +18,20 @@ import {
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { Splash } from '@/components/Splash';
 import {
+  useRelayActor,
+  useRelayActorLifecycleKey,
+  useRelayAuthLifecycleKey,
+} from '@/relay/RelayActorProvider';
+import {
   errorSession,
   guestSession,
   projectVisibleSession,
   reduceProfileRestoreState,
   reduceSessionState,
 } from './sessionState';
-import type { ProfileRestoreState, SessionState, SessionValue } from './sessionState';
-import {
-  useRelayActor,
-  useRelayActorLifecycleKey,
-  useRelayAuthLifecycleKey,
-} from '@/relay/RelayActorProvider';
 import type { PropsWithChildren } from 'react';
 import type { SessionProviderQuery as SessionProviderQueryType } from './__generated__/SessionProviderQuery.graphql';
+import type { ProfileRestoreState, SessionState, SessionValue } from './sessionState';
 
 type SessionChange = {
   accountChanged: boolean;

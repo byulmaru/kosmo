@@ -32,9 +32,7 @@ type RelayActorValue = {
   setNativeSession: (token: string) => Promise<void>;
 };
 
-type NativeTokenState =
-  | { phase: 'restoring' }
-  | { phase: 'ready'; token: string | null };
+type NativeTokenState = { phase: 'restoring' } | { phase: 'ready'; token: string | null };
 
 const RelayActorContext = createContext<RelayActorValue | null>(null);
 const RelayActorLifecycleContext = createContext<string | null>(null);

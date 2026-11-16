@@ -48,6 +48,9 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+const MockSplash: ComponentType<{ label: string }> = ({ label }) =>
+  createElement('Splash', { label });
+
 mockModule('react-native', {
   Platform: platform,
 });
@@ -88,7 +91,7 @@ mockModule('expo-secure-store', {
   },
 });
 mockModule(new URL('../components/Splash.tsx', import.meta.url), {
-  Splash: ({ label }: { label: string }) => createElement('Splash', { label }),
+  Splash: MockSplash,
 });
 
 let RelayActorProvider: ComponentType<
@@ -221,7 +224,7 @@ describe('RelayActorProvider session cleanup', () => {
 
     assert.equal(snapshot, null);
     const restoringRenderer = currentRenderer();
-    assert.equal(restoringRenderer.root.findAllByType('Splash').length, 1);
+    assert.equal(restoringRenderer.root.findAllByType(MockSplash).length, 1);
 
     await act(async () => {
       resolveTokenRead(savedToken);
@@ -244,7 +247,7 @@ describe('RelayActorProvider session cleanup', () => {
 
     assert.equal(snapshot, null);
     const restoringRenderer = currentRenderer();
-    assert.equal(restoringRenderer.root.findAllByType('Splash').length, 1);
+    assert.equal(restoringRenderer.root.findAllByType(MockSplash).length, 1);
 
     await act(async () => {
       rejectTokenRead(new Error('SecureStore read failed'));
