@@ -5346,7 +5346,9 @@ export const PostMediaViewerCompact: Story = {
 
     const dialog = await screen.findByRole('dialog');
     const viewer = within(dialog);
-    expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toHaveFocus();
+    await waitFor(() =>
+      expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toHaveFocus(),
+    );
     expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({
       flexDirection: 'column',
     });

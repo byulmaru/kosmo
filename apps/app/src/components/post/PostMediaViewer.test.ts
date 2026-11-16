@@ -1012,6 +1012,25 @@ describe('PostMediaViewer', () => {
     assert.equal(currentImage().props.onError, onError);
   });
 
+  it('표시 완료 전에 사용자가 뷰어 안으로 옮긴 포커스를 유지한다', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { activeElement: viewerKeyTarget },
+    });
+    try {
+      await render();
+      await act(async () => rendered('Modal')[0]!.props.onShow());
+      assert.equal(closeFocused, 0);
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(globalThis, 'document', descriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, 'document');
+      }
+    }
+  });
+
   it('platform dismiss·backdrop은 닫고 내부 surface는 backdrop과 분리한다', async () => {
     let closed = 0;
     let originFocused = 0;

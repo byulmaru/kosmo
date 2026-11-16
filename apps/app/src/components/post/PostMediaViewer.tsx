@@ -135,7 +135,15 @@ export function PostMediaViewer({
       return;
     }
     // Modal's child focus-trap effects must commit before focusing its content.
-    const focusFrame = requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef));
+    const focusFrame = requestAnimationFrame(() => {
+      if (
+        Platform.OS === 'web' &&
+        containsTarget(dialogRef, globalThis.document?.activeElement ?? null)
+      ) {
+        return;
+      }
+      focusPostMediaViewerTarget(closeRef);
+    });
     return () => globalThis.cancelAnimationFrame?.(focusFrame);
   }, [shown]);
 
@@ -558,7 +566,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function containsTarget(dialog: RefObject<NativeView | null>, target: EventTarget | null): boolean {
   const element = dialog.current as unknown as { contains?: (node: EventTarget | null) => boolean };
-  return element.contains?.(target) ?? false;
+  return element?.contains?.(target) ?? false;
 }
 
 function stableCloseVisualStyle(state: PressableStateCallbackType): ViewStyle[] {
