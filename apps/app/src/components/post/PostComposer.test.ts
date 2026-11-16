@@ -1790,7 +1790,7 @@ describe('PostComposer local author', () => {
     assert.equal(targetProps?.quotePolicy, 'EVERYONE');
     await act(async () => targetProps?.onSubmit());
     assert.equal(mutationCalls[0]?.variables.input.quotePolicy, 'EVERYONE');
-    assert.deepEqual(mutationCalls[0]?.variables.input.media, mediaValue.items);
+    assert.deepEqual(mutationCalls[0]?.variables.input.media, mediaValue.getPostRequestMedia());
     assert.equal(mutationCalls[0]?.variables.input.contentWarning, '보존할 CW');
   });
 
