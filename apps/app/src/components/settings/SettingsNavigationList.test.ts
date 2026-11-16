@@ -415,7 +415,8 @@ describe('SettingsNavigationList', () => {
     const chevron = picker.findAll((node) => (node.type as unknown) === 'ChevronDownIcon')[0];
     assert.ok(chevron);
     const hiddenDecoration = picker.findAll(
-      (node) => node.type === 'View' && node.props.accessibilityElementsHidden === true,
+      (node) =>
+        (node.type as unknown) === 'View' && node.props.accessibilityElementsHidden === true,
     )[0];
     assert.ok(hiddenDecoration);
     assert.equal(hiddenDecoration.props.pointerEvents, 'none');
