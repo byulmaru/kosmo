@@ -462,6 +462,23 @@ if (isChildProcess) {
       const worker = await createWorker();
 
       await t.test(
+        'Quote admission rejects a missing Source without publishing standalone',
+        async () => {
+          const input = quoteInput(quoteProfile.id, randomUUID(), 'missing Quote Source');
+          const ids = postCreateIdentities(quotePostCreateInput(input));
+          await assert.rejects(
+            createPost(input),
+            (error: unknown) => error instanceof ApplicationFailure && error.type === 'NOT_FOUND',
+          );
+          assert.equal((await db.select().from(Posts).where(eq(Posts.id, ids.postId))).length, 0);
+          assert.equal(
+            (await db.select().from(PostContents).where(eq(PostContents.id, ids.contentId))).length,
+            0,
+          );
+        },
+      );
+
+      await t.test(
         'Quote publication rechecks membership in the owner transaction and rolls back denied creation',
         async () => {
           const account = await db
