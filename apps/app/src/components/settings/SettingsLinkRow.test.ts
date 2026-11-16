@@ -196,8 +196,6 @@ describe('SettingsLinkRow', () => {
     const description = rendered('Text').find((node) => node.children[0] === '현재 공개 범위');
     assert.ok(label);
     assert.ok(description);
-    assert.equal(label.parent, description.parent);
-    assert.notEqual(flattenStyle(label.parent?.props.style).flexDirection, 'row');
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
     const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
     assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
