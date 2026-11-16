@@ -54,10 +54,16 @@ import { quotePostCreateInput } from '../temporal/post-admission';
 import { KOSMO_TASK_QUEUE } from '../temporal/task-queue';
 import { normalizeHashtag } from '../validation/hashtag';
 import { postVisibilityCondition } from '../visibility/post';
-import { revokePostQuoteConsentsForSource } from './post-quote-consent';
+import {
+  assertPostQuotePolicy,
+  defaultPostQuotePolicy,
+  isLocalQuoteAllowedByPolicy,
+  revokePostQuoteConsentsForSource,
+} from './post-quote-consent';
 import { validatePostStructure } from './post-structure';
 import { assertProfilePairIsNotBlocked } from './profile-block-policy';
 import type { DatabaseHandle, Transaction } from '../db';
+import type { PostQuotePolicy } from '../enums';
 import type { PostContentDocumentV1 } from '../post-content';
 import type {
   PostContentHashtagReference,
@@ -81,6 +87,7 @@ export type LegacyLocalPostInput = {
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  quotePolicy?: PostQuotePolicy | null;
   visibility: PostVisibility;
 };
 
@@ -98,6 +105,7 @@ export type LocalPostInput = {
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  quotePolicy?: PostQuotePolicy | null;
   sensitiveMedia?: boolean;
   visibility: PostVisibility;
 };
@@ -384,8 +392,16 @@ const validateQuoteSource = async (
   if (source.visibility === PostVisibility.DIRECT) {
     throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
-  if (source.instanceKind === InstanceKind.ACTIVITYPUB) {
-    throw new ValidationError('Quote approval is not available', { field: 'repostSourceId' });
+  if (
+    source.instanceKind === InstanceKind.LOCAL &&
+    source.profileId !== actorProfileId &&
+    !(await isLocalQuoteAllowedByPolicy(tx, {
+      actorProfileId,
+      sourceAuthorProfileId: source.profileId,
+      sourcePostId: source.id,
+    }))
+  ) {
+    throw new ValidationError('Post cannot be quoted', { field: 'repostSourceId' });
   }
   return source;
 };
@@ -743,6 +759,13 @@ export const createPostInTransaction = async (
   postId?: string,
   initialContentId?: string,
 ): Promise<CreatedPost> => {
+  const localQuotePolicy =
+    input.origin === 'LOCAL'
+      ? input.quotePolicy == null
+        ? defaultPostQuotePolicy
+        : assertPostQuotePolicy(input.quotePolicy)
+      : undefined;
+  let quoteSource: Awaited<ReturnType<typeof validateQuoteSource>> | undefined;
   let document: PostContentDocumentV1;
   let postContentHashtagIds: string[] = [];
   if (input.origin === 'LOCAL' && 'document' in input) {
@@ -851,7 +874,7 @@ export const createPostInTransaction = async (
   }
 
   if (input.origin === 'LOCAL' && input.repostSourceId !== undefined) {
-    await validateQuoteSource(tx, {
+    quoteSource = await validateQuoteSource(tx, {
       actorProfileId: input.profileId,
       postId: input.repostSourceId,
     });
@@ -924,9 +947,13 @@ export const createPostInTransaction = async (
             id: postId ?? (createdAt === undefined ? undefined : uuidv7(createdAt.toString())),
             profileId: input.profileId,
             repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : undefined,
+            quotePolicy: localQuotePolicy,
             quoteConsentStatus:
               input.origin === 'LOCAL' && input.repostSourceId !== undefined
-                ? PostQuoteConsentStatus.APPROVED
+                ? quoteSource?.instanceKind === InstanceKind.LOCAL ||
+                  quoteSource?.profileId === input.profileId
+                  ? PostQuoteConsentStatus.APPROVED
+                  : PostQuoteConsentStatus.PENDING
                 : undefined,
             state: PostState.ACTIVE,
             visibility: input.visibility,
@@ -938,9 +965,13 @@ export const createPostInTransaction = async (
           .set({
             currentContentId: content.id,
             ...(createdAt === undefined ? {} : { createdAt }),
+            quotePolicy: localQuotePolicy,
             quoteConsentStatus:
               input.origin === 'LOCAL' && input.repostSourceId !== undefined
-                ? PostQuoteConsentStatus.APPROVED
+                ? quoteSource?.instanceKind === InstanceKind.LOCAL ||
+                  quoteSource?.profileId === input.profileId
+                  ? PostQuoteConsentStatus.APPROVED
+                  : PostQuoteConsentStatus.PENDING
                 : null,
             repostSourceId: input.origin === 'LOCAL' ? (input.repostSourceId ?? null) : null,
           })

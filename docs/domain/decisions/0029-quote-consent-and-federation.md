@@ -19,12 +19,13 @@ Accepted
 - Content가 있는 Local Post마다 `모두`, `팔로워`, `본인만` 인용 허용 정책을 제공한다. 새 Post와 기존
   Post의 초기값은 `모두`다. `팔로워`는 established Follower와 본인, `본인만`은 본인만 허용한다.
   허용된 요청도 Source 조회와 차단 조건을 통과해야 한다.
-- 정책 변경은 이후 요청에만 적용한다. 기존 QuoteAuthorization을 자동 철회하지 않는다.
+- 현재 PROD-924는 작성 시 정책 선택만 제공하며 게시 후 정책 변경 UI·API는 제외한다. 향후 정책 변경을
+  도입할 때에도 이후 요청에만 적용하고 기존 QuoteAuthorization을 자동 철회하지 않는다.
 - Kosmo 원문은 정책에 따라 자동 승인·거절한다. Kosmo 자체의 건별 수동 승인 UI는 제공하지 않는다.
 - Local Note의 `interactionPolicy.canQuote.automaticApproval`은 `모두`를 ActivityStreams Public,
   `팔로워`를 Author의 followers collection과 Author Actor, `본인만`을 Author Actor로 광고한다. 첫 출시에는
-  건별 수동 승인 기능이 없으므로 `manualApproval`은 제공하지 않는다. 최초 Note와 정책 변경 뒤 같은 identity의
-  Update에 이 projection을 적용하되, 광고 자체는 개별 승인 증거로 사용하지 않는다.
+  건별 수동 승인 기능이 없으므로 `manualApproval`은 제공하지 않는다. 현재는 최초 Note에 이 projection을 적용하고, 향후 정책 변경을 도입하면 같은 identity의
+  Update에도 적용하되, 광고 자체는 개별 승인 증거로 사용하지 않는다.
 - 자기 인용은 QuoteRequest 없이 허용한다. 타인의 원격 원문을 인용할 때는 `interactionPolicy`의
   `automaticApproval`·`manualApproval` 여부, 정책 부재 또는 해석 실패와 관계없이 QuoteRequest를 보낸다.
   `interactionPolicy`는 작성 전 UI·정책 힌트일 뿐 승인 근거가 아니며, 실제 승인은 원문 작성자가 발급한
@@ -36,7 +37,8 @@ Accepted
   Source를 정상 인용으로 노출하지 않으며 원문 서버에 별도 승인 요청을 보낸다. 유효한 승인을 받으면
   Source와 승인을 연결하고 필요한 Update를 보낸다.
 - 거절·승인 철회·Source 삭제 후에도 Quote 자체 Content는 유지하고 Source는 비노출한다. Local Source 삭제는
-  그 Source에 발급된 모든 유효한 승인을 철회한다. Local Quote audience에 Quote `Update(Note)`를 전달하고,
+  삭제와 관련 Quote들의 Pending·Approved 철회를 원자적으로 반영하고 그 Source에 발급된 모든 유효한
+  승인을 철회한다. 승인과 삭제의 경쟁으로 삭제된 Source에 새 유효한 승인을 남기지 않는다. Local Quote audience에 Quote `Update(Note)`를 전달하고,
   Remote Quote owner에는 Source가 발급한 `Delete(QuoteAuthorization)`을 직접 전달한다. 원격 철회 수신 시의
   전파는 아래 원격 철회 전달 정책을 따른다. 실패나 응답 부재는 승인이 아니며, 이전 승인을 위한 뒤늦은 응답이나
   오래된 중복 전달은 더 최근의 거절·철회를 되돌려서는 안 된다.
@@ -44,9 +46,10 @@ Accepted
   않고 기존 방향별 Post 조회 정책을 적용한다. Viewer가 Source Author를 차단한 방향만 존재하면 Viewer의 직접
   조회 조건에 따라 Source를 볼 수 있고, Source Author가 Viewer를 차단했거나 상호 차단이면 Source를 숨긴다.
   차단 자체가 기존 승인을 자동 철회하거나 제3자의 Source 조회를 일괄 막지는 않는다. 제3자에게도 Source를
-  숨기려면 원문 작성자가 별도 승인 철회를 사용한다.
+  숨기는 별도 승인 철회 UI·API는 현재 PROD-924 범위에서 제공하지 않는다.
 - Remote Source Author의 `Delete(QuoteAuthorization)`은 발신자와 승인·Source·Quote의 결속을 확인한 뒤
-  수신한 Local Quote를 철회하고 Source를 숨긴다. Quote 소유 서버는 원본 `Delete`를 전달하거나 대체 `Delete`를
+  현재 유효한 철회임이 명확한 경우 수신한 Local Quote를 철회하고 Source를 숨긴다. 같은 승인 URI를
+  재사용해 과거 Delete와 현재 Delete가 모호한 경우에는 아래 현재 승인 재검증 계약을 따른다. Quote 소유 서버는 원본 `Delete`를 전달하거나 대체 `Delete`를
   만들지 않고, 기존 Quote audience에 Source와 승인 및 자동 생성한 Quote 표현을 제외한 `Update(Note)`를 보낸다.
   작성된 본문·링크, Quote identity와 공개 범위는 유지되며, 전달 실패는 철회를 되돌리지 않는다. Local Source
   Author가 원격 Quote owner에게 발신하는 `Delete`의 `object`와 `target`은 객체를 embed하지 않고 URI 참조로
@@ -126,3 +129,25 @@ PROD-902 Spec 대화에서 사용자가 원격 `interactionPolicy`의 automatic/
 있다. 승인 URI는 같거나 달라도 되며 URI 자체는 현재 승인 결정의 증거가 아니다. 이 재승인 허용은 FEP-044f의
 명시 규정이라고 주장하지 않으며, 상세한 동작은 [Post 객체의 Quote federation 정책](../objects/post.md#quote-federation-정책)에
 기록한다.
+
+## 현재 승인 재검증과 철회 경계 정정 (2026-10-09)
+
+- Activity ID와 `target` 없는 Delete 수신을 유지한다. 발신자·Authorization·Source·Quote 결속은 계속
+  검증하며, `target`이 있으면 Source와 일치해야 한다. Activity ID는 재전송 중복 판정에 사용할 수 있지만
+  승인 세대의 identity는 아니다.
+- 명확하게 유효한 Delete에는 기존 철회 계약을 적용한다. 동일 Authorization URI 재승인으로 과거 Delete와
+  현재 Delete가 모호할 때만 issuer의 현재 QuoteAuthorization을 직접 재검증한다. 로컬 처리 이력만으로
+  외부 Delete의 승인 세대를 완전히 식별할 수 있다고 주장하지 않는다.
+- 기존 승인 유효성 확인은 Authorization 직접 재검증을 신뢰 근거로 사용한다. Quote Note 조회는 새 승인·
+  재승인과 승인 참조 변경 발견 경계에서 사용하며, 기존 승인 재검증의 필수 단계로 확대하지 않는다.
+- 404·403·5xx·timeout·JSON-LD 또는 파싱 실패는 단독 철회 근거가 아니다. 200 응답의 type·binding
+  불일치도 명시적 철회로 취급하지 않는다. 기존 Approved와 Source 표시를 유지한 채 재검증하며, Source의
+  기존 viewer별 접근 조건은 계속 적용한다. 이 경계는 신규 승인·재승인의 fail-closed를 완화하지 않는다.
+- 410 상태 코드만으로 철회하지 않는다. 현재 삭제의 증거로 인정하려면 issuer·Authorization URI·redirect·cache
+  신뢰 경계를 확인하고 Tombstone이 있으면 type·id 일치도 검증한다. body 없는 410의 충분성과 반복 확인된
+  현재 승인 무효의 최종 표현은 별도 상호운용·제품 결정으로 남긴다. 이번 범위에서 새 consent 상태를 만들지 않는다.
+- 재검증의 비동기 재시도는 실행 방식이며 별도의 승인·철회 증거가 아니다. 승인 유지와 철회의 조건, Source
+  결속 및 작성 본문·링크 보존은 [Post 객체](../objects/post.md#원격-인용-승인-철회-반영)가 소유한다.
+- 작성 중 인용 허용 정책은 현재 작성 Profile 기준이다. 실제 작성 Profile 변경 시 `모두`로 초기화하며 같은
+  Profile 재선택·picker 취소는 유지한다. 이전 Profile로 돌아가도 과거 선택값을 복원하지 않는다. 본문·CW·
+  Media·Visibility 보존 계약은 유지하며, Profile별 저장 기본값 기능은 기존 PROD-925 후속 범위다.
