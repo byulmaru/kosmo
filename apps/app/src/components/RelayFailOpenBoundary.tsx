@@ -23,7 +23,7 @@ export function RelayFailOpenBoundary({
     <ErrorBoundary
       fallbackRender={({ resetErrorBoundary }) => (
         <>
-          {onRetry ? <NativeResumeRetry onRetry={resetErrorBoundary} /> : null}
+          <NativeResumeRetry onRetry={resetErrorBoundary} />
           {fallback}
         </>
       )}
