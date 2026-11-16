@@ -110,6 +110,10 @@ export const DirectSelection: Story = {
       await userEvent.click(canvas.getByRole('button', { name: /^공개 범위:/ }));
       await userEvent.click(canvas.getByRole('menuitemradio', { name: label }));
       expect(args.onVisibilityChange).toHaveBeenLastCalledWith(value);
+      if (value === 'PUBLIC' || value === 'UNLISTED') {
+        expect(canvas.getByRole('group', { name: '인용 허용 정책' })).toBeVisible();
+        await userEvent.keyboard('{Escape}');
+      }
       expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
 
       const trigger = canvas.getByRole('button', { name: `공개 범위: ${label}` });
@@ -153,8 +157,6 @@ export const KeyboardSelection: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
     expect(canvas.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
     await userEvent.keyboard('{End}');
-    expect(canvas.getByRole('menuitemradio', { name: '언급한 프로필만' })).toHaveFocus();
-    await userEvent.keyboard('{Enter}');
     const direct = canvas.getByRole('button', { name: '공개 범위: 언급한 프로필만' });
     expect(direct).toHaveFocus();
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('DIRECT');
@@ -162,13 +164,19 @@ export const KeyboardSelection: Story = {
     await userEvent.click(direct);
     await userEvent.keyboard('{Home}');
     expect(canvas.getByRole('menuitemradio', { name: '공개' })).toHaveFocus();
-    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
-    expect(canvas.getByRole('menuitemradio', { name: '팔로워만' })).toHaveFocus();
-    await userEvent.keyboard('{ArrowUp}');
+    expect(args.onVisibilityChange).toHaveBeenLastCalledWith('PUBLIC');
+    await userEvent.keyboard('{ArrowDown}');
     expect(canvas.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
     await userEvent.keyboard(' ');
-    expect(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' })).toHaveFocus();
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('UNLISTED');
+    expect(canvas.getByRole('group', { name: '인용 허용 정책' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    const unlisted = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
+    expect(unlisted).toHaveFocus();
+    await userEvent.click(unlisted);
+    await userEvent.keyboard('{ArrowDown}');
+    expect(args.onVisibilityChange).toHaveBeenLastCalledWith('FOLLOWERS');
+    expect(canvas.getByRole('button', { name: '공개 범위: 팔로워만' })).toHaveFocus();
     expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
   },
 };
