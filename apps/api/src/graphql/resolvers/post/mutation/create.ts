@@ -1,5 +1,5 @@
 import { db, firstOrThrow, Posts } from '@kosmo/core/db';
-import { AccountProfileRole, PostVisibility } from '@kosmo/core/enums';
+import { AccountProfileRole, PostQuotePolicy, PostVisibility } from '@kosmo/core/enums';
 import { postBodyTextOrEmptySchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -65,6 +65,7 @@ builder.mutationField('createPost', (t) =>
       actorProfileId: t.input.globalID({ for: Profile, required: false }),
       replyParentId: t.input.globalID({ for: Post, required: false }),
       repostSourceId: t.input.globalID({ for: Post, required: false }),
+      quotePolicy: t.input.field({ type: PostQuotePolicy, required: false }),
       sensitiveMedia: t.input.boolean({ required: false }),
       visibility: t.input.field({ type: PostVisibility }),
     },

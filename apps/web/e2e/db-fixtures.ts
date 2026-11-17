@@ -44,6 +44,7 @@ import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-
 import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
+import type { PostQuoteConsentStatus } from '@kosmo/core/enums';
 import type { PostContentMentionReference } from '@kosmo/core/post-content/server';
 import type { BrowserContext } from '@playwright/test';
 
@@ -102,6 +103,7 @@ type CreateE2EPostOptions = {
   profileId: string;
   replyParentId?: string;
   repostSourceId?: string;
+  quoteConsentStatus?: PostQuoteConsentStatus | null;
   sensitiveMedia?: boolean;
   state?: PostState;
   visibility?: PostVisibility;
@@ -481,6 +483,7 @@ export async function createE2EPost(options: CreateE2EPostOptions) {
       .insert(Posts)
       .values({
         profileId: options.profileId,
+        quoteConsentStatus: options.quoteConsentStatus,
         ...(options.replyParentId ? { replyParentId: options.replyParentId } : {}),
         ...(options.repostSourceId ? { repostSourceId: options.repostSourceId } : {}),
         state: options.state ?? PostState.ACTIVE,

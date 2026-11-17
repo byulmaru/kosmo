@@ -1,3 +1,4 @@
+import { PostQuoteConsentStatus } from '@kosmo/core/enums';
 import { devices } from '@playwright/test';
 import {
   createE2EFollow,
@@ -197,6 +198,7 @@ for (const width of [390, 1440]) {
           body: quoteBody,
           profileId: quoteAuthor.id,
           repostSourceId: source.id,
+          quoteConsentStatus: PostQuoteConsentStatus.APPROVED,
         });
         for (let index = 0; index < 8; index += 1) {
           await createE2EPost({

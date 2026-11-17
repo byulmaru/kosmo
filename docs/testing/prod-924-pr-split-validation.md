@@ -59,3 +59,94 @@ Source owner history의 Activity와 cached Update 및 완료 후 재요청의 to
 `prod924-lower-migration-transition.log`, `prod924-split-lifecycle-replay.log`에 있다.
 최초 최종 lint에서 상위 테스트 분리 후 남은 unused import 3건을 확인해 제거했다.
 전체 root 및 recursive lint/typecheck를 이 정렬 후 새로 실행해 exit 0을 확인했다.
+
+### 상위 #940 분리 및 migration 검증
+
+하위 고정 head는 `cd7c5c694e7df3315af88732c8e04eb6488e22d9`이며 최신 main과 원격 #961 두 parent를 보존한다.
+상위는 이 head와 통합 `3122940aa`를 merge하여 기존 #940 이력을 유지한다. 원격 PR ref/base는 아직 변경하지 않았다.
+
+최신 main → #961 → #940 실제 PostgreSQL migration은 이력 60 → 60 → 61로 통과했다.
+local ACTIVE contentful Post만 EVERYONE으로 backfill하고 remote·DELETED·contentless는 NULL을 유지했다.
+기존 본문 JSON/CW·링크·media binding·content ID·repostSourceId·APPROVED/approval URI가 변하지 않았다.
+구버전의 정책 없는 INSERT도 확장된 스키마에서 실행됐고, 두 consent 컬럼과 폐기 테이블 부재 및 재실행 멱등성을 확인했다.
+이는 구형 consent writer와 새 owner의 동시 운영 허용 증거가 아니다.
+로그: `/private/tmp/prod924-upper-migration-transition.log` (exit 0). 초기 실험 fixture의 잘못된 MANUAL enum과
+postgres.js Result/Array prototype assertion을 수정한 뒤 다시 실행했다. 제품 SQL 변경으로 처리한 실패가 아니다.
+
+정책 migration SQL 및 디렉터리 이름은 통합본과 동일하다. 기존 snapshot의 비정책 hunk를 제외하고
+최신 main snapshot의 424개 DDL을 그대로 보존한 뒤 enum·column 2개만 추가했다.
+최신 main snapshot과 새 policy snapshot을 격리 출력 경로에 놓고 공식
+`drizzle-kit check --dialect postgresql --out /private/tmp/prod924-snapshot-validator`를 실행해 exit 0을 확인했다.
+전체 과거 snapshot을 읽는 generate/check는 종료되지 않았으며 PASS로 기록하지 않는다.
+동일 최신 main의 전체 snapshot만 놓은 대조 check도 25초 안에 끝나지 않아 해당 소유 process group만 종료했다.
+최신 main 전체 snapshot 대조의 미종료 문제와 정책 SQL의 실제 migration 통과를 구분한다.
+전체 generate가 정상 종료한 증거는 없으며 향후 schema generation 시 별도 도구 검증이 필요하다.
+
+Fedify protocol database 7건은 하위부터 unit glob에 포함돼 있다. 상위 통합본 root script의 별도 중복 호출은
+제외했고, test 실행 횟수를 고유 테스트 수로 부풀리지 않는다.
+
+### 공유 파일의 hunk 책임
+
+| 영역                       | #961 공통 경계                                                              | #940 상위 기능                                         |
+| -------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------ |
+| core `post.ts`             | Local compatibility bridge·Source owner·잠금·atomic revoke                  | 원격 Source PENDING 작성·정책 검증/저장                |
+| core consent service       | status/approval/source CAS·Source lock·공통 Source 표시 규칙                | local policy/follow eligibility                        |
+| core DTO / Worker registry | INITIALIZE/REQUEST/DECIDE·read/write/fence/drain/bootstrap·공통 Source 삭제 | 기존 DTO에 nullable quotePolicy 입력 전달              |
+| Fedify                     | inbound·Approval dispatcher·proof/reconciliation·terminal effect            | local Note의 policy approval audience projection       |
+| API                        | 기존 service caller가 lower compatibility bridge 사용                       | 직접 owner admission·정책 입력/응답·Source 표시 loader |
+| DB                         | #1094 두 consent 컬럼·Source lookup index 유지                              | nullable policy enum/column과 local Post backfill      |
+| UI                         | main의 기존 작성·Mention·keyboard 계약 유지                                 | Profile policy 초기화·policy 메뉴 및 keyboard dismiss  |
+
+#961은 latest main + merged #1094에서 독립 실행한다. #940은 #961 head를 base로 해야 한다.
+기존 두 PR이 둘 다 main을 가리키는 원격 상태는 그대로 두었으며, 향후 승인된 Stack 반영 시
+#940 base를 #961 branch로 정렬해야 한다. 순서는 공통 모델(병합됨) → #961 → policy migration → #940 application이다.
+별도 Source writer를 상위에 재구현하지 않는다. 구형 writer admission freeze/drain은 코드 병합 순서와 별도 운영 Gate다.
+
+### 로컬 상위 실행 기록
+
+| Gate                             | 실제 결과                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------ |
+| Root 및 recursive lint/typecheck | exit 0                                                                         |
+| API                              | schema/tsc·unit 44/44·integration 346 PASS/1 기존 SKIP, exit 0                 |
+| App                              | Relay/tsc·unit 952/952·Storybook build·138 files/908 interactions PASS, exit 0 |
+| Core                             | unit 110/110·migration 19/19·smoke·service 257/257 PASS, exit 0                |
+| Web                              | check 및 unit PASS, exit 0; 전체 E2E shard 종료 결과는 아래 최종 기록          |
+
+UI/API 독립 hunk 검토에서도 actionable 회귀를 발견하지 않았다. 최신 main의 Mention·Enter/Space/Escape,
+Profile ID guard, FOLLOWERS Arrow dismiss/focus 및 공통 Source 표시/owner admission 재사용을 확인했다.
+전체 CI 중 변경 영역의 Core/API/Fedify/Worker/App/Web 및 focused Composer를 실행하며,
+무관한 Admin/Helm/Admin Image job과 원격 Ubuntu ARM 실행 및 GitHub CI는 이번 로컬 증거에 포함하지 않는다.
+
+Root `pnpm test:eslint`는 하위/상위 각각 8/8, Web check+unit도 각각 46/46 PASS·exit 0이었다.
+상위 Web E2E shard 1/3은 60/60, 2/3은 53/53 PASS·exit 0이다.
+각 계층 전체 변경 경로는 [파일 manifest](./prod-924-pr-split-files.json)에 기록한다.
+원래 primary `PROD-1053` checkout과 사용자 변경, 통합 `3122940aa` checkout은 보존했다.
+
+상위 Worker 최종 동결 exact aggregate는 183/183 PASS·exit 0이었다(unit 10, Workflow 42, DB 69,
+migration 21, Quote 41). nullable 정책 input 전달과 AUTHOR의 실제 INITIALIZE DB 저장을 추가 관측했다.
+Source 경쟁·deadlock rollback/retry·ABA·timeout·CAN·Worker 복구·local history replay도 이 run에 포함된다.
+최초 sandbox listen EPERM 결과는 제품 실패로 바꾸지 않고 로그를 보존했으며 실제 환경 권한으로 재실행했다.
+최종 Fedify script는 고유 unit 356/356·Consumer build/tsc 1/1 PASS·exit 0이었다.
+중복 protocol 별도 호출을 제외한 현재 script로 재실행했다. 새 policy JSON-LD와 기존 Mention/terminal 전달도 통과했다.
+로그는 `/private/tmp/prod924-upper-worker-aggregate.log`, `prod924-upper-fedify-final.log`,
+`prod924-upper-core-final.log`, `prod924-split-upper-api-final.log`, `prod924-split-upper-app-final.log`,
+`prod924-upper-lint-recursive.log`, `prod924-upper-web-unit.log`에 있다.
+
+최종 원격 read-back에서 main `e15787c41f` 및 두 기존 PR head는 최초 snapshot과 같았다.
+기존 #961 remote CI와 이번 로컬 후보 검증은 별도다. #940 remote old head의 App·Web shard 1/3·총괄 Test
+실패는 여전히 남아 있으며 로컬 통과로 원격 상태를 수정하지 않았다. 후보 head의 원격 CI는 미실행이다.
+
+제품 코드의 추가 blocker는 현재 발견하지 않았다. 원격 push/답글/resolve/merge/deploy는 사용자 지시로 보류한다.
+production history export/replay·운영 DB 구형 migration inventory·실제 writer fleet drain이 미실행이므로
+production 전환 준비 완료라고 표시하지 않는다. 강제 Terminate 뒤 늦은 commit, 외부 exactly-once 및
+Source/Quote 간 외부 delivery 전체 순서도 보장 범위에서 제외한다.
+
+상위 Web E2E 마지막 shard 3/3은 56/56 PASS·exit 0이었다. 전체는 **169/169**(60+53+56)로
+실제 production entrypoint 5개 서버에서 실행했다. Composer 12건도 포함됐으며 새로운 실패는 없었다.
+하위는 UI 변경이 없어 focused Composer 12건과 Web check/unit 46건을 실행했고 전체 Web E2E
+3-shard 및 App Storybook을 재실행한 것으로 표시하지 않는다.
+
+로컬 최종 반영은 기존 PR branch 이름 `PROD-792`와 `PROD-924`를 격리 clone에서 채택하는
+main → #961 → #940 Stack이다. 원래 candidate branch는 비교용으로 보존하고 원격 기존 head는 유지한다.
+원래 #961/#940 head가 각각 새 후보의 ancestor이므로 이력 rewrite 없이 fast-forward 반영할 수 있다.
+다만 원격 #940 base 변경·원격 CI 및 Stack push/submit은 별도 사용자 승인 후 작업이다.

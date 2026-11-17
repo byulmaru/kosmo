@@ -66,6 +66,7 @@ export function quotePostCreateInput(
     profileId: input.profileId,
     replyParentId: input.replyParentId,
     repostSourceId: input.repostSourceId,
+    quotePolicy: input.quotePolicy ?? 'EVERYONE',
     visibility: input.visibility,
   };
 }
