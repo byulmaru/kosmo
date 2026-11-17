@@ -8,7 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, textStyles, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
 import { PostVisibilityIcon } from './PostVisibilityIcon';
@@ -196,7 +196,9 @@ export function PostSourcePresentationView({
             {formatTimelineTimestamp(post.createdAt)}
           </TimestampText>
         </PresentationLink>
-        <PostVisibilityIcon visibility={post.visibility} />
+        <View style={styles.visibilityIconAlignment}>
+          <PostVisibilityIcon visibility={post.visibility} />
+        </View>
       </View>
     </PostDetailBackground>
   );
@@ -459,7 +461,7 @@ function presentationMedia(
 
 function Author({ profile, showAvatar }: { profile: AuthorProfile; showAvatar: boolean }) {
   return (
-    <View style={styles.author}>
+    <View style={[styles.author, !showAvatar && styles.authorWithoutAvatar]}>
       {showAvatar ? (
         <Avatar
           imageUri={profile.avatar?.url}
@@ -482,11 +484,12 @@ const styles = StyleSheet.create({
     minHeight: 44,
     minWidth: 0,
   },
+  authorWithoutAvatar: { alignItems: 'flex-start' },
   authorText: { flex: -1, minWidth: 0 },
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { alignItems: 'flex-start', flex: 1, minWidth: 0 },
   timeMetadata: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     flexShrink: 0,
     gap: spacing.xs,
@@ -495,10 +498,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     borderRadius: radii.sm,
     flexShrink: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     minHeight: 44,
     minWidth: 44,
   },
+  visibilityIconAlignment: { height: textStyles.uiCopyM.lineHeight, justifyContent: 'center' },
   timestamp: {
     fontFamily: fontFamilies.ui,
     minHeight: 44,

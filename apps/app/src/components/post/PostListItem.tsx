@@ -9,7 +9,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { fontFamilies, radii, spacing, textStyles, typography } from '@/theme/tokens';
 import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { PostDetailBackground, PostDetailBackgroundFeedbackContext } from './PostDetailBackground';
@@ -444,7 +444,9 @@ function PostListRow({
                 </TimestampText>
               </Pressable>
             </Link>
-            <PostVisibilityIcon visibility={post.visibility} />
+            <View style={styles.visibilityIconAlignment}>
+              <PostVisibilityIcon visibility={post.visibility} />
+            </View>
           </View>
         </PostDetailBackground>
         {post.content ? (
@@ -510,12 +512,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     borderRadius: radii.sm,
     flexShrink: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     minHeight: 44,
     minWidth: 44,
   },
+  visibilityIconAlignment: { height: textStyles.uiCopyM.lineHeight, justifyContent: 'center' },
   timeMetadata: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     flexShrink: 0,
     gap: spacing.xs,
