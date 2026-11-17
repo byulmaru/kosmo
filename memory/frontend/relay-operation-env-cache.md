@@ -1,6 +1,6 @@
 # Frontend: Relay Operation, Environment And Cache
 
-Read this entire file when changing Relay documents, actor environments, mutations, normalized state, or connection updates. When writing or modifying React components that use Relay, also use [`relay-best-practices`](../../.codex/skills/relay-best-practices/SKILL.md). Select [`relay-performance`](../../.codex/skills/relay-performance/SKILL.md) for data-fetching, rendering, or cache performance optimization.
+Read this entire file when changing Relay documents, actor environments, mutations, normalized state, or connection updates. When writing or modifying React components that use Relay, also use [`relay-best-practices`](../../.agents/skills/relay-best-practices/SKILL.md). Select [`relay-performance`](../../.agents/skills/relay-performance/SKILL.md) for data-fetching, rendering, or cache performance optimization.
 
 ## Relay Colocation
 

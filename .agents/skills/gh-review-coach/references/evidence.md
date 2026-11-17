@@ -2,18 +2,18 @@
 
 ## Independent evidence checks
 
-After fixing the review mode, exact snapshot, ownership evidence, and repository guidance, decide whether an independent evidence check adds coverage. Use a bounded correctness check for a new implementation, changed head, or uncertain execution path. When changed tests or changed runtime behavior are in scope, read [Test Evidence](test-evidence.md) and add a separate test-evidence check. Skip these checks for an unchanged, already-established finding draft, an authorized comment publication, thread-state cleanup, or another action with no new review surface.
+After establishing the snapshot, ownership evidence, and repository guidance, decide whether an independent evidence check adds coverage. Use a bounded correctness check for a new implementation, changed head, or uncertain execution path. When changed tests or runtime behavior are in scope, read [Test Evidence](test-evidence.md). A separate check is useful only when it adds coverage; skip it for an unchanged finding draft, authorized comment publication, thread cleanup, or another action with no new review surface.
 
 - Keep each check on one non-overlapping responsibility slice such as contracts, authorization, transactions, persistence, concurrency, test behavior, or unresolved-thread regressions. A minimality check is useful only when the diff introduces abstractions, dependencies, or scope with a concrete current cost.
 - Give every check the same repository, review mode, exact snapshot, applicable guidance, and a bounded question. For external review include PR number, base SHA, and head SHA. For self-review provide raw artifacts rather than implementation rationale or the expected conclusion.
 - Require exact file/line evidence, the path or invariant checked, confirmed findings separated from suspicions, the smallest relevant validation and its result, and an explicit no-finding result when the assigned surface is sound.
 - Independent checks do not publish GitHub feedback, edit code, decide product policy or severity, or make the final review recommendation.
 
-When independent checks run, the main reviewer independently traces and shares a compact responsibility map and execution-flow summary instead of waiting idle. The main reviewer owns freshness checks, final verification, deduplication, severity, drafting, and every GitHub write.
+The reviewer remains responsible for freshness, the end-to-end execution flow, checking independent evidence, deduplication, severity, drafting, the recommendation, and every GitHub write.
 
 ## Trace Behavior And Ownership
 
-For a new implementation review or changed head, the main reviewer owns the end-to-end implementation map. Trace the changed flow through callers and downstream consumers in execution order. For a targeted follow-up on an unchanged snapshot, trace only the affected line, thread, or state transition:
+For a new implementation review or changed head, trace the end-to-end implementation map through callers and downstream consumers in execution order. For a targeted follow-up on an unchanged snapshot, trace only the affected line, thread, or state transition:
 
 `entry point -> application action -> domain policy -> transaction/persistence -> side effect -> response/consumer`
 
@@ -57,7 +57,7 @@ Prefer the smallest relevant check that can disprove or confirm a concern. Do no
 
 ## Reconcile And Classify Evidence
 
-Treat subagent reports as evidence, not conclusions. Verify their cited lines against the exact reviewed snapshot; in external review, this includes the shared head SHA. Merge duplicates only when they have the same root cause and requested fix, and preserve independently actionable fixes. A ponytail observation is not a blocker without a concrete current cost, absent caller, duplicated behavior, or scope/verification mismatch.
+Treat independent reports as evidence, not conclusions. Verify their cited lines against the exact reviewed snapshot; in external review, this includes the shared head SHA. Merge duplicates only when they have the same root cause and requested fix, and preserve independently actionable fixes. A simplification suggestion is not a blocker without a concrete current cost, absent caller, duplicated behavior, or scope/verification mismatch.
 
 If the snapshot changes, record the delta, preserve evidence for unaffected responsibility slices, and rerun only checks whose files, callers, invariants, or decisions changed. Restart the whole review only when the base, review mode, ownership, or a broad rewrite makes prior evidence unreliable. Never reuse evidence against a changed snapshot without this verification.
 

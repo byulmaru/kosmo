@@ -62,7 +62,7 @@ Return:
 
 1. the reviewed base SHA and head SHA, plus the head-to-head change summary;
 2. the implementation summary by responsibility and ordered execution flow;
-3. subagent coverage, relevant validations, and any disagreements or no-finding reports;
+3. independent checks, if used, relevant validations, and any disagreements or no-finding reports;
 4. which previous feedback is addressed;
 5. confirmed findings ordered by severity;
 6. suspicions and questions for the user;

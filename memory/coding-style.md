@@ -10,7 +10,6 @@
   - Expo Router/React Native Web/React Relay/Storybook: `memory/frontend-react-native.md` 진입점과 선택한 세부 문서
   - DB/Drizzle schema: `memory/database-design.md`와 `memory/database-migrations.md` 진입점, 선택한 세부 문서
   - 스크립트/CI/명령 실행: `memory/script.md` 진입점과 선택한 세부 문서
-  - 커밋/PR/스택 운영: `memory/commit-pr.md`를 먼저 읽고, 작업 상황에 맞는 하위 메모리를 추가로 읽는다.
   - 리뷰 작성 스타일: `memory/review-style.md` 진입점과 선택한 `memory/review/` 주제 문서
   - 리뷰 thread 운영: `memory/review-thread.md`
 

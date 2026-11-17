@@ -1,0 +1,4 @@
+interface:
+  display_name: 'KOSMO Review Coach'
+  short_description: 'Review KOSMO changes with exact evidence'
+  default_prompt: 'Use $gh-review-coach for a KOSMO implementation or external PR review.'

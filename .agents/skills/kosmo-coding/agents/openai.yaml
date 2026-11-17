@@ -1,7 +1,7 @@
 interface:
-  display_name: 'Kosmo Coding'
-  short_description: '필요한 Kosmo 코딩 지침만 라우팅'
-  default_prompt: 'Use $kosmo-coding to select only the Kosmo guidance relevant to this code, test, or review task.'
+  display_name: 'KOSMO Technical References'
+  short_description: 'Select KOSMO domain and tooling guidance'
+  default_prompt: 'Use this skill to locate KOSMO-specific technical and review criteria for the current repository change.'
 
 policy:
   allow_implicit_invocation: true

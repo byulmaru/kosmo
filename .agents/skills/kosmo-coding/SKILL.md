@@ -1,18 +1,23 @@
 ---
 name: kosmo-coding
-description: Route repository code, test, and review tasks to applicable Kosmo guidance. Use when changing or reviewing repository code or tests.
+description: Locate KOSMO-specific domain, API, runtime, design, and review criteria for repository changes.
 ---
 
-# Kosmo Coding
+# KOSMO Technical References
 
-Use this skill for repository code and test work. Choose guidance from the task's actual boundary; do not load unrelated domain or delivery material.
+Use this index for KOSMO-specific engineering constraints. Read the relevant entrypoints and selected topic files in full before relying on them; skip unrelated domain topics.
 
-## Route
+## Technical topics
 
-- Read the governing `AGENTS.md` files and the [coding-style entrypoint](../../../memory/coding-style.md).
-- Follow the [coding-style applicability router](../../../memory/coding-style.md): read Core Principles and each matching topic file, and skip topics outside the current boundary.
-- For a domain task, select the matching entrypoint (`graphql-style`, `temporal-workflows`, `frontend-react-native`, `database-design`, `database-migrations`, or `script`) and follow only its relevant topic links.
-- Use the design, OpenSpec, review, and tooling entrypoints when the task crosses those boundaries; they supplement this router.
-- Read selected files completely before relying on them. If the scope or validation path changes, select newly relevant guidance.
+- General implementation principles, tests, API/client contracts, core services, and runtime tooling: [`memory/coding-style.md`](../../../memory/coding-style.md) and the topic files it selects.
+- GraphQL resolver structure, object references, enums, Node IDs, and resolver style: [`memory/graphql-style.md`](../../../memory/graphql-style.md).
+- Temporal Workflow/Activity ownership, shared effect settlement, aliases, and post-commit starts: [`memory/temporal-workflows.md`](../../../memory/temporal-workflows.md).
+- Expo Router, React Native Web, React Relay, Storybook, and frontend behavior: [`memory/frontend-react-native.md`](../../../memory/frontend-react-native.md).
+- PostgreSQL, Drizzle schema, and migration constraints: [`memory/database-design.md`](../../../memory/database-design.md) and [`memory/database-migrations.md`](../../../memory/database-migrations.md).
+- Workspace scripts, CI, and command execution: [`memory/script.md`](../../../memory/script.md).
 
-For a documentation-only skill update, use the applicable repository and tooling guidance without loading unrelated product-domain topics. When assigning a bounded check, include the selected paths and why they apply.
+## Design, review, and authority
+
+- For UI/product design or Figma changes, read the applicable `docs/design/*.md` and use [`kosmo-design-audit`](../kosmo-design-audit/SKILL.md) when auditing a Figma source.
+- For KOSMO implementation or external PR reviews, use [`gh-review-coach`](../gh-review-coach/SKILL.md) and the matching topics from [`memory/review-style.md`](../../../memory/review-style.md).
+- When a change relies on an OpenSpec artifact or alters a product contract, consult [`memory/issue-openspec-workflow.md`](../../../memory/issue-openspec-workflow.md) for the authority boundary. OpenSpec remains optional session context.

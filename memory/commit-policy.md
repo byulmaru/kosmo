@@ -3,7 +3,6 @@
 ## Purpose
 
 - 커밋 단위, staging 범위, 커밋 메시지를 판단할 때 적용한다.
-- 기본 운영 규칙은 먼저 `memory/commit-pr.md`를 따른다.
 
 ## Commit Policy
 

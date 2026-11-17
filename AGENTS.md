@@ -7,14 +7,6 @@
 - Use the Question tool when an unresolved product, contract, security, rollout, ownership, or other materially different choice needs the user's decision. Treat explicit user instructions and existing canonical contract as settled input; do not repeat a question for routine in-scope choices.
 - Do not add a `Co-authored-by` trailer for the agent in commits or PR descriptions. The author of record is the human running the agent; agent attribution belongs in the PR body or Linear, not in the git trailer.
 
-## GitHub Stacked Pull Requests
-
-- Create every new pull request, including a standalone pull request, as a one-layer-or-larger Stack with the official `github/gh-stack` extension.
-- Before branch or pull request work, verify the extension with `gh extension list` and `gh stack --version`; if it is missing, install it for the current user. Use `gh stack`, never an ordinary unstacked PR fallback.
-- Start the first layer from the latest `main` with `gh stack init --base main <branch>` and add later layers from the current top with `gh stack add <branch>`. Feature and contract branches use their Linear issue ID; behavior-preserving refactors may use a descriptive branch.
-- Push and submit through `gh stack push` and `gh stack submit`. Diagnose command errors, fix recoverable setup, environment, or usage problems, and retry the official command. If the failure is unrecoverable, preserve and report the local/remote partial state and blocker. Do not bypass the extension with `gh pr create`, an unstacked PR, or manual Stack/base metadata edits.
-- Detailed branch, Stack, REST verification, Draft/Ready, auto-merge, merge-queue and closeout rules live in [`memory/git-pr-workflow.md`](memory/git-pr-workflow.md); rebase and reparent rules live in [`memory/git-stack-maintenance.md`](memory/git-stack-maintenance.md).
-
 ## CodeGraph In Linked Worktrees
 
 - For this repository, consider CodeGraph initialized only when the current worktree contains
@@ -27,7 +19,6 @@
 
 ## Tests
 
-- 테스트는 로컬에서 실행하지 않고 CI에서 실행한다. 로컬 테스트 실행을 PR 준비 조건으로 요구하지 않는다.
 - Test executed behavior: inputs, outputs, state changes, and failure paths. Do not substitute source-text checks for behavior; use [memory/coding/tests.md](memory/coding/tests.md) for the boundary between implementation inspection and legitimate observable text assertions.
 - Use standard linters/validators for syntax and configuration checks.
 
@@ -45,58 +36,22 @@
 ## Pull Request Completion
 
 - Completion means the scoped implementation, required documentation and focused validation are finished, including repairs for failures caused by the change. Continue through that work before reporting the first working patch as done; keep optional follow-ups separate from required completion.
-- For implementation requests, default delivery includes an official `gh-stack` PR and required CI checks passing on its latest head, even when the user does not explicitly ask for a PR; respect explicit local-only/no-PR requests. See [`memory/git-pr-workflow.md#ci-and-pr-completion`](memory/git-pr-workflow.md#ci-and-pr-completion) for timing and check handling.
-- Treat pull request readiness separately from optional OpenSpec session-harness housekeeping; housekeeping is not a
-  product decision or PR completion gate.
-- When practical, archive a used, completed, or superseded session harness in the same implementation PR with
-  `--skip-specs`; this preference does not create an archive-only issue or PR.
-- When a pull request's own scoped implementation and required verification are complete, mark it Ready for review unless the user explicitly requests that it remain a Draft.
-- OpenSpec is an optional, mutable session harness. Its tasks, scenarios, design notes and archive state do not add
-  product requirements, implementation obligations or PR completion gates.
-- Keep product behavior, security, compatibility and rollout requirements in canonical documents or Linear. If a
-  session harness exposes an unresolved decision in one of those areas, pause and ask the user before implementing it.
-- Do not add implementation details to canonical documents or Linear merely because a session harness contains them.
+- Required CI checks are part of PR completion and must pass on the latest PR head. Pending, failed, blocked, or unavailable checks are not passing evidence; report the exact unresolved state.
+- CI proves only the behavior covered by its checks. Keep production, deployment, and device evidence separate when those surfaces were not verified.
 
-## OpenSpec Workflow
+## Product Authority And OpenSpec
 
-- Before using OpenSpec, read `memory/issue-openspec-workflow.md`. Use it only when a short-lived session checklist,
-  handoff or verification plan materially helps; do not require it for every issue.
-- Canonical documents and Linear own business requirements, observable guarantees, scope and accepted security or
-  rollout constraints. An externally mandated interoperability, security or regulatory detail may be named with its
-  source and necessity; team implementation preferences remain in code and PRs. OpenSpec may summarize these for the
-  current session but cannot redefine or extend them.
-- Keep OpenSpec mutable and minimal: goal, non-goals, approved constraints, verification and progress are sufficient.
-  Remove or skip unnecessary tasks instead of implementing them to satisfy a checklist. Unfinished business requirements
-  remain pending or in handoff; they are not silently marked complete.
-- Before implementation, use the Question tool for unresolved requirements or choices that would change observable
-  behavior, public contracts, security, production or rollout, ownership, or the completion boundary. Continue with
-  routine implementation choices that stay within the user's request and existing contract.
-- If such a material decision appears after work has started, stop at that decision boundary, present the alternatives
-  and impact, and continue once it is settled. Do not promote a session-harness note into authority or reopen a settled
-  decision.
+- `docs/domain` and accepted ADRs own product behavior, permissions, state transitions, security, compatibility, and rollout contracts. `docs/design` owns visual structure, presentation, accessibility, and interaction design.
+- Linear records the problem, value, delivery scope, and outcome-level completion conditions. Code, tests, and PRs record implementation and verification evidence.
+- OpenSpec is an optional, mutable session aid. It does not add product requirements, override settled user or canonical decisions, or create implementation or PR completion gates.
+- Ask about unresolved choices that would change observable behavior, public contracts, security, rollout, ownership, or completion scope. Do not promote an OpenSpec note or implementation preference into a durable requirement.
 
 ## Memory
 
 - For repository implementation or review work, use [`.agents/skills/kosmo-coding/SKILL.md`](.agents/skills/kosmo-coding/SKILL.md) and its routing instructions.
-- For repository implementation or review work, read the applicable memory entrypoint and only the topic documents that shape the current task; read each selected document from beginning to end. Do not read unrelated topics or a full repository map by default. For docs-only or mechanical changes, inspect the affected guidance and validation instructions instead. If the scope changes, select and read newly applicable topics before continuing.
+- Read only the memory topics that apply to the current task, and read each selected topic fully. For docs-only or mechanical changes, inspect the affected guidance and validation instructions instead of unrelated domain topics.
 - When a task changes the assumptions documented in a relevant memory file, update that memory in the same change.
-- `memory/coding-style.md`: common coding router; follow its conditions to select directly applicable coding topics.
-- `memory/issue-openspec-workflow.md`: canonical/Linear business-requirement boundaries and optional OpenSpec
-  session-harness workflow.
-- `memory/frontend-react-native.md`: short entrypoint for Expo Router, React Native Web, React Relay, Storybook, and frontend UI topics.
-- `memory/review-style.md`: Korean review index for comment style, priority labels, and evidence policy; select and read the applicable `memory/review/` topics.
-- `memory/commit-pr.md`: short router for commit, branch, stacked PR, and PR writing policy. Read this first, then load the specific memory it points to.
-- `memory/commit-policy.md`: commit unit, staging scope, and commit message conventions.
-- `memory/git-pr-workflow.md`: official Git/GitHub CLI branch, commit, push, PR, and basic stacked PR workflow.
-- `memory/git-stack-maintenance.md`: official Git stack maintenance for rebase, reparent, squash-merge continuation, and force-push safety.
-- `memory/pr-writing.md`: Korean PR title/body, scope, Draft PR, and dependency explanation policy.
-- `memory/review-thread.md`: unresolved review thread handling and merge-readiness policy.
-- `memory/script.md`: short entrypoint for workspace scripts, command wrappers, and execution validation.
-- `memory/database-design.md`: short entrypoint for kosmo PostgreSQL/Drizzle schema design and review topics.
-- `memory/database-migrations.md`: short entrypoint for additive와 breaking DB 변경 분류, expand/transition/contract
-  이슈·PR·배포 순서, backfill과 contract gate.
-- `memory/graphql-style.md`: short entrypoint for GraphQL resolver structure, object refs, enum registration, Node ID, and resolver style.
-- `memory/temporal-workflows.md`: short entrypoint for Temporal Workflow structure, shared effect settlement, Activity aliases, and post-commit start.
+- `memory/coding-style.md` routes to directly applicable implementation topics. `memory/issue-openspec-workflow.md` records the canonical, Linear, and OpenSpec authority split.
 
 ## Design Docs
 
