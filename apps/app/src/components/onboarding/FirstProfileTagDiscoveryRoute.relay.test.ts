@@ -20,7 +20,11 @@ import type { FirstProfileTagDiscoveryRoute as RouteExport } from './FirstProfil
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const require = createRequire(import.meta.url);
-const analyticsEvents: Array<{ event: string; properties: Record<string, unknown> }> = [];
+const analyticsEvents: Array<{
+  accountId: string;
+  event: string;
+  properties: Record<string, unknown>;
+}> = [];
 const pendingHomeViews: Array<{ accountId: string | null; flowId: string | null }> = [];
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
@@ -64,8 +68,11 @@ mockModule('@/components/profile/ProfileListItemContent', {
 mockModule('@/components/profile/ProfileBlockAction', { ProfileBlockAction: 'ProfileBlockAction' });
 mockModule('@/analytics/client', {
   trackAnalytics: () => undefined,
-  trackAnalyticsForAccount: (event: string, properties: Record<string, unknown>) =>
-    analyticsEvents.push({ event, properties }),
+  trackAnalyticsForAccount: (
+    accountId: string,
+    event: string,
+    properties: Record<string, unknown>,
+  ) => analyticsEvents.push({ accountId, event, properties }),
   setPendingOnboardingHomeView: (accountId: string | null, flowId: string | null) =>
     pendingHomeViews.push({ accountId, flowId }),
 });
