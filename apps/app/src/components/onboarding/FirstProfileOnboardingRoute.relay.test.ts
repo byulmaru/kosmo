@@ -34,6 +34,20 @@ const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
 const require = createRequire(import.meta.url);
 const mockModule = (specifier: string, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+const analyticsEvents: Array<{
+  accountId: string;
+  event: string;
+  properties: Record<string, unknown>;
+}> = [];
+mockModule('@/analytics/client', {
+  trackAnalytics: () => undefined,
+  trackAnalyticsForAccount: (
+    accountId: string,
+    event: string,
+    properties: Record<string, unknown>,
+  ) => analyticsEvents.push({ accountId, event, properties }),
+  setPendingOnboardingHomeView: () => undefined,
+});
 type Request = {
   name: string;
   actor: string | null;
@@ -313,11 +327,13 @@ async function next(step: Exclude<FirstProfileStep, 'review'> = 'handle') {
   await act(async () => flow.next(step, () => navigate(destination[step])));
 }
 async function finish() {
-  await act(async () => flow.complete(() => navigate('complete')));
+  const currentStep = displayedStep() as FirstProfileStep;
+  const action = currentStep === 'review' ? 'continue' : 'start_now';
+  await act(async () => flow.complete(currentStep, action, () => navigate('complete')));
 }
 async function skip(step: 'details' | 'tags' | 'posting') {
   const destination = { details: 'tags', tags: 'posting', posting: 'review' } as const;
-  await act(async () => flow.skip(() => navigate(destination[step])));
+  await act(async () => flow.skip(step, () => navigate(destination[step])));
 }
 async function createFirst() {
   await change({ handle: 'spring' });
@@ -350,6 +366,7 @@ beforeEach(async () => {
   });
   globals.__KOSMO_CHANNEL__ = 'dev';
   requests = [];
+  analyticsEvents.length = 0;
   autoFollowEnvironment = null;
   cachedAutoFollowPolicy = null;
   storedProfileId = null;
@@ -441,6 +458,45 @@ describe('first profile step mutations', () => {
     assert.equal(flow.createdProfile?.id, 'profile-1');
     assert.equal(storedProfileId, 'profile-1');
     assert.equal(requests.length, 0);
+  });
+
+  it('records profile creation once across a failed selection and selection retry', async () => {
+    await change({ handle: 'spring' });
+    await next();
+    await resolve('FirstProfileOnboardingCreateMutation', {
+      createProfile: { profile: profile() },
+    });
+    await resolve(
+      'FirstProfileOnboardingSelectMutation',
+      { selectProfile: { profile: { id: 'profile-1' } } },
+      [{ message: 'selection unavailable' }],
+    );
+    assert.equal(flow.result.kind, 'error');
+    await next();
+    await selected();
+
+    const createdEvents = analyticsEvents.filter(({ event }) => event === 'profile_created');
+    const selectedEvents = analyticsEvents.filter(({ event }) => event === 'profile_selected');
+    const createOperations = analyticsEvents.filter(
+      ({ event, properties }) =>
+        event === 'first_profile_onboarding_operation' && properties.operation === 'create_profile',
+    );
+    const selectOperations = analyticsEvents.filter(
+      ({ event, properties }) =>
+        event === 'first_profile_onboarding_operation' && properties.operation === 'select_profile',
+    );
+    assert.equal(createdEvents.length, 1);
+    assert.equal(selectedEvents.length, 1);
+    assert.equal(createdEvents[0]?.accountId, 'account-1');
+    assert.equal(createOperations.length, 1);
+    assert.equal(createOperations[0]?.properties.result, 'succeeded');
+    assert.deepEqual(
+      selectOperations.map(({ properties }) => [properties.result, properties.operation_attempt]),
+      [
+        ['failed', 1],
+        ['succeeded', 2],
+      ],
+    );
   });
 
   it('creates and selects on handle immediate completion without saving optional inputs', async () => {

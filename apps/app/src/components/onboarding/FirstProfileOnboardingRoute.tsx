@@ -29,6 +29,7 @@ import { getPublicConfig } from '@/config/public';
 import { captureHandledError } from '@/observability/sentry';
 import { useRelayActor, useRelayAuthLifecycleKey } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
+import { createFirstProfileOnboardingAnalytics } from './firstProfileOnboardingAnalytics';
 import { initialFirstProfileDraft, prepareFirstProfileStep } from './firstProfileOnboardingState';
 import type { PropsWithChildren } from 'react';
 import type { ImageUploadStage } from '@/components/media/imageUploadErrors';
@@ -41,6 +42,10 @@ import type { FirstProfileOnboardingProfile_profile$key } from './__generated__/
 import type { FirstProfileOnboardingQuery } from './__generated__/FirstProfileOnboardingQuery.graphql';
 import type { FirstProfileOnboardingSaveMutation } from './__generated__/FirstProfileOnboardingSaveMutation.graphql';
 import type { FirstProfileOnboardingSelectMutation } from './__generated__/FirstProfileOnboardingSelectMutation.graphql';
+import type {
+  FirstProfileOnboardingAnalytics,
+  FirstProfileOperationToken,
+} from './firstProfileOnboardingAnalytics';
 import type { FirstProfileOnboardingScreenProps } from './FirstProfileOnboardingScreen';
 import type {
   FirstProfileDraft,
@@ -54,9 +59,13 @@ type Identity = { id: string; handle: string };
 type Result = { kind: 'idle' } | { kind: 'success' } | { kind: 'error'; message: string };
 type FlowValue = {
   busy: boolean;
-  complete: (onComplete: () => void) => void;
+  complete: (
+    step: FirstProfileStep,
+    action: 'start_now' | 'continue',
+    onComplete: () => void,
+  ) => void;
   next: (step: Exclude<FirstProfileStep, 'review'>, onSaved: () => void) => void;
-  skip: (onSkipped: () => void) => void;
+  skip: (step: Exclude<FirstProfileStep, 'handle' | 'review'>, onSkipped: () => void) => void;
   summary?: FirstProfileOnboardingScreenProps['summary'];
   createdProfile: Identity | null;
   profileSelected: boolean;
@@ -68,6 +77,7 @@ type FlowValue = {
   retryImage: (field: ImageField) => void;
   result: Result;
   setDraft: (value: FirstProfileDraft) => void;
+  analytics: FirstProfileOnboardingAnalytics;
 };
 const FlowContext = createContext<FlowValue | null>(null);
 
@@ -195,7 +205,7 @@ export function FirstProfileOnboardingRoute({ children }: PropsWithChildren) {
     return status === 'error' ? <SessionConfirmationError /> : <Redirect href="/" />;
   }
   return (
-    <FirstProfileFlow key={`${authLifecycleKey}:${accountId}:${sessionId}`}>
+    <FirstProfileFlow accountId={accountId} key={`${authLifecycleKey}:${accountId}:${sessionId}`}>
       <RouteBoundary
         loading={<Splash label="프로필을 확인하고 있어요." />}
         title="프로필을 불러오지 못했어요"
@@ -285,9 +295,14 @@ function FirstProfileQuery({ children }: PropsWithChildren) {
   return <FlowContext.Provider value={{ ...flow, summary }}>{children}</FlowContext.Provider>;
 }
 
-function FirstProfileFlow({ children }: PropsWithChildren) {
+function FirstProfileFlow({ accountId, children }: PropsWithChildren<{ accountId: string }>) {
   const { resetCurrentActor, selectedProfileId } = useRelayActor();
-  const pendingSelection = useRef<{ profileId: string; onSelected: () => void } | null>(null);
+  const [analytics] = useState(() => createFirstProfileOnboardingAnalytics(accountId));
+  const pendingSelection = useRef<{
+    profileId: string;
+    onSelected: () => void;
+    token: FirstProfileOperationToken;
+  } | null>(null);
   const [draft, setDraft] = useState(initialFirstProfileDraft);
   const [images, setImages] = useState<Images>(() => ({
     avatar: createProfileEditRouteImage(),
@@ -336,8 +351,12 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     }
     pendingSelection.current = null;
     if (selectedProfileId !== pending.profileId) {
+      analytics.finishOperation(pending.token, 'failed', 'response');
       return;
     }
+
+    analytics.profileSelected(pending.profileId, pending.token);
+    analytics.finishOperation(pending.token, 'succeeded');
 
     const targetProfileId = getPublicConfig('firstProfileAutoFollowProfileId');
     if (targetProfileId) {
@@ -362,7 +381,7 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
       }
     }
     pending.onSelected();
-  }, [commitFollow, selectedProfileId]);
+  }, [analytics, commitFollow, selectedProfileId]);
 
   const fail = (message: string) => setResult({ kind: 'error', message });
   const uploadField = (
@@ -370,14 +389,23 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     field: ImageField,
     image: ProfileEditRouteImage,
     onReady: (image: ProfileEditRouteImage) => void,
+    actionSequence?: number,
+    onUploadFailed?: () => void,
   ) => {
     const uploading = retryProfileEditImageUpload(image);
     const asset = uploading.asset;
     if (!asset) {
       return;
     }
+    const uploadToken = analytics.beginOperation('details', 'upload_profile_image', actionSequence);
     setImages((current) => ({ ...current, [field]: uploading }));
-    const failed = (error: unknown, stage: ImageUploadStage) => {
+    const failed = (
+      error: unknown,
+      stage: ImageUploadStage,
+      errorType: 'network' | 'response' | 'media' | 'unknown',
+    ) => {
+      analytics.finishOperation(uploadToken, 'failed', errorType);
+      onUploadFailed?.();
       const uploadError = asImageUploadError(error, stage);
       reportImageUploadError(uploadError);
       setMediaBusy(false);
@@ -401,7 +429,7 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
       onCompleted: (response, responseErrors) => {
         const issued = response?.issueMediaUploadUrl;
         if (responseErrors?.length || !issued) {
-          failed(new Error('Image issuance failed'), 'issue');
+          failed(new Error('Image issuance failed'), 'issue', 'response');
           return;
         }
         setMediaBusy(true);
@@ -417,9 +445,10 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
                   media?.id !== issued.media.id ||
                   media.state !== 'READY'
                 ) {
-                  failed(new Error('Image completion failed'), 'complete');
+                  failed(new Error('Image completion failed'), 'complete', 'response');
                   return;
                 }
+                analytics.finishOperation(uploadToken, 'succeeded');
                 const ready = completeProfileEditImageUpload(
                   uploading,
                   uploading.generation,
@@ -428,13 +457,13 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
                 setImages((current) => ({ ...current, [field]: ready }));
                 onReady(ready);
               },
-              onError: (error) => failed(error, 'complete'),
+              onError: (error) => failed(error, 'complete', 'network'),
             });
           },
-          (error: unknown) => failed(error, 'transfer'),
+          (error: unknown) => failed(error, 'transfer', 'media'),
         );
       },
-      onError: (error) => failed(error, 'issue'),
+      onError: (error) => failed(error, 'issue', 'network'),
     });
   };
 
@@ -442,12 +471,17 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     step: 'details' | 'tags' | 'posting',
     onSaved: () => void,
     requestImages = images,
+    actionSequence?: number,
+    existingSaveToken?: FirstProfileOperationToken,
   ) => {
     if (!createdProfile || selectedProfileId !== createdProfile.id) {
       return;
     }
+    const saveToken =
+      existingSaveToken ?? analytics.beginOperation(step, 'save_profile', actionSequence);
     const prepared = prepareFirstProfileStep(draft, step);
     if (!prepared.ok) {
+      analytics.finishOperation(saveToken, 'failed', 'validation');
       setErrors(prepared.errors);
       fail('입력한 내용을 확인해 주세요.');
       return;
@@ -457,8 +491,20 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
         (field) => requestImages[field].asset && !requestImages[field].mediaId,
       );
       if (field) {
-        uploadField(createdProfile, field, requestImages[field], (ready) =>
-          saveStep(step, onSaved, { ...requestImages, [field]: ready }),
+        uploadField(
+          createdProfile,
+          field,
+          requestImages[field],
+          (ready) =>
+            saveStep(
+              step,
+              onSaved,
+              { ...requestImages, [field]: ready },
+              actionSequence,
+              saveToken,
+            ),
+          actionSequence,
+          () => analytics.finishOperation(saveToken, 'failed', 'media'),
         );
         return;
       }
@@ -479,9 +525,11 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
       },
       onCompleted: (response) => {
         if (response?.updateProfile?.profile.id !== createdProfile.id) {
+          analytics.finishOperation(saveToken, 'failed', 'response');
           fail('프로필을 저장하지 못했어요. 다시 시도하거나 지금은 건너뛸 수 있어요.');
           return;
         }
+        analytics.finishOperation(saveToken, 'succeeded');
         const tags = value.tags;
         if (step === 'tags' && tags) {
           setDraft((current) => ({ ...current, tags, tagInput: '' }));
@@ -489,11 +537,18 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
         setResult({ kind: 'idle' });
         onSaved();
       },
-      onError: () => fail('프로필을 저장하지 못했어요. 다시 시도하거나 지금은 건너뛸 수 있어요.'),
+      onError: () => {
+        analytics.finishOperation(saveToken, 'failed', 'network');
+        fail('프로필을 저장하지 못했어요. 다시 시도하거나 지금은 건너뛸 수 있어요.');
+      },
     });
   };
 
-  const creationFailed = (cause: unknown) => {
+  const creationFailed = (
+    cause: unknown,
+    token: FirstProfileOperationToken,
+    fallbackErrorType: 'network' | 'response' = 'response',
+  ) => {
     const record = (value: unknown): value is Record<string, unknown> =>
       typeof value === 'object' && value !== null;
     const source = record(cause) && record(cause.source) ? cause.source : null;
@@ -506,24 +561,29 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
       (error) => record(error) && record(error.extensions) && error.extensions.field === 'handle',
     );
     if (record(handleError) && record(handleError.extensions)) {
+      analytics.finishOperation(token, 'failed', 'validation');
       setErrors({
         handle:
           handleError.extensions.code === 'CONFLICT'
             ? '이미 사용 중인 핸들이에요.'
             : '핸들을 확인해 주세요.',
       });
+    } else {
+      analytics.finishOperation(token, 'failed', fallbackErrorType);
     }
     fail('프로필을 만들지 못했어요. 입력한 내용은 유지되니 다시 시도해 주세요.');
   };
 
-  const createAndSelect = (onSelected: () => void) => {
-    const handle = localProfileHandleSchema.safeParse(draft.handle);
-    if (!handle.success) {
-      setErrors({ handle: handle.error.issues[0]?.message ?? '핸들을 확인해 주세요.' });
-      return;
-    }
+  const createAndSelect = (
+    step: FirstProfileStep,
+    actionSequence: number,
+    onSelected: () => void,
+  ) => {
     const select = (identity: Identity) => {
+      const selectToken = analytics.beginOperation(step, 'select_profile', actionSequence);
       if (selectedProfileId === identity.id) {
+        analytics.profileSelected(identity.id, selectToken);
+        analytics.finishOperation(selectToken, 'succeeded');
         onSelected();
         return;
       }
@@ -531,19 +591,33 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
         variables: { profileId: identity.id },
         onCompleted: (response, responseErrors) => {
           if (responseErrors?.length || response?.selectProfile?.profile.id !== identity.id) {
+            analytics.finishOperation(selectToken, 'failed', 'response');
             fail('프로필을 선택하지 못했어요. 다시 시도해 주세요.');
             return;
           }
           if (resetCurrentActor(identity.id)) {
-            pendingSelection.current = { profileId: identity.id, onSelected };
+            pendingSelection.current = { profileId: identity.id, onSelected, token: selectToken };
             void writeSelectedProfile(identity.id);
+          } else {
+            analytics.finishOperation(selectToken, 'failed', 'response');
+            fail('프로필을 선택하지 못했어요. 다시 시도해 주세요.');
           }
         },
-        onError: () => fail('프로필을 선택하지 못했어요. 다시 시도해 주세요.'),
+        onError: () => {
+          analytics.finishOperation(selectToken, 'failed', 'network');
+          fail('프로필을 선택하지 못했어요. 다시 시도해 주세요.');
+        },
       });
     };
     if (createdProfile) {
       select(createdProfile);
+      return;
+    }
+    const createToken = analytics.beginOperation(step, 'create_profile', actionSequence);
+    const handle = localProfileHandleSchema.safeParse(draft.handle);
+    if (!handle.success) {
+      analytics.finishOperation(createToken, 'failed', 'validation');
+      setErrors({ handle: handle.error.issues[0]?.message ?? '핸들을 확인해 주세요.' });
       return;
     }
     commitCreate({
@@ -551,14 +625,16 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
       onCompleted: (response, responseErrors) => {
         const identity = response?.createProfile?.profile;
         if (!identity) {
-          creationFailed(responseErrors);
+          creationFailed(responseErrors, createToken);
           return;
         }
+        analytics.profileCreated(identity.id, createToken);
+        analytics.finishOperation(createToken, 'succeeded');
         setCreatedProfile(identity);
         setDraft((current) => ({ ...current, handle: identity.handle }));
         select(identity);
       },
-      onError: creationFailed,
+      onError: (cause) => creationFailed(cause, createToken, 'network'),
     });
   };
 
@@ -566,10 +642,11 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
     <FlowContext.Provider
       value={{
         busy,
-        complete: (onComplete) => {
+        complete: (step, action, onComplete) => {
           if (busy) {
             return;
           }
+          const actionSequence = analytics.action(step, action);
           setErrors({});
           setResult({ kind: 'idle' });
           const finish = () => {
@@ -579,23 +656,25 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
           if (createdProfile && selectedProfileId === createdProfile.id) {
             finish();
           } else {
-            createAndSelect(finish);
+            createAndSelect(step, actionSequence, finish);
           }
         },
         next: (step, onSaved) => {
           if (busy) {
             return;
           }
+          const actionSequence = analytics.action(step, step === 'handle' ? 'next' : 'save');
           setErrors({});
           setResult({ kind: 'idle' });
           if (step === 'handle') {
-            createAndSelect(onSaved);
+            createAndSelect(step, actionSequence, onSaved);
           } else {
-            saveStep(step, onSaved);
+            saveStep(step, onSaved, images, actionSequence);
           }
         },
-        skip: (onSkipped) => {
+        skip: (step, onSkipped) => {
           if (!busy && createdProfile && selectedProfileId === createdProfile.id) {
+            analytics.action(step, 'skip');
             setErrors({});
             setResult({ kind: 'idle' });
             onSkipped();
@@ -657,9 +736,17 @@ function FirstProfileFlow({ children }: PropsWithChildren) {
         },
         retryImage: (field) => {
           if (!busy && createdProfile) {
-            uploadField(createdProfile, field, images[field], () => setResult({ kind: 'idle' }));
+            const actionSequence = analytics.action('details', 'retry');
+            uploadField(
+              createdProfile,
+              field,
+              images[field],
+              () => setResult({ kind: 'idle' }),
+              actionSequence,
+            );
           }
         },
+        analytics,
       }}
     >
       {children}

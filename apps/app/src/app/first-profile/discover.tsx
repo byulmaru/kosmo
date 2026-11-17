@@ -10,8 +10,9 @@ export default function FirstProfileDiscoveryRoute() {
   }
   return (
     <FirstProfileTagDiscoveryRoute
-      empty={<Redirect href="/home" />}
+      analytics={flow.analytics}
       onContinue={() => router.replace('/home')}
+      onNoSavedTags={() => router.replace('/home')}
       profileId={flow.createdProfile.id}
     />
   );
