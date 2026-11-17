@@ -37,6 +37,7 @@ minimumReleaseAgeExclude:
   - '@vitest/utils@4.1.12'
   # Allow only the requested Fedify security releases past the release-age gate.
   - '@fedify/fedify@2.4.5'
+  - '@fedify/interaction-controls@2.4.5'
   - '@fedify/postgres@2.4.0'
   - '@fedify/uri-template@2.4.5'
   - '@fedify/vocab-runtime@2.4.5'

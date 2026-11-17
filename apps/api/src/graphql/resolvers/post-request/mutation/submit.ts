@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   db,
   first,
@@ -17,9 +17,11 @@ import {
   mediaUploadWithMetadataWorkflow,
   mediaUploadWorkflow,
 } from '@kosmo/core/temporal/media-upload';
+import { postCreateIdentities, quotePostCreateInput } from '@kosmo/core/temporal/post-admission';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import {
   POST_REQUEST_SEARCH_ATTRIBUTES,
+  postQuoteRequestAdmitDefinition,
   PostRequestStatus,
   postRequestWorkflow,
 } from '@kosmo/core/temporal/post-request';
@@ -29,6 +31,7 @@ import {
   WorkflowNotFoundError,
 } from '@temporalio/client';
 import { and, eq, inArray } from 'drizzle-orm';
+import stringify from 'fast-json-stable-stringify';
 import { formatRelativeHandle } from '@/profile/identity';
 import { rethrowPostWorkflowFailure } from '../../post/mutation/errors';
 import { prepareLocalPostInput } from '../../post/mutation/prepare-local-input';
@@ -389,8 +392,13 @@ const startPostRequest = async (
   preparedInput: Awaited<ReturnType<typeof prepareLocalPostInput>>,
   submittedMedia: readonly SubmittedPostMedia[],
   analyticsPlatform?: PostAnalyticsPlatform,
+  waitForPublication = false,
 ): Promise<PostRequestState> => {
-  const requestId = randomUUID();
+  const quote =
+    preparedInput.repostSourceId === undefined
+      ? null
+      : postCreateIdentities(quotePostCreateInput(preparedInput));
+  const requestId = quote?.postId ?? randomUUID();
   const snapshot: PostRequestSnapshot = {
     input: {
       ...preparedInput,
@@ -400,6 +408,14 @@ const startPostRequest = async (
         mediaId,
       })),
     },
+    ...(quote === null
+      ? {}
+      : {
+          quoteContentId: quote.contentId,
+          submissionFingerprint: createHash('sha256')
+            .update(stringify({ input: preparedInput, media: submittedMedia }))
+            .digest('hex'),
+        }),
     requestId,
     submittedAt: new Date().toISOString(),
     ...(analyticsPlatform ? { analyticsPlatform } : {}),
@@ -409,26 +425,84 @@ const startPostRequest = async (
     status: PostRequestStatus.QUEUED,
   };
 
+  const options = {
+    args: [snapshot] as [PostRequestSnapshot],
+    typedSearchAttributes: [
+      {
+        key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.ownerAccountId, type: 'KEYWORD' },
+        value: snapshot.input.accountId,
+      },
+      {
+        key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.profileId, type: 'KEYWORD' },
+        value: snapshot.input.profileId,
+      },
+      {
+        key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.status, type: 'KEYWORD' },
+        value: state.status,
+      },
+    ] satisfies NonNullable<WorkflowStartOptions<Workflow>['typedSearchAttributes']>,
+  };
   try {
+    if (quote !== null) {
+      let admitted: PostRequestState;
+      try {
+        admitted = await runWorkflow(postQuoteRequestAdmitDefinition, {
+          ...options,
+          mode: 'update-with-start',
+          updateArgs: [snapshot.submissionFingerprint!],
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        });
+      } catch (error) {
+        if (
+          !(error instanceof WorkflowExecutionAlreadyStartedError) ||
+          error.workflowId !== postRequestWorkflow.workflowIdFromArgs(snapshot) ||
+          error.workflowType !== postRequestWorkflow.workflow
+        ) {
+          throw error;
+        }
+        admitted = await runWorkflow(postRequestWorkflow, {
+          ...options,
+          mode: 'execute',
+          returnExistingResult: true,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        });
+      }
+      if (admitted.snapshot.submissionFingerprint !== snapshot.submissionFingerprint) {
+        throw new ValidationError(
+          'Quote admission payload does not match its original submission',
+          { field: 'admissionId' },
+        );
+      }
+      if (waitForPublication) {
+        admitted = await runWorkflow(postRequestWorkflow, {
+          ...options,
+          mode: 'execute',
+          returnExistingResult: true,
+          workflowIdConflictPolicy: 'USE_EXISTING',
+          workflowIdReusePolicy: 'REJECT_DUPLICATE',
+        });
+      }
+      if (admitted.status === PostRequestStatus.FAILED) {
+        throw ApplicationFailure.nonRetryable(
+          admitted.error?.message ?? 'Quote publication failed',
+          admitted.error?.code ?? 'INTERNAL_SERVER_ERROR',
+          admitted.error?.field,
+        );
+      }
+      if (admitted.status === PostRequestStatus.CANCELLED) {
+        throw new ValidationError('Quote admission was cancelled; start a new Quote', {
+          field: 'admissionId',
+        });
+      }
+      return admitted;
+    }
     await runWorkflow(postRequestWorkflow, {
-      args: [snapshot],
+      ...options,
       mode: 'start',
       workflowIdConflictPolicy: 'FAIL',
       workflowIdReusePolicy: 'REJECT_DUPLICATE',
-      typedSearchAttributes: [
-        {
-          key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.ownerAccountId, type: 'KEYWORD' },
-          value: snapshot.input.accountId,
-        },
-        {
-          key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.profileId, type: 'KEYWORD' },
-          value: snapshot.input.profileId,
-        },
-        {
-          key: { name: POST_REQUEST_SEARCH_ATTRIBUTES.status, type: 'KEYWORD' },
-          value: state.status,
-        },
-      ] satisfies NonNullable<WorkflowStartOptions<Workflow>['typedSearchAttributes']>,
     });
   } catch (error) {
     return rethrowPostWorkflowFailure(error);
@@ -498,12 +572,23 @@ export async function submitLocalPost(
     publicationMetadataByMediaId,
   );
 
-  if (publications.some(({ status }) => status === 'processing')) {
-    return {
-      postId: null,
-      profileId: null,
-      request: await startPostRequest(preparedInput, submittedMedia, analyticsPlatform),
-    };
+  const processing = publications.some(({ status }) => status === 'processing');
+  if (processing || preparedInput.repostSourceId !== undefined) {
+    const request = await startPostRequest(
+      preparedInput,
+      submittedMedia,
+      analyticsPlatform,
+      !processing,
+    );
+    if (!processing && request.status === PostRequestStatus.PUBLISHED && request.result) {
+      return { postId: request.result.postId, profileId: preparedInput.profileId, request: null };
+    }
+    return { postId: null, profileId: null, request };
+  }
+  if (preparedInput.admissionId !== undefined) {
+    throw new ValidationError('Quote admission requires its original Source', {
+      field: 'admissionId',
+    });
   }
 
   const args: PostCreateWorkflowArgs = {

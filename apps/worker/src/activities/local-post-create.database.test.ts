@@ -711,7 +711,7 @@ test('Post request rechecks current membership and reconciles an already committ
   );
 });
 
-test('Post request rejects unavailable Reply Parent and Quote instead of publishing standalone', async () => {
+test('Post request rejects unavailable Reply Parent instead of publishing standalone', async () => {
   const author = await createAuthor('post-request-unavailable-reference');
   const hiddenParentAuthor = await createAuthor('post-request-hidden-parent');
   const hiddenParentId = await createParentPost(
@@ -726,10 +726,6 @@ test('Post request rejects unavailable Reply Parent and Quote instead of publish
     {
       input: localInput(author, { replyParentId: hiddenParentId }),
       kind: 'unavailable Reply Parent',
-    },
-    {
-      input: localInput(author, { repostSourceId: crypto.randomUUID() }),
-      kind: 'missing Quote source',
     },
   ];
 

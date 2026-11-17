@@ -22,6 +22,7 @@ import type { LocalPostInput } from '@kosmo/core/services';
 import type { SessionContext } from '@/context';
 
 export type LocalPostMutationInput = {
+  admissionId?: string | null;
   actorProfileId?: { readonly id: string } | null;
   bodyText: string;
   contentWarning?: string | null;
@@ -77,6 +78,7 @@ export const localPostMediaArraySchema = z.array(z.unknown()).max(4, {
 
 const localPostInputBaseSchema = z
   .object({
+    admissionId: z.string().nullish(),
     bodyText: z.string(),
     contentWarning: z.string().nullish(),
     media: z.array(z.unknown()).nullish(),
@@ -296,6 +298,7 @@ export async function prepareLocalPostInput(
 
   return {
     accountId: ctx.session.accountId,
+    ...(input.admissionId == null ? {} : { admissionId: input.admissionId }),
     bodyText,
     contentWarning: contentWarning || null,
     media: media.map(({ altText, mediaId }) => ({

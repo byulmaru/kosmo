@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   Bookmarks,
   db,
@@ -292,6 +293,7 @@ test('Block 실패 후 재시도와 상호 차단에서 자신의 exact 관계�
     await route.fallback();
   });
   await page.goto(`/@${target.profile!.handle}`);
+  await expect(page.getByText('Mutual block content', { exact: true })).toBeVisible();
   const cancelled = await openBlockConfirmation(page);
   await expect(cancelled.getByRole('button', { name: '취소', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
@@ -555,7 +557,7 @@ for (const targetKind of ['Local', 'Remote'] as const) {
         'addReaction(input: { postId: $post, type: "🎉" }) { reaction { id } }',
         'repostPost(input: { sourceId: $post }) { repost { id } }',
         'createPost(input: { bodyText: "blocked reply", visibility: PUBLIC, replyParentId: $post }) { post { id } }',
-        'createPost(input: { bodyText: "blocked quote", visibility: PUBLIC, repostSourceId: $post }) { post { id } }',
+        `createPost(input: { admissionId: "${Date.now()}:${randomUUID()}", bodyText: "blocked quote", visibility: PUBLIC, repostSourceId: $post }) { post { id } }`,
       ];
       for (const mutation of mutations) {
         const isFollow = mutation.startsWith('followProfile');

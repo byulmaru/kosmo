@@ -18,6 +18,7 @@ export { operationalNotificationDeliveryWorkflow } from './operational-notificat
 export { reprocessLocalPostContentsWorkflow } from './post-content-reprocessing';
 export { postCreateWorkflow } from './post-create';
 export { postCreateWorkflow as postCreateWorkflowV2 } from './post-create';
+export { postDeleteMutationWorkflow } from './post-delete-mutation';
 export { postRequestWorkflow } from './post-request';
 export { profileBlockWorkflow } from './profile-block';
 export { profileFollowPairWorkflow } from './profile-follow-pair';
@@ -26,6 +27,8 @@ export { profileMigrationMoveWorkflow } from './profile-migration';
 export { profileUnblockWorkflow } from './profile-unblock';
 export { profileUpdateEffectsWorkflow } from './profile-update';
 export { pushNotificationDeliveryWorkflow } from './push-notification';
+export { postQuoteOwnerWorkflow } from './quote-owner';
+export { activitypubQuoteResolutionWorkflow } from './quote-resolution';
 export { reactionCreateEffectsWorkflow } from './reaction-create';
 export { reactionDeleteEffectsWorkflow } from './reaction-delete';
 export { remotePostCreateWorkflow } from './remote-post-create';

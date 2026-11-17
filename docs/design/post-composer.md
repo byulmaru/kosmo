@@ -174,6 +174,7 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   재시도나 제거 상태로 되돌리지 않는다. 처리 정책은 [Media 객체](../domain/objects/media.md)를 따른다.
 - 접수 대기 중에는 button에 spinner와 `게시 중` 상태를 표시하고 본문·Content Warning·Visibility와 닫기를 잠근다.
 - 서버 오류·GraphQL 오류·network 오류는 기존 일반 오류 표현을 사용하고, 작성 내용을 보존한 채 Composer 입력을 다시 활성화한다. 사용자가 수동 재제출하면 서버가 새 `requestId`를 발급하는 별도 요청이 된다. 접수 뒤 실패한 요청은 `Local Post 제출과 요청 상태`의 `새 글 작성` 정책을 따른다.
+- Quote는 같은 작성 시도로 재시도하며, 비동기 미디어 처리 중에도 기존 요청에 합류한다. 다른 입력은 거절하고 최초 접수된 시도는 긴 미디어 처리 중에도 유지한다. 결과 미확인 시 draft와 identity를 유지하며, 성공·접수 확인 또는 명시적 폐기 뒤에만 다음 draft가 새 identity를 만든다. 시도 만료·입력 불일치는 새 Quote 작성이 필요함을 안내한다.
 
 ## 공통 Visibility
 
@@ -242,6 +243,9 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   같은 close 요청으로 처리한다. dirty 상태에서는 확인 뒤 닫거나 Parent를 전환하고, Reply 제출 pending
   상태에서는 현재 작성과 active Parent를 유지한다.
 - 접수 전 제출 실패 시 열린 modal·fullscreen surface, direct Parent 맥락, 본문, Content Warning, Visibility와 Media 작성 상태를 유지한다.
+  Quote의 결과 미확인 상태에서는 같은 작성 시도로 재시도할 수 있으며, 확인된 성공 뒤에만 다음 draft가 새
+  작성 시도를 만든다. 서버가 시도 만료나 payload 불일치를 명시적으로 거부한 경우에는 현재 draft와 작성
+  시도를 보존한 채 새 Quote 작성이 필요하다고 안내한다.
 - selected Profile, direct Parent 또는 Relay Environment가 바뀌면 새 문맥의 첫 Composer commit부터 본문,
   Content Warning, Visibility, Media, error와 pending을 초기 상태로 시작한다. Content
   Warning은 새 direct Parent 값에서 다시 한 번 초기화하며, 이전 Parent에서 수정한 값을 이어받지 않는다. 이전
@@ -324,6 +328,10 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   편집·삭제·제출과 일반 Post·Quote 빈 초기값을 확인한다.
 - 일반 Post와 Reply의 Content Warning 입력·제출, Parent Content Warning 초기값, 수정·제거, Unicode code point 기준 합산 500자 검증과
   Reply-open discard/reset/error 유지 상태를 확인한다.
+- Quote 첫 제출이 하나의 작성 시도를 만들고, 결과 미확인 뒤 재시도에서 같은 시도를 유지하는지, 성공 뒤
+  다음 draft가 새 시도를 시작하는지 실행으로 확인한다. 일반 Post/Reply의 기존 제출 동작도 유지해야 한다.
+  Quote network·timeout·미생성 응답은 결과 미확인 문구를 표시하고 draft를 유지하며, 서버가 시도 만료나
+  payload 불일치를 명시적으로 거부하면 명확한 재작성 안내를 표시해야 한다.
 - Home, Profile, Thread와 Reply Parent preview에서 같은 `Post.id`의 reveal·다시 가리기 상태가 공유되고 surface
   remount로 초기화되지 않으며, 서로 다른 Post와 Sensitive Media 상태는 독립적인지 확인한다.
 - 모든 지원 Reply surface에서 이미지 선택·업로드·미리보기·제거·재시도, Alt Text, Sensitive Media, 이미지별 AI

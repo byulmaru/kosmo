@@ -17,6 +17,7 @@ export type PostCreateActivityInput = {
   input: LocalPostInput | ActivityPubPostCreateInput;
   postId: string;
   revalidateAuthorization?: boolean;
+  requestId?: string;
 };
 
 export type PostAnalyticsPlatform = 'web' | 'native';
@@ -46,6 +47,7 @@ export type PostCreateActivityResult =
     };
 
 export type PostCreateWorkflowArgs = {
+  readonly quoteAdmittedAt?: string;
   readonly analyticsPlatform?: PostAnalyticsPlatform;
   readonly input: LocalPostInput | ActivityPubPostCreateInput;
   readonly mode?: 'publish' | 'import';
