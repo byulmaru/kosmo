@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
@@ -8,7 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, textStyles, typography } from '@/theme/tokens';
+import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
 import { PostVisibilityIcon } from './PostVisibilityIcon';
@@ -292,19 +292,19 @@ export function PostSourcePreview({
           )}
         </PostDetailBackground>
         {interactive ? (
-          <PresentationLink
-            accessibilityLabel="원문 게시글 보기"
-            href={sourcePostHref}
-            style={{ paddingTop: authorTopInset }}
-          >
-            <Text style={[styles.timestamp, { color: theme.foregroundSecondary }]}>
-              {formatTimelineTimestamp(source.createdAt)}
-            </Text>
-          </PresentationLink>
+          <View style={{ paddingTop: authorTopInset }}>
+            <PresentationLink
+              accessibilityLabel="원문 게시글 보기"
+              href={sourcePostHref}
+              style={styles.timestampLink}
+            >
+              <TimestampText>{formatTimelineTimestamp(source.createdAt)}</TimestampText>
+            </PresentationLink>
+          </View>
         ) : (
-          <Text style={[styles.timestamp, { color: theme.foregroundSecondary }]}>
-            {formatTimelineTimestamp(source.createdAt)}
-          </Text>
+          <View style={styles.timestampLink}>
+            <TimestampText>{formatTimelineTimestamp(source.createdAt)}</TimestampText>
+          </View>
         )}
       </PostDetailBackground>
       {source.content && interactive ? (
@@ -461,12 +461,13 @@ function presentationMedia(
 
 function Author({ profile, showAvatar }: { profile: AuthorProfile; showAvatar: boolean }) {
   return (
-    <View style={[styles.author, !showAvatar && styles.authorWithoutAvatar]}>
+    <View style={styles.author}>
       {showAvatar ? (
         <Avatar
           imageUri={profile.avatar?.url}
           label={profile.displayName || profile.relativeHandle}
           size={40}
+          style={styles.authorAvatar}
         />
       ) : null}
       <ProfileNameBlock profile={profile} style={styles.authorText} />
@@ -477,14 +478,14 @@ function Author({ profile, showAvatar }: { profile: AuthorProfile; showAvatar: b
 const styles = StyleSheet.create({
   root: { gap: spacing.sm, minWidth: 0 },
   author: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: spacing.sm,
     maxWidth: '100%',
     minHeight: 44,
     minWidth: 0,
   },
-  authorWithoutAvatar: { alignItems: 'flex-start' },
+  authorAvatar: { alignSelf: 'center' },
   authorText: { flex: -1, minWidth: 0 },
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { alignItems: 'flex-start', flex: 1, minWidth: 0 },
@@ -503,14 +504,6 @@ const styles = StyleSheet.create({
     minWidth: 44,
   },
   visibilityIconAlignment: { height: textStyles.uiCopyM.lineHeight, justifyContent: 'center' },
-  timestamp: {
-    fontFamily: fontFamilies.ui,
-    minHeight: 44,
-    minWidth: 44,
-    paddingTop: 12,
-    textAlign: 'right',
-    ...typography.xsm,
-  },
   sourceBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
   presentationLink: { maxWidth: '100%', minWidth: 0 },

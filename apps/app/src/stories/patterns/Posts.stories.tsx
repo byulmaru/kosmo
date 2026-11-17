@@ -5326,6 +5326,33 @@ export const VisibilityListRows: Story = {
       'href',
       `/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}`,
     );
+    const sourceAuthorName = sourcePreview
+      .querySelector<HTMLAnchorElement>(
+        `a[role="link"][href="/${visibilityOwnershipSourcePost.profile.relativeHandle}"]`,
+      )
+      ?.querySelector<HTMLElement>('[dir="auto"]');
+    const sourceTimestampLink = within(sourcePreview).getByRole('link', {
+      name: '원문 게시글 보기',
+    });
+    const sourceTimestamp = sourceTimestampLink.querySelector<HTMLElement>('[dir="auto"]');
+    expect(sourceAuthorName).toBeTruthy();
+    expect(sourceTimestamp).toBeTruthy();
+    const sourceTimestampStyle = window.getComputedStyle(sourceTimestamp!);
+    expect(sourceTimestampStyle.fontSize).toBe(publicTimestampStyle.fontSize);
+    expect(sourceTimestampStyle.lineHeight).toBe(publicTimestampStyle.lineHeight);
+    expect(sourceTimestampStyle.fontWeight).toBe(publicTimestampStyle.fontWeight);
+    expect(sourceTimestampLink.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(sourceTimestampLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    const sourceAuthorRange = sourcePreview.ownerDocument.createRange();
+    sourceAuthorRange.selectNodeContents(sourceAuthorName!);
+    const sourceTimestampRange = sourcePreview.ownerDocument.createRange();
+    sourceTimestampRange.selectNodeContents(sourceTimestamp!);
+    expect(
+      Math.abs(
+        sourceTimestampRange.getBoundingClientRect().top -
+          sourceAuthorRange.getBoundingClientRect().top,
+      ),
+    ).toBeLessThanOrEqual(3);
 
     const repostRow = canvas.getByTestId('visibility-pure-repost-row');
     const repostSourceRow = within(repostRow).getByTestId('post-list-standard-row');
