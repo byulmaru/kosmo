@@ -150,3 +150,102 @@ Source/Quote 간 외부 delivery 전체 순서도 보장 범위에서 제외한�
 main → #961 → #940 Stack이다. 원래 candidate branch는 비교용으로 보존하고 원격 기존 head는 유지한다.
 원래 #961/#940 head가 각각 새 후보의 ancestor이므로 이력 rewrite 없이 fast-forward 반영할 수 있다.
 다만 원격 #940 base 변경·원격 CI 및 Stack push/submit은 별도 사용자 승인 후 작업이다.
+
+### #962 private Source owner 이식의 focused 검증 (2026-10-12)
+
+이 계층은 #940 `9987966eb324f6449a40afecdfc41a6eeeabe651`과 기존 #962 이력을 병합한 작업 트리다.
+기존 #962의 직접 consent writer·transaction callback을 복사하지 않고, 인증된 Source 준비 DTO와
+공통 Quote owner의 fenced transaction을 사용했다. 신규 private Source·Content·Media와 consent는 같은
+commit/rollback 경계에 있다. 기존 Public/Unlisted hydration과 signed-fetch Public fallback은 유지한다.
+
+- signed follower/key 일치 테스트는 최초 실행에서 null/APPROVED mismatch로 실패했다.
+  이식 후 private·Public·URI winner·Follow 해제·audience·동시 중복·revoke/CAS focused 12/12 PASS, exit 0.
+- 실제 PostgreSQL·Temporal owner focused는 13개 child와 parent를 합쳐 Node summary 14/14 PASS, exit 0.
+  Source·Media commit, Query timeout rollback/SDK retry, CAS revoke, Follow 해제, Query 후 Follow 해제,
+  inactive Profile/Instance, URI author/visibility mismatch 및 commit 응답 유실 복구를 실행했다.
+  Source 삭제의 실제 bulk revoke와 Quote Content 보존, 생성 effect startup retry의 동일 ID,
+  성공 child의 closed AlreadyStarted 검증은 SDK 예외 mock을 사용했다. 추가 native Temporal child에서는
+  실제 postCreateEffectsWorkflow 완료 후 동일 ID의 REJECT_DUPLICATE 시작이 SDK AlreadyStarted를 던지고,
+  production effect Activity 재호출이 이를 처리하는 것을 확인했다. notification Activity 전달 경계만 stub하며
+  각 kind별 1회인 총 3회 이후 추가 effect 실행이 없었다.
+  prepared DTO 뒤 삽입된 동일 author/FOLLOWERS URI winner를 연결하며 Source SHARE·Query를 유지한 상태에서
+  실제 Source delete owner를 동시에 시작했다. PostgreSQL Lock 대기와 delete 미완료를 확인하고 fence를
+  해제한 뒤 binding commit → bulk REVOKED 및 작성 본문/Media 보존을 검증했다.
+- History의 준비 DTO에 미리 할당된 Source Post ID를 현재 연결 ID와 대조하고, fresh proof/CAS
+  reconciliation에 그 ID가 유지되는 경우에만 생성 effect를 재개한다. 응답 유실 테스트에서 Source·Media는
+  하나이고 생성 effect도 한 번 호출됐다. 응답 유실 뒤 fresh proof가 일시 실패(NOOP retryable)하고
+  이후 valid proof로 다시 처리되는 경우에도 이미 commit된 Source 생성 effect는 한 번 정산됐다.
+  이 정산은 Quote 재승인이나 Source 접근권 변경을 수행하지 않는다. status/approval URI만으로 소유권을 추론하지 않는다.
+- 전체 inbound Quote 최초 실행은 44 PASS/1 FAIL이었다. 실패는 구형 fixture가 원래 target 없이 DB에
+  직접 만든 PENDING 상태였다. owner input에 원래 Source binding을 명시한 focused 재실행은 1/1 PASS다.
+  이 수정은 원래 binding이 사라진 운영 데이터의 자동 복구 허용을 뜻하지 않는다.
+- canonical followers URI가 없는 stored Actor의 signed Public fallback 추가 테스트는 1/1 PASS, exit 0.
+- URL-only FEP 승인 참조의 미저장 Source는 승인 증거 → Local Follower 서명 조회로 통일하고,
+  Follower 없는 Public도 조회 없이 PENDING으로 유지한다는 2026-10-12 사용자 결정을 반영했다.
+  기존 generic Source preflight는 실제 owner 경로의 3개 진단 테스트에서 Source URI 1회씩 관측돼
+  RED였다. 좁은 materialization guard를 추가한 최종 production owner focused는 10/10 PASS, exit 0.
+  unknown stored author·no follower·no key의 zero unsigned/lookup, selected signed identity,
+  Follower 없는 Public PENDING/no Source, approved embedded Public, no-approval URL-only Public·legacy·
+  signed Public fallback을 검증했다. Public fixture에 Follower를 추가하지 않았다.
+  로그는 `prod924-962-unsigned-red.log`, `prod924-962-policy-focused.log`이며, scoped fix artifact는
+  `/private/tmp/prod924-962-policy-fix-against-checkpoint.diff`다. Worker runtime은 이 수정에서 바꾸지 않았다.
+- Worker/Fedify TypeScript와 scoped ESLint·Prettier 및 diff whitespace 검증은 exit 0이었다.
+  전체 패키지 aggregate, API·원격 CI와 운영 acceptance는 별도 최종 기록에 기재한다.
+
+로그: `/private/tmp/prod924-962-red.log`, `prod924-962-private-third.log`,
+`prod924-962-owner-private-native.log`, `prod924-962-pending-fixture-final.log`,
+`prod924-962-signed-public-final.log`, `prod924-962-worker-type-native.log`,
+`prod924-962-fedify-type-final5.log`, `prod924-962-eslint-native.log`, `prod924-962-prettier-native.log`.
+프로덕션 history replay·migration inventory·writer fleet drain·강제 Terminate 복구와 외부 exactly-once를
+이번 focused 실행의 PASS로 표시하지 않는다.
+
+### #962 최종 전체 패키지 검증
+
+2026-10-12, 위 merge 작업 트리에서 Core 전체(unit110/migration19/smoke/services257),
+API(unit44/integration346 PASS, 기존 외부 storage1 SKIP), Fedify(unit372/Consumer1)는 exit0이었다.
+API 최초 실행의 DTO visibility 타입 오류는 DIRECT 제외 narrowing으로 수정한 뒤 전체 재검증했다.
+최종 root ESLint/Prettier/syncpack 및 recursive lint/type/schema 검증은 모두 exit0이다.
+Root behavioral tooling test8도 PASS다. migration은 기존 #940 정책 migration 그대로이며 새 schema/state는 없다.
+
+초기 Worker 전체 실행194/194는 후속 effect retry 수정 이전 기록이다. 수정 뒤 private focused13/13을
+실행했다. 최종 전체 Worker 재실행은 unit10 + Workflow42 + DB69 + migration21 + Quote54,
+합계196/196 PASS·exit0였다. 후속 계약 경계의 진단 테스트/수정과 원격 CI는 이 결과와 별도로 기록한다. sandbox EPERM으로 Temporal의 loopback
+listen이 차단된 실행은 제품 실패나 PASS로 처리하지 않고 서버 실행 권한으로 다시 실행했다.
+App/전체 Web E2E는 #962에서 다시 실행한 것으로 표시하지 않는다. Composer/UI는 부모998과 동일하지만
+부모의 PASS를 이 계층 전체 PASS로 복사하지 않는다. 새 원격 HEAD의 Actions 결과를 따로 확인한다.
+
+전체 로그: `/private/tmp/prod924-962-core-full.log`, `prod924-962-api-final.log`,
+`prod924-962-fedify-frozen-final.log`, `prod924-962-root-lint-frozen.log`,
+`prod924-962-recursive-frozen.log`, `prod924-962-root-test-final.log`,
+`prod924-962-worker-frozen-final.log`.
+
+### 확정된 URL-only FEP 승인 조회 경계의 재검증
+
+기존 production owner의 MATERIALIZE→VERIFY 경로를 계측한 진단3건은 Source URI의 비인증 조회1회를
+발견해 RED였다. Audience가 없는 URL-only 참조에서는 조회 전 Public/FOLLOWERS 구분이 불가능하다.
+사용자는 issuer 증거→저장된 작성자→Local Follower 서명 조회로 통일하고, 적격 Follower가 없는
+Public/Unlisted 원문도 PENDING에 유지하는 정책을 확정했다. 이를 canonical/ADR/runtime에 정렬했다.
+수정 뒤 실제 owner focused10/10이 PASS이며, 적격 private Source는 unsigned0/signed1,
+미저장 작성자·Follower 없음·key 없음·Public no-follower는 Source fetch0/PENDING을 확인했다.
+embedded Public 및 승인 없는 URL-only/legacy 확보와 signed Public fallback도 통과했다.
+
+정책 수정 뒤 전체 Fedify374/374·Consumer1/1, recursive lint/type/schema와 root lint는 exit0이었다.
+Root lint 최초 실패는 review 도구가 만든 미추적 `.serena/project.yml`의 formatting만이었고
+로컬 파일을 포맷한 후 재실행했다. 이 파일은 PR에 포함하지 않는다.
+
+전체 Worker 최초 최종 실행의 quote aggregate는53PASS/2FAIL이었다. 두 FAIL은 parent와 같은 child이며,
+기존 `drain barrier prevents … normal renew` 테스트의 새 Run polling에서 NOT_OPEN Query가
+CONTINUED_AS_NEW(status6) 이전 Run을 조회해 QueryRejectedError를 전파했다. 해당 fixture/runtime은
+부모998과 동일하며, write fence/DB 변경 실패가 아니다. 이전196전체 PASS와 이번 nativeclosedWorkflow
+focused14/14 PASS를 이 실패의 PASS로 복사하지 않는다. 같은 코드 전체 Worker를 별도 부하 없이 다시
+실행한 결과는 다음 최종 기록에 명시한다. 이 timing 가능성은 기록으로 유지한다.
+
+로그: `/private/tmp/prod924-962-unsigned-red.log`, `prod924-962-policy-focused.log`,
+`prod924-962-fedify-policy-final.log`, `prod924-962-worker-policy-final.log`,
+`prod924-962-worker-policy-final2.log`, `prod924-962-root-policy-final2.log`,
+`prod924-962-recursive-policy-final.log`. task review와 최종 통합 review의 scoped 재검토는 모두
+알려진 정책 blocker 해소·추가 blocking defect 없음으로 판정했다. 원격 CI는 아직 별도 미실행이다.
+
+최종 동일 코드 Worker 단독 재실행은 unit10 + Workflow42 + DB69 + migration21 + Quote55,
+합계197/197 PASS·exit0였다. normal renew도 실제 실행에서 PASS였다. fixture와 write fence는 수정하지
+않았으며 최초 QueryRejected(status6) polling timing 기록은 알려진 테스트 위험으로 유지한다.

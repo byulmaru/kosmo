@@ -9,8 +9,15 @@ Update handler는 enqueue와 결과 대기만 수행하며, DB 변경 Activity�
 Source 삭제는 Source owner의 제한된 다중 자원 transaction이다. Source 삭제와 연결된 여러 Quote의
 철회를 하나의 commit으로 유지한다. 전체 Quote를 하나의 Workflow에 모으지 않는다.
 
-원격 Note/QuoteAuthorization의 승인 증거 조회는 읽기 전용 Activity다. Source materialize는 별도
-Activity이며 consent를 변경하지 않는다. 검증된 proof와 기존 status·approval URI·Source/author/object
+원격 Note/QuoteAuthorization의 승인 증거 조회는 Source와 consent를 변경하지 않는 Activity다.
+일반 Public/Unlisted Source materialize는 별도 Activity이며 consent를 변경하지 않는다.
+#962의 인증된 Source 조회는 현재 issuer proof로 author를 확인하고, established Local Follower와
+그 Profile의 signing key를 선택한다. exact Source URI·단일 author·canonical followers audience를
+검증한 뒤 Content·Media·identity·timestamp만 포함한 serializable DTO를 반환한다. 키와 Fedify 객체는
+History에 넣지 않으며 projection의 기존 remote Mention Profile refresh는 transaction 밖에서 실행한다.
+private Source는 Quote owner write Activity가 같은 transaction에서 Source·Content·Media 저장과 consent
+CAS를 수행한다. 일반 hydration의 private 허용 범위를 넓히지 않는다. 인증된 조회가 Public/Unlisted
+Note를 반환하는 기존 fallback도 이 준비 DTO와 owner 저장을 사용한다. 검증된 proof와 기존 status·approval URI·Source/author/object
 identity snapshot을 History에 받은 뒤 write Activity를 실행한다. 새 consent 상태·CAS 컬럼·generation
 컬럼은 추가하지 않는다. 저장 모델은 공통 consent 두 컬럼과 기존 `repostSourceId`다.
 
@@ -23,9 +30,18 @@ identity snapshot을 History에 받은 뒤 write Activity를 실행한다. 새 c
 
 1. Quote owner가 command를 FIFO로 dequeue한다. 처리 중 command ID도 중복 admission에서 제외한다.
 2. 필요하면 Source를 materialize하고 원격 승인 증거를 읽는다. 네트워크 조회 중 DB transaction을 유지하지 않는다.
+   미저장 Source의 URL-only FEP 승인 참조는 generic materialization을 건너뛴다. 공개 범위를 알아내기 위한
+   비인증 probe 없이 fresh issuer proof → stored author → eligible Active Local Follower/key → signed fetch를
+   읽기 Activity에서 수행한다. Public·Unlisted여도 Follower/key가 없으면 PENDING을 유지한다. embedded
+   Public과 승인 참조 없는 URL-only·legacy materialization은 기존 경계를 사용한다. 이는 공개 원문의
+   자동 확보보다 조회 전 인증 경계의 일관성을 우선하는 승인된 제품 선택이다.
 3. Write Activity는 Source `FOR SHARE` → Quote `FOR UPDATE` 순서로 잠근다.
 4. 열린 owner의 현재 Run ID·작업 token·WRITE phase를 deadline이 있는 Query로 확인한다. 실패하면 rollback한다.
 5. 같은 transaction에서 기존 CAS와 Source 현재 상태·결속을 다시 검사한 뒤 commit한다.
+   #962의 신규 private Source는 Source 저장/URI winner 확인 → Source 공유 잠금 → Quote 잠금 → Query
+   fence → 현재 author/Profile/Instance/선택된 Follow 재확인 → consent CAS 순서다. Query 실패·CAS 불일치·
+   Follow 해제·URI winner author/visibility 불일치이면 신규 Source·Content·Media까지 rollback한다.
+   최초 미해결 원격 grant는 owner에서 PENDING을 먼저 기록하며 실패가 그 상태를 승인으로 바꾸지 않는다.
 6. Workflow가 token을 폐기하고 drain Activity로 미완료 transaction을 기다린 후 다음 명령으로 진행한다.
 7. commit 결과는 Update caller에게 반환한다. 외부 effect는 Workflow에서 별도로 재시도한다.
 
@@ -49,7 +65,15 @@ Activity timeout은 외부 DB rollback을 뜻하지 않는다. 이전 Activity�
 DB commit 응답이 유실되면 같은 값만 보고 과거 commit 소유권을 추론하지 않는다. Workflow가 다시 현재
 proof를 조회하고 새 fenced transaction으로 검증한 현재 상태를 reconciliation한다. 외부 effect ID는
 command ID·상태·approval binding에서 결정한다. 동일 상태 effect의 재시도는 같은 ID를 사용하고 다른
-상태 effect는 ID를 구분한다. 원격 서버의 중복 처리까지 포함한 exactly-once delivery는 보장하지 않는다.
+상태 effect는 ID를 구분한다. 새 private Source의 deferred create effect는 commit 후
+`post-create-effects:<Source Post ID>` identity로 시작한다. 시작 오류의 재시도에서도 같은 identity를 쓴다.
+commit 응답 유실 뒤에는 History의 준비 DTO에 미리 할당된 Source Post ID와 실제 연결 Source ID가
+일치하는 경우에만 생성 effect identity를 재검증 결과에 보존한다. 이미 commit된 Source 생성 effect는
+현재 승인 proof의 일시 조회 실패와 분리해 동일 Source Workflow로 재개한다. 조회 실패를 새 grant로
+취급하거나 consent/Source 노출 상태를 변경하지 않는다. 이 구분으로 이후 유효한 proof를 재조회하더라도
+Source·Media 중복이나 생성 effect 누락을 피한다.
+동일 status·approval URI만으로 과거 commit 소유권을 추론하지 않는다. 원격 서버의
+중복 처리까지 포함한 exactly-once delivery는 보장하지 않는다.
 
 정상 종료와 Continue-As-New는 admission을 닫고 이미 대기 중인 Update들을 완료한 뒤 drain한다.
 Continue-As-New는 Source recovery ID·Source URI binding·재사용 URI 이력·pending 재검증을 전달한다.
@@ -137,7 +161,8 @@ content identity가 변하지 않는 것을 검증했다. 실제 production hist
 rolling overlap은 허용하지 않는다. admission freeze → 구형 Workflow/Activity 완료 → 열린 DB session·구형 process
 확인 → 새 owner admission 재개 순서가 운영 전제다. SDK shutdown만으로 이 전제를 대체하지 않는다.
 
-두 PR은 main → #961 → #940 순서의 계층이다. 기존 PR head와 최신 main 이력은 보존하며, 공유 파일은
+세 PR은 main → #961 → #940 → #962 순서의 계층이다. #962는 PROD-793 private Source 수신을 공통 owner에
+이식하며 새 consent writer·Workflow·DB 컬럼을 추가하지 않는다. 기존 PR head와 최신 main 이력은 보존하며, 공유 파일은
 policy·local 기능 hunk와 공통 safety hunk로 분리한다. 통합 `3122940aa`의 PASS를 계층 검증으로 재사용하지 않는다.
 
 검증 명령과 실제 결과는 [계층 검증 기록](../../testing/prod-924-pr-split-validation.md)에 구분해 기록한다.
