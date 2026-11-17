@@ -12,14 +12,8 @@ import type { SettingsLinkRowProps } from './SettingsLinkRow';
 const require = createRequire(import.meta.url);
 let platformOS: 'ios' | 'web' = 'web';
 let reducedMotion = false;
-let pressableState: { hovered: boolean; pressed: boolean } = {
-  hovered: false,
-  pressed: false,
-};
 const timingCalls: Array<{ duration: number; target: string }> = [];
 const pendingAnimations: Array<{ complete: () => void; stopped: boolean }> = [];
-let stopAnimationCalls = 0;
-let setValueCalls = 0;
 const theme = {
   borderSubtle: '#eeeeee',
   foregroundPrimary: '#111111',
@@ -34,11 +28,9 @@ const theme = {
 class AnimatedColorMock {
   constructor(public value: string) {}
   setValue(value: string) {
-    setValueCalls += 1;
     this.value = value;
   }
   stopAnimation(callback?: () => void) {
-    stopAnimationCalls += 1;
     callback?.();
   }
 }
@@ -63,7 +55,7 @@ mock.module('react-native', {
     processColor: () => undefined,
     Animated: {
       Color: AnimatedColorMock,
-      View: 'AnimatedView',
+      createAnimatedComponent: <P>(component: ComponentType<P>) => component,
       timing: (
         value: { setValue: (next: unknown) => void },
         config: { duration: number; toValue: unknown },
@@ -91,20 +83,8 @@ mock.module('react-native', {
         return platformOS;
       },
     },
-    Pressable: ({
-      children,
-      ...props
-    }: {
-      children?: ReactElement | ((state: { hovered: boolean; pressed: boolean }) => ReactElement);
-      [key: string]: unknown;
-    }) =>
-      createElement(
-        'Pressable',
-        props,
-        typeof children === 'function' ? children(pressableState) : children,
-      ),
+    Pressable: 'Pressable',
     StyleSheet: {
-      absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
       create: <T>(styles: T) => styles,
       flatten: (style: unknown) =>
         Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean)) : style,
@@ -155,11 +135,8 @@ before(async () => {
 beforeEach(() => {
   platformOS = 'web';
   reducedMotion = false;
-  pressableState = { hovered: false, pressed: false };
   timingCalls.length = 0;
   pendingAnimations.length = 0;
-  stopAnimationCalls = 0;
-  setValueCalls = 0;
 });
 
 afterEach(async () => {
@@ -196,10 +173,11 @@ describe('SettingsLinkRow', () => {
     const description = rendered('Text').find((node) => node.children[0] === '현재 공개 범위');
     assert.ok(label);
     assert.ok(description);
-    const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
-    const feedbackStyle = animatedStyle('backgroundColor');
-    assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
-    assert.equal(animatedStyle('borderColor').borderWidth, 1);
+    const rowStyle = flattenStyle(row.props.style);
+    assert.equal(colorValue(rowStyle.backgroundColor), '#fff8dc');
+    assert.equal(rowStyle.borderWidth, 1);
+    assert.equal(colorValue(rowStyle.borderColor), '#9a7800');
+    assert.equal(colorValue(rowStyle.borderBottomColor), '#9a7800');
     assert.equal(rowStyle.minHeight, 64);
     assert.equal(rowStyle.width, '100%');
     const chevronWrapper = rendered('View').find(
@@ -222,9 +200,10 @@ describe('SettingsLinkRow', () => {
     const row = byTestId('selected-parent-settings-row');
     assert.equal(row.props['aria-current'], undefined);
     assert.deepEqual(row.props.accessibilityState, { selected: true });
-    const feedbackStyle = animatedStyle('backgroundColor');
-    assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
-    assert.equal(colorValue(animatedStyle('borderColor').borderColor), '#9a7800');
+    const style = flattenStyle(row.props.style);
+    assert.equal(colorValue(style.backgroundColor), '#fff8dc');
+    assert.equal(colorValue(style.borderColor), '#9a7800');
+    assert.equal(colorValue(style.borderBottomColor), '#9a7800');
   });
 
   it('compact theme link exposes its accessible name and current value', async () => {
@@ -238,15 +217,14 @@ describe('SettingsLinkRow', () => {
     });
 
     const row = byTestId('compact-theme-row');
-    const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
-    const item = rendered('View').find((node) => flattenStyle(node.props.style).minHeight === 40);
+    const rowStyle = flattenStyle(row.props.style);
     const value = rendered('Text').find((node) => node.children[0] === '시스템');
-    assert.ok(item);
     assert.ok(value);
     assert.equal(row.props.accessibilityLabel, '화면 설정 열기, 시스템');
     assert.equal(rowStyle.minHeight, 40);
-    assert.equal(item.props.style.paddingVertical, 4);
-    assert.equal(item.props.style.paddingHorizontal, 16);
+    assert.equal(rowStyle.borderWidth, 1);
+    assert.equal(colorValue(rowStyle.borderColor), 'transparent');
+    assert.equal(colorValue(rowStyle.borderBottomColor), '#eeeeee');
     assert.equal(flattenStyle(value.props.style).color, '#666666');
     assert.deepEqual(texts(), ['화면', '시스템']);
   });
@@ -320,22 +298,47 @@ describe('SettingsLinkRow', () => {
     assert.equal(rendered('Link')[0].props.rel, 'noopener noreferrer');
   });
 
-  it('selected row feedback uses selected, hover, then pressed precedence', async () => {
-    await render({
-      accessibilityLabel: '선택된 설정 링크',
-      href: '/settings/profile',
-      label: '프로필 설정',
-      selected: true,
-      testID: 'selected-settings-row',
+  for (const selected of [false, true]) {
+    it(`row events use pressed > hover > selected background with selected=${selected}`, async () => {
+      await render({
+        accessibilityLabel: '설정 링크',
+        href: '/settings/profile',
+        label: '프로필 설정',
+        selected,
+        testID: 'interaction-settings-row',
+      });
+
+      const assertColors = (background: string) => {
+        const style = rowStyle('interaction-settings-row');
+        assert.equal(colorValue(style.backgroundColor), background);
+        assert.equal(colorValue(style.borderColor), selected ? '#9a7800' : 'transparent');
+        assert.equal(colorValue(style.borderBottomColor), selected ? '#9a7800' : '#eeeeee');
+      };
+      assertColors(selected ? '#fff8dc' : 'transparent');
+
+      await interact('interaction-settings-row', 'onHoverIn');
+      assertColors('#f4f4f4');
+      assert.ok(
+        timingCalls.some(({ duration, target }) => duration === 120 && target === '#f4f4f4'),
+      );
+
+      await interact('interaction-settings-row', 'onPressIn');
+      assertColors('#e8e8e8');
+      assert.ok(
+        timingCalls.some(({ duration, target }) => duration === 120 && target === '#e8e8e8'),
+      );
+
+      await interact('interaction-settings-row', 'onPressOut');
+      assertColors('#f4f4f4');
+      await interact('interaction-settings-row', 'onPressIn');
+      await interact('interaction-settings-row', 'onHoverOut');
+      assertColors('#e8e8e8');
+      await interact('interaction-settings-row', 'onPressOut');
+      assertColors(selected ? '#fff8dc' : 'transparent');
     });
+  }
 
-    const idleStyle = animatedStyle('backgroundColor');
-    assert.equal(colorValue(idleStyle.backgroundColor), '#fff8dc');
-    assert.equal(colorValue(animatedStyle('borderColor').borderColor), '#9a7800');
-    assert.equal(idleStyle.transitionDuration, undefined);
-  });
-
-  it('Web row feedback uses fast or selected timing and native omits CSS transitions', async () => {
+  it('selection animates for 200ms and reduced motion applies colors immediately', async () => {
     await render({
       accessibilityLabel: '설정 링크',
       href: '/settings',
@@ -344,7 +347,7 @@ describe('SettingsLinkRow', () => {
       testID: 'motion-settings-row',
     });
 
-    let style = animatedStyle('backgroundColor');
+    let style = rowStyle('motion-settings-row');
     assert.equal(style.transitionDuration, undefined);
 
     await act(async () =>
@@ -358,8 +361,9 @@ describe('SettingsLinkRow', () => {
         }),
       ),
     );
+    assert.ok(timingCalls.some(({ duration, target }) => duration === 200 && target === '#fff8dc'));
     completePendingAnimations();
-    const selectedStyle = animatedStyle('backgroundColor');
+    const selectedStyle = rowStyle('motion-settings-row');
     assert.equal(colorValue(selectedStyle.backgroundColor), '#fff8dc');
     assert.equal(selectedStyle.transitionDuration, undefined);
 
@@ -370,17 +374,24 @@ describe('SettingsLinkRow', () => {
           accessibilityLabel: '설정 링크',
           href: '/settings',
           label: '설정',
-          selected: true,
+          selected: false,
           testID: 'motion-settings-row',
         }),
       ),
     );
-    style = animatedStyle('backgroundColor');
-    assert.equal(colorValue(style.backgroundColor), '#fff8dc');
+    style = rowStyle('motion-settings-row');
+    assert.equal(colorValue(style.backgroundColor), 'transparent');
+    assert.equal(colorValue(style.borderColor), 'transparent');
+    assert.equal(colorValue(style.borderBottomColor), '#eeeeee');
     assert.equal(style.transitionDuration, undefined);
 
-    await act(async () => renderer?.unmount());
-    renderer = null;
+    await act(async () => byTestId('motion-settings-row').props.onPressIn());
+    assert.equal(colorValue(rowStyle('motion-settings-row').backgroundColor), '#e8e8e8');
+    await act(async () => byTestId('motion-settings-row').props.onPressOut());
+    assert.equal(colorValue(rowStyle('motion-settings-row').backgroundColor), 'transparent');
+  });
+
+  it('native row uses press events without hover feedback or CSS transitions', async () => {
     platformOS = 'ios';
     await render({
       accessibilityLabel: '설정 링크',
@@ -389,16 +400,19 @@ describe('SettingsLinkRow', () => {
       selected: true,
       testID: 'motion-settings-row',
     });
-    style = flattenStyle(
-      byTestId('motion-settings-row').props.style({ hovered: false, pressed: false }),
-    );
+    const style = rowStyle('motion-settings-row');
     assert.equal(style.transitionDuration, undefined);
     assert.equal(style.transitionProperty, undefined);
     assert.equal(style.transitionTimingFunction, undefined);
+    await interact('motion-settings-row', 'onHoverIn');
+    assert.equal(colorValue(rowStyle('motion-settings-row').backgroundColor), '#fff8dc');
+    await interact('motion-settings-row', 'onPressIn');
+    assert.equal(colorValue(rowStyle('motion-settings-row').backgroundColor), '#e8e8e8');
+    await interact('motion-settings-row', 'onPressOut');
+    assert.equal(colorValue(rowStyle('motion-settings-row').backgroundColor), '#fff8dc');
   });
 
   it('hover 중 선택 상태가 바뀌어도 border 전이는 양방향 200ms를 유지한다', async () => {
-    pressableState = { hovered: true, pressed: false };
     const props = {
       accessibilityLabel: '설정 링크',
       href: '/settings',
@@ -407,6 +421,7 @@ describe('SettingsLinkRow', () => {
       testID: 'selected-transition-row',
     } satisfies SettingsLinkRowProps;
     await render(props);
+    await interact('selected-transition-row', 'onHoverIn');
 
     timingCalls.length = 0;
     await act(async () => {
@@ -417,6 +432,9 @@ describe('SettingsLinkRow', () => {
       timingCalls.some(({ duration, target }) => duration === 200 && target === '#9a7800'),
       true,
     );
+    const selectedStyle = rowStyle('selected-transition-row');
+    assert.equal(colorValue(selectedStyle.borderColor), '#9a7800');
+    assert.equal(colorValue(selectedStyle.borderBottomColor), '#9a7800');
 
     timingCalls.length = 0;
     await act(async () => {
@@ -427,8 +445,11 @@ describe('SettingsLinkRow', () => {
       timingCalls.some(({ duration, target }) => duration === 200 && target === 'transparent'),
       true,
     );
-    const finalStyle = animatedStyle('borderColor');
+    const finalStyle = rowStyle('selected-transition-row');
     assert.equal(colorValue(finalStyle.borderColor), 'transparent');
+    assert.equal(colorValue(finalStyle.borderBottomColor), '#eeeeee');
+    assert.equal(colorValue(finalStyle.backgroundColor), '#f4f4f4');
+    assert.ok(timingCalls.some(({ duration, target }) => duration === 200 && target === '#eeeeee'));
   });
 
   it('focus 진입은 진행 중 feedback 전이를 중단하거나 끝점으로 점프시키지 않는다', async () => {
@@ -444,9 +465,8 @@ describe('SettingsLinkRow', () => {
     await act(async () => {
       renderer?.update(createElement(SettingsLinkRow, { ...props, selected: true }));
     });
-    const timingCount = timingCalls.length;
-    const stopCount = stopAnimationCalls;
-    const setValueCount = setValueCalls;
+    assert.equal(colorValue(rowStyle('focus-transition-row').backgroundColor), 'transparent');
+    assert.equal(colorValue(rowStyle('focus-transition-row').borderColor), 'transparent');
     const row = byTestId('focus-transition-row');
 
     await act(async () => {
@@ -455,15 +475,15 @@ describe('SettingsLinkRow', () => {
       });
     });
 
-    assert.equal(timingCalls.length, timingCount);
-    assert.equal(stopAnimationCalls, stopCount);
-    assert.equal(setValueCalls, setValueCount);
+    assert.equal(colorValue(rowStyle('focus-transition-row').backgroundColor), 'transparent');
+    assert.equal(colorValue(rowStyle('focus-transition-row').borderColor), 'transparent');
 
     completePendingAnimations();
-    const finalStyle = animatedStyle('backgroundColor');
+    const finalStyle = rowStyle('focus-transition-row');
     assert.equal(colorValue(finalStyle.backgroundColor), '#fff8dc');
-    assert.equal(colorValue(animatedStyle('borderColor').borderColor), '#9a7800');
-    assert.equal(flattenStyle(row.props.style({ hovered: false, pressed: false })).outlineWidth, 2);
+    assert.equal(colorValue(finalStyle.borderColor), '#9a7800');
+    assert.equal(colorValue(finalStyle.borderBottomColor), '#9a7800');
+    assert.equal(flattenStyle(row.props.style).outlineWidth, 2);
   });
 
   it('Web focus ring은 focus-visible일 때만 표시하고 pointer focus에서는 숨긴다', async () => {
@@ -475,19 +495,19 @@ describe('SettingsLinkRow', () => {
     });
 
     const row = byTestId('focus-settings-row');
-    assert.equal(flattenStyle(row.props.style({ hovered: false, pressed: false })).outlineWidth, 0);
+    assert.equal(flattenStyle(row.props.style).outlineWidth, 0);
 
     await act(async () =>
       row.props.onFocus({
         currentTarget: { matches: (selector: string) => selector === ':focus-visible' },
       }),
     );
-    let focusedStyle = flattenStyle(byTestId('focus-settings-row').props.style({}));
+    let focusedStyle = rowStyle('focus-settings-row');
     assert.equal(focusedStyle.outlineWidth, 2);
     assert.equal(focusedStyle.outlineColor, '#005fcc');
 
     await act(async () => byTestId('focus-settings-row').props.onPointerDown());
-    focusedStyle = flattenStyle(byTestId('focus-settings-row').props.style({}));
+    focusedStyle = rowStyle('focus-settings-row');
     assert.equal(focusedStyle.outlineWidth, 0);
 
     await act(async () =>
@@ -495,7 +515,7 @@ describe('SettingsLinkRow', () => {
         currentTarget: { matches: () => false },
       }),
     );
-    focusedStyle = flattenStyle(byTestId('focus-settings-row').props.style({}));
+    focusedStyle = rowStyle('focus-settings-row');
     assert.equal(focusedStyle.outlineWidth, 0);
   });
 });
@@ -525,10 +545,16 @@ function texts(): string[] {
   );
 }
 
-function animatedStyle(property: 'backgroundColor' | 'borderColor'): Record<string, unknown> {
-  const node = rendered('AnimatedView').find((node) => property in flattenStyle(node.props.style));
-  assert.ok(node);
-  return flattenStyle(node.props.style);
+function rowStyle(testID: string): Record<string, unknown> {
+  return flattenStyle(byTestId(testID).props.style);
+}
+
+async function interact(
+  testID: string,
+  event: 'onHoverIn' | 'onHoverOut' | 'onPressIn' | 'onPressOut',
+) {
+  await act(async () => byTestId(testID).props[event]());
+  completePendingAnimations();
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {

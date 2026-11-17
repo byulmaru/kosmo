@@ -5,11 +5,12 @@ import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-nat
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, fontFamilies, space, typography } from '@/theme/tokens';
-import { SettingsItem } from './SettingsItem';
+import { borderWidths, fontFamilies, layoutRecipes, space, typography } from '@/theme/tokens';
+import { SettingsItemContent } from './SettingsItem';
 import type { Href, WebAnchorProps } from 'expo-router';
-import type { ReactNode } from 'react';
 import type { ViewStyle } from 'react-native';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export type SettingsLinkRowProps = {
   accessibilityLabel: string;
@@ -26,16 +27,27 @@ export type SettingsLinkRowProps = {
   testID?: string;
 };
 
-type SettingsLinkFeedbackProps = {
-  children: ReactNode;
-  hovered: boolean;
-  pressed: boolean;
-  selected: boolean;
-};
-
-function SettingsLinkFeedback({ children, hovered, pressed, selected }: SettingsLinkFeedbackProps) {
+export function SettingsLinkRow({
+  accessibilityLabel,
+  currentPage = false,
+  density = 'default',
+  description,
+  external = false,
+  href,
+  label,
+  onNavigate,
+  primary = false,
+  selected = false,
+  target,
+  testID,
+}: SettingsLinkRowProps) {
   const theme = useTheme();
   const reducedMotion = useReducedMotion();
+  const [focusVisible, setFocusVisible] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const web = Platform.OS === 'web';
+  const externalRel = target === '_blank' ? 'noopener noreferrer' : undefined;
   const interaction = pressed || hovered;
   const backgroundColor = pressed
     ? theme.statePressed
@@ -56,46 +68,15 @@ function SettingsLinkFeedback({ children, hovered, pressed, selected }: Settings
     reducedMotion,
     role: 'selection',
   });
-
-  return (
-    <>
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.feedback, { backgroundColor: animatedBackground } as ViewStyle]}
-      />
-      {children}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.feedback,
-          { borderColor: animatedBorder, borderWidth: borderWidths[1] } as ViewStyle,
-        ]}
-      />
-    </>
-  );
-}
-
-export function SettingsLinkRow({
-  accessibilityLabel,
-  currentPage = false,
-  density = 'default',
-  description,
-  external = false,
-  href,
-  label,
-  onNavigate,
-  primary = false,
-  selected = false,
-  target,
-  testID,
-}: SettingsLinkRowProps) {
-  const theme = useTheme();
-  const [focusVisible, setFocusVisible] = useState(false);
-  const web = Platform.OS === 'web';
-  const externalRel = target === '_blank' ? 'noopener noreferrer' : undefined;
+  const animatedBottomBorder = useAnimatedColorTransition({
+    color: selected ? theme.stateSelectedBorder : theme.borderSubtle,
+    instantKey: theme,
+    reducedMotion,
+    role: 'selection',
+  });
 
   const row = (
-    <Pressable
+    <AnimatedPressable
       {...(web && external && target ? { hrefAttrs: { rel: externalRel, target } } : {})}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
@@ -111,53 +92,47 @@ export function SettingsLinkRow({
         };
         setFocusVisible(Boolean(target.matches?.(':focus-visible')));
       }}
+      onHoverIn={() => setHovered(web)}
+      onHoverOut={() => setHovered(false)}
       onPress={external ? onNavigate : undefined}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
       onPointerDown={() => setFocusVisible(false)}
-      style={() => {
-        return [
-          styles.entry,
-          density === 'compact' ? styles.entryCompact : undefined,
-          {
-            outlineColor: focusVisible ? theme.stateFocusRing : undefined,
-            outlineOffset: 2,
-            outlineStyle: focusVisible ? 'solid' : 'none',
-            outlineWidth: focusVisible ? 2 : 0,
-          } as unknown as ViewStyle,
-        ];
-      }}
+      style={[
+        styles.entry,
+        density === 'compact' ? styles.entryCompact : undefined,
+        {
+          backgroundColor: animatedBackground,
+          borderColor: animatedBorder,
+          borderBottomColor: animatedBottomBorder,
+          outlineColor: focusVisible ? theme.stateFocusRing : undefined,
+          outlineOffset: 2,
+          outlineStyle: focusVisible ? 'solid' : 'none',
+          outlineWidth: focusVisible ? 2 : 0,
+        } as unknown as ViewStyle,
+      ]}
       testID={testID}
     >
-      {(state) => {
-        const hovered = web && Boolean((state as { hovered?: boolean }).hovered);
-        const pressed = Boolean(state.pressed);
-        return (
-          <SettingsLinkFeedback hovered={hovered} pressed={pressed} selected={selected}>
-            <SettingsItem
-              density={density}
-              description={density === 'compact' ? undefined : description}
-              label={label}
-              trailing={
-                <View
-                  style={density === 'compact' && description ? styles.inlineTrailing : undefined}
-                >
-                  {density === 'compact' && description ? (
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.inlineDescription, { color: theme.foregroundSecondary }]}
-                    >
-                      {description}
-                    </Text>
-                  ) : null}
-                  <View accessibilityElementsHidden pointerEvents="none">
-                    <ChevronRightIcon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
-                  </View>
-                </View>
-              }
-            />
-          </SettingsLinkFeedback>
-        );
-      }}
-    </Pressable>
+      <SettingsItemContent
+        description={density === 'compact' ? undefined : description}
+        label={label}
+        trailing={
+          <View style={density === 'compact' && description ? styles.inlineTrailing : undefined}>
+            {density === 'compact' && description ? (
+              <Text
+                numberOfLines={1}
+                style={[styles.inlineDescription, { color: theme.foregroundSecondary }]}
+              >
+                {description}
+              </Text>
+            ) : null}
+            <View accessibilityElementsHidden pointerEvents="none">
+              <ChevronRightIcon color={theme.foregroundSecondary} size={20} strokeWidth={2} />
+            </View>
+          </View>
+        }
+      />
+    </AnimatedPressable>
   );
 
   if (external) {
@@ -176,18 +151,20 @@ export function SettingsLinkRow({
 }
 
 const styles = StyleSheet.create({
-  feedback: {
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-  },
   entry: {
-    minHeight: 64,
+    ...layoutRecipes.listRow,
+    borderWidth: borderWidths[1],
+    minWidth: 0,
+    paddingHorizontal: space[16] - borderWidths[1],
+    paddingTop: space[12] - borderWidths[1],
+    paddingBottom: space[12],
     width: '100%',
   },
-  entryCompact: { minHeight: 40 },
+  entryCompact: {
+    minHeight: 40,
+    paddingTop: space[4] - borderWidths[1],
+    paddingBottom: space[4],
+  },
   inlineTrailing: { alignItems: 'center', flexDirection: 'row', gap: space[8] },
   inlineDescription: { flexShrink: 1, fontFamily: fontFamilies.ui, ...typography.sm },
 });
