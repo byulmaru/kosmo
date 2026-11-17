@@ -15,7 +15,7 @@ import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { and, eq, isNull } from 'drizzle-orm';
 import { findPostByActivityPubUri, resolveActivityPubPostUri } from './activitypub-post-uri';
-import { isHttpUri } from './activitypub-uri';
+import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { materializeHydratedRemoteNote } from './inbound-create-note';
 import { RemoteActorDiscoveryUnavailableError } from './remote-actor-materialization';
 import type { Context } from '@fedify/fedify';
@@ -94,7 +94,6 @@ export type InboundQuoteResolution = {
 
 type QuoteExtraction = {
   format: ActivityPubQuoteFormat;
-  targetObject: ActivityPubObject | null;
   targetUri: string;
   authorizationId: URL | null;
   authorization: Awaited<ReturnType<Note['getQuoteAuthorization']>>;
@@ -168,7 +167,6 @@ export const hasInboundQuote = async ({
     return (
       (await note.getQuote({
         contextLoader: context.contextLoader,
-        crossOrigin: 'trust',
         documentLoader: context.documentLoader,
         suppressError: true,
       })) !== null
@@ -203,19 +201,6 @@ const extractQuote = async (context: QuoteContext, note: Note): Promise<QuoteExt
     fepPropertyPresent,
     format,
     malformed,
-    targetObject:
-      !malformed && fepPropertyPresent
-        ? await note
-            .getQuote({
-              contextLoader: context.contextLoader,
-              documentLoader: async () => {
-                throw new Error('Only embedded Quote Source is extracted at admission');
-              },
-              suppressError: true,
-              crossOrigin: 'trust',
-            })
-            .catch(() => null)
-        : null,
     targetUri,
   };
 };
@@ -272,17 +257,15 @@ const materializeTarget = async ({
   postId: string;
   receivedAt: Temporal.Instant;
 }): Promise<QuoteTargetResolution> => {
-  let targetObject = extraction.targetObject;
-  if (targetObject === null) {
-    const targetUri = new URL(extraction.targetUri);
-    if (!isHttpUri(targetUri)) {
-      return { kind: 'permanent_failure' };
-    }
-    try {
-      targetObject = await context.lookupObject(targetUri);
-    } catch {
-      return { kind: 'transient_failure' };
-    }
+  const targetUri = new URL(extraction.targetUri);
+  if (!isHttpUri(targetUri)) {
+    return { kind: 'permanent_failure' };
+  }
+  let targetObject: unknown;
+  try {
+    targetObject = await context.lookupObject(targetUri);
+  } catch {
+    return { kind: 'transient_failure' };
   }
 
   if (
@@ -290,6 +273,14 @@ const materializeTarget = async ({
     !targetObject.id ||
     targetObject.id.href !== extraction.targetUri
   ) {
+    return { kind: 'permanent_failure' };
+  }
+  const attributionHref = uniqueHref(targetObject.attributionIds);
+  if (!attributionHref) {
+    return { kind: 'permanent_failure' };
+  }
+  const attributionUri = new URL(attributionHref);
+  if (!isHttpUri(attributionUri) || attributionUri.origin !== targetObject.id.origin) {
     return { kind: 'permanent_failure' };
   }
   if (
@@ -487,11 +478,6 @@ export const materializeInboundQuoteSource = async (input: NoteCommand, context:
       targetUri: input.targetUri,
       authorizationId: input.approvalUri ? new URL(input.approvalUri) : null,
       authorization: null,
-      targetObject: input.embeddedSource
-        ? await Note.fromJsonLd(input.embeddedSource, {
-            contextLoader: context.contextLoader ?? getDocumentLoader(),
-          })
-        : null,
       fepPropertyPresent: input.format === ActivityPubQuoteFormat.FEP_044F,
       malformed: false,
     },
@@ -625,7 +611,6 @@ export const prepareStoredInboundQuote = async (
       targetUri: input.targetUri,
       authorization: null,
       authorizationId: null,
-      targetObject: null,
       fepPropertyPresent: input.format === ActivityPubQuoteFormat.FEP_044F,
       malformed: false,
     },
@@ -679,12 +664,6 @@ export const handleInboundQuote = async ({
   if (!extraction) {
     return { retryable: false, status: null };
   }
-  const embedded = extraction.targetObject
-    ? await extraction.targetObject.toJsonLd({
-        format: 'expand',
-        contextLoader: context.contextLoader ?? getDocumentLoader(),
-      })
-    : null;
   const result = await admit({
     kind: 'NOTE',
     postId,
@@ -693,14 +672,6 @@ export const handleInboundQuote = async ({
     ...(authorProfileId === undefined ? {} : { authorProfileId }),
     targetUri: extraction.malformed ? '' : extraction.targetUri,
     ...(extraction.malformed ? { malformed: true } : {}),
-    ...(embedded
-      ? {
-          embeddedSource: (Array.isArray(embedded) ? embedded[0] : embedded) as Record<
-            string,
-            unknown
-          >,
-        }
-      : {}),
     format: extraction.format,
     approvalUri: extraction.authorizationId?.href ?? null,
     authorizationUpdate,

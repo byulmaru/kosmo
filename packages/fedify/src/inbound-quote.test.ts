@@ -26,7 +26,10 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentToText,
+} from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { eq, ne } from 'drizzle-orm';
 import { temporalTestExecutable } from '../../../apps/worker/src/temporal-test-executable.js';
@@ -39,6 +42,7 @@ import type { createKosmoFederation as createKosmoFederationType } from './feder
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 import type {
   handleInboundQuote as handleInboundQuoteType,
+  materializeInboundQuoteSource as materializeInboundQuoteSourceType,
   resolveStoredInboundQuote as resolveStoredInboundQuoteType,
   revokeInboundQuote as revokeInboundQuoteType,
 } from './inbound-quote';
@@ -67,6 +71,7 @@ let federation: ReturnType<typeof createKosmoFederationType>;
 let handleInboundCreate: typeof handleInboundCreateType;
 let handleInboundQuote: typeof handleInboundQuoteType;
 let handleInboundUpdate: typeof handleInboundUpdateType;
+let materializeInboundQuoteSource: typeof materializeInboundQuoteSourceType;
 let resolveStoredInboundQuote: typeof resolveStoredInboundQuoteType;
 let revokeInboundQuote: typeof revokeInboundQuoteType;
 let localInstanceId: string;
@@ -108,8 +113,12 @@ before(async () => {
   ({ createPost } = await import('@kosmo/core/services'));
   ({ createKosmoFederation, federation } = await import('./federation'));
   ({ handleInboundCreate } = await import('./inbound-create'));
-  ({ handleInboundQuote, resolveStoredInboundQuote, revokeInboundQuote } =
-    await import('./inbound-quote'));
+  ({
+    handleInboundQuote,
+    materializeInboundQuoteSource,
+    resolveStoredInboundQuote,
+    revokeInboundQuote,
+  } = await import('./inbound-quote'));
   ({ handleInboundUpdate } = await import('./inbound-update'));
   const { localInstance } = await seedDatabase({ publicOrigin });
   localInstanceId = localInstance.id;
@@ -724,7 +733,7 @@ test('a remote Quote without authorization remains pending and keeps its body vi
   assert.ok(storedPost.currentContentId);
 });
 
-test('an embedded public target materializes with the Fedify class context before resolution', async () => {
+test('an embedded public target stores only the independently fetched source', async () => {
   const sourceActor = await createRemoteActor('source', 'https://source.example/users/source');
   const quoteActor = await createRemoteActor('quote', 'https://quote.example/users/quote');
   const targetUri = new URL('https://source.example/notes/embedded');
@@ -737,19 +746,24 @@ test('an embedded public target materializes with the Fedify class context befor
     to: PUBLIC_COLLECTION,
     quote: new Note({
       attribution: new URL('https://source.example/users/source'),
-      content: 'embedded source',
+      content: 'forged embedded source',
       id: targetUri,
       to: PUBLIC_COLLECTION,
     }),
   });
-  currentContext = createKosmoFederation().createContext(
-    new URL(publicOrigin),
-    undefined,
-  ) as TestQuoteContext;
+  const canonicalSource = new Note({
+    attribution: new URL('https://source.example/users/source'),
+    content: 'canonical source',
+    id: targetUri,
+    to: PUBLIC_COLLECTION,
+  });
+  const context = createContext(new Map(), async (identifier) =>
+    identifier.toString() === targetUri.href ? canonicalSource : null,
+  );
 
   await handleInboundQuote({
     actorUri: 'https://quote.example/users/quote',
-    context: currentContext,
+    context,
     note,
     postId: quote.post.id,
     receivedAt,
@@ -772,13 +786,188 @@ test('an embedded public target materializes with the Fedify class context befor
     .then(firstOrThrow);
 
   assert.ok(materialized.id);
-  assert.equal(
-    (await db.select().from(Posts).where(eq(Posts.id, materialized.id)).then(firstOrThrow))
-      .profileId,
-    sourceActor.id,
-  );
+  const storedSourcePost = await db
+    .select()
+    .from(Posts)
+    .where(eq(Posts.id, materialized.id))
+    .then(firstOrThrow);
+  assert.equal(storedSourcePost.profileId, sourceActor.id);
+  const storedSourceContent = await db
+    .select()
+    .from(PostContents)
+    .where(eq(PostContents.id, storedSourcePost.currentContentId!))
+    .then(firstOrThrow);
+  assert.equal(postContentDocumentToText(storedSourceContent.document), 'canonical source');
   assert.equal(storedQuote.sourcePostId, materialized.id);
   assert.equal(storedQuote.status, PostQuoteConsentStatus.PENDING);
+});
+
+const assertQuoteSourceWithMismatchedOriginIsNotStored = async ({
+  actorUri,
+  representation,
+  targetUri: targetUriHref,
+}: {
+  actorUri: string;
+  representation: 'URL' | 'embedded';
+  targetUri: string;
+}) => {
+  await createRemoteActor('source-author', actorUri);
+  const quoteActorUri = 'https://quote.example/users/quote';
+  const quoteActor = await createRemoteActor('quote', quoteActorUri);
+  const targetUri = new URL(targetUriHref);
+  const quoteUri = new URL('https://quote.example/notes/origin-mismatch');
+  const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+  const canonicalSource = new Note({
+    attribution: new URL(actorUri),
+    content: 'canonical source from another origin',
+    id: targetUri,
+    to: PUBLIC_COLLECTION,
+  });
+  const quoteTarget =
+    representation === 'embedded'
+      ? new Note({
+          attribution: new URL(actorUri),
+          content: 'untrusted embedded source',
+          id: targetUri,
+          to: PUBLIC_COLLECTION,
+        })
+      : targetUri;
+  const context = createContext(new Map(), async (identifier) =>
+    identifier.toString() === targetUri.href ? canonicalSource : null,
+  );
+
+  await handleInboundQuote({
+    actorUri: quoteActorUri,
+    context,
+    note: new Note({
+      attribution: new URL(quoteActorUri),
+      content: 'quote body',
+      id: quoteUri,
+      quote: quoteTarget,
+      to: PUBLIC_COLLECTION,
+    }),
+    postId: quote.post.id,
+    receivedAt,
+  });
+
+  assert.equal(await db.$count(ActivityPubActors, eq(ActivityPubActors.uri, actorUri)), 1);
+  assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, targetUri.href)), 0);
+  assert.equal(await db.$count(Posts), 1);
+  assert.equal(await db.$count(PostContents), 1);
+  const storedQuote = await db
+    .select({ status: Posts.quoteConsentStatus, sourcePostId: Posts.repostSourceId })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .then(firstOrThrow);
+  assert.equal(storedQuote.status, PostQuoteConsentStatus.PENDING);
+  assert.equal(storedQuote.sourcePostId, null);
+};
+
+for (const representation of ['URL', 'embedded'] as const) {
+  test(`a public ${representation} Quote target is not stored when its author origin differs`, async () => {
+    await assertQuoteSourceWithMismatchedOriginIsNotStored({
+      actorUri: 'https://victim.example/users/victim',
+      representation,
+      targetUri: `https://attacker.example/notes/${representation}-mismatched-author`,
+    });
+  });
+}
+
+for (const { description, actorUri, targetUri } of [
+  {
+    description: 'scheme',
+    actorUri: 'https://source.example/users/source',
+    targetUri: 'http://source.example/notes/scheme-mismatched-author',
+  },
+  {
+    description: 'port',
+    actorUri: 'https://source.example:9443/users/source',
+    targetUri: 'https://source.example:8443/notes/port-mismatched-author',
+  },
+] as const) {
+  test(`a public URL Quote target is not stored when its ${description} differs from its author origin`, async () => {
+    await assertQuoteSourceWithMismatchedOriginIsNotStored({
+      actorUri,
+      representation: 'URL',
+      targetUri,
+    });
+  });
+}
+
+for (const result of ['missing', 'unavailable'] as const) {
+  test(`an embedded public target is not stored when its canonical lookup is ${result}`, async () => {
+    await createRemoteActor('source', 'https://source.example/users/source');
+    const quoteActor = await createRemoteActor('quote', 'https://quote.example/users/quote');
+    const targetUri = new URL(`https://source.example/notes/${result}-embedded`);
+    const quoteUri = new URL(`https://quote.example/notes/${result}-embedded-quote`);
+    const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+    const note = new Note({
+      attribution: new URL('https://quote.example/users/quote'),
+      content: 'quote body',
+      id: quoteUri,
+      to: PUBLIC_COLLECTION,
+      quote: new Note({
+        attribution: new URL('https://source.example/users/source'),
+        content: 'forged embedded source',
+        id: targetUri,
+        to: PUBLIC_COLLECTION,
+      }),
+    });
+    const context = createContext(new Map(), async () =>
+      result === 'missing' ? null : Promise.reject(new Error('temporary source outage')),
+    );
+
+    const resolution = await handleInboundQuote({
+      actorUri: 'https://quote.example/users/quote',
+      context,
+      note,
+      postId: quote.post.id,
+      receivedAt,
+    });
+
+    assert.equal(resolution.status, PostQuoteConsentStatus.PENDING);
+    assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, targetUri.href)), 0);
+    assert.equal(await db.$count(Posts), 1);
+    assert.equal(await db.$count(PostContents), 1);
+  });
+}
+
+test('a legacy Quote owner command cannot persist its embedded Source when canonical lookup misses', async () => {
+  await createRemoteActor('source', 'https://source.example/users/source');
+  const quoteActor = await createRemoteActor('quote', 'https://quote.example/users/quote');
+  const targetUri = new URL('https://source.example/notes/legacy-embedded');
+  const quoteUri = new URL('https://quote.example/notes/legacy-embedded-quote');
+  const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+  const embeddedSource = new Note({
+    attribution: new URL('https://source.example/users/source'),
+    content: 'forged legacy source',
+    id: targetUri,
+    to: PUBLIC_COLLECTION,
+  });
+  const context = createContext();
+  const expandedEmbeddedSource = await embeddedSource.toJsonLd({ format: 'expand' });
+
+  await materializeInboundQuoteSource(
+    {
+      kind: 'NOTE',
+      postId: quote.post.id,
+      commandId: 'legacy-embedded-source',
+      actorUri: 'https://quote.example/users/quote',
+      targetUri: targetUri.href,
+      format: 'FEP_044F',
+      approvalUri: null,
+      authorizationUpdate: false,
+      duplicateCreate: false,
+      embeddedSource: (Array.isArray(expandedEmbeddedSource)
+        ? expandedEmbeddedSource[0]
+        : expandedEmbeddedSource) as Record<string, unknown>,
+    },
+    context,
+  );
+
+  assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, targetUri.href)), 0);
+  assert.equal(await db.$count(Posts), 1);
+  assert.equal(await db.$count(PostContents), 1);
 });
 
 test('a URL-only public target is hydrated through Fedify before resolution', async () => {
@@ -893,8 +1082,6 @@ for (const representation of ['embedded', 'url'] as const) {
     assert.equal(withoutSource.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
     assert.equal(withoutSource.repostSourceId, null);
     assert.equal(withoutSource.currentContentId, quote.post.currentContentId);
-    assert.equal(lookupObject.mock.callCount(), representation === 'url' ? 1 : 0);
-
     const storedSource = await createPost({
       document: postContentDocumentFromText('previously delivered followers-only source'),
       mentionProfileIds: [],
@@ -919,7 +1106,6 @@ for (const representation of ['embedded', 'url'] as const) {
     assert.equal(connected.currentContentId, quote.post.currentContentId);
     assert.equal(await db.$count(ActivityPubPosts), 2);
     assert.equal(await db.$count(PostContents), 2);
-    assert.equal(lookupObject.mock.callCount(), representation === 'url' ? 1 : 0);
     assert.equal(
       (await db.select().from(Posts).where(eq(Posts.id, storedSource.post.id)).then(firstOrThrow))
         .visibility,
