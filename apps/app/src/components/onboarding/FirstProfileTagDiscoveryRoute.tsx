@@ -1,3 +1,4 @@
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment, useLazyLoadQuery, usePaginationFragment } from 'react-relay';
@@ -91,6 +92,7 @@ export function FirstProfileTagDiscoveryRoute({
       const token = analytics.beginOperation('discovery', 'load_saved_tags', actionSequence);
       setSavedTagToken(token);
       retry?.();
+      return token;
     },
     [analytics],
   );
@@ -102,10 +104,17 @@ export function FirstProfileTagDiscoveryRoute({
     [analytics, startSavedTagOperation],
   );
   useEffect(() => {
-    if (!savedTagToken) {
-      startSavedTagOperation();
-    }
-  }, [savedTagToken, startSavedTagOperation]);
+    const token = startSavedTagOperation();
+    return () => analytics.finishOperation(token, 'not_observed');
+  }, [analytics, startSavedTagOperation]);
+  useEffect(
+    () => () => {
+      if (savedTagToken) {
+        analytics.finishOperation(savedTagToken, 'not_observed');
+      }
+    },
+    [analytics, savedTagToken],
+  );
 
   const continueOnboarding = () => {
     analytics.action('discovery', 'continue');
@@ -214,7 +223,15 @@ function SavedTags({
   const [selectedActionSequence, setSelectedActionSequence] = useState<number | undefined>();
   const theme = useTheme();
   const observedTokenRef = useRef<number | null>(null);
-  const viewedDiscoveryRef = useRef(false);
+  const hasTags = tags != null && tags.length > 0;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (hasTags) {
+        analytics.viewStep('discovery');
+      }
+    }, [analytics, hasTags]),
+  );
 
   useEffect(() => {
     if (observedTokenRef.current === token.id) {
@@ -229,9 +246,6 @@ function SavedTags({
     if (tags.length === 0) {
       analytics.completeOnboarding('no_saved_tags');
       onNoSavedTags();
-    } else if (!viewedDiscoveryRef.current) {
-      viewedDiscoveryRef.current = true;
-      analytics.viewStep('discovery');
     }
   }, [analytics, onNoSavedTags, tags, token]);
 
@@ -325,6 +339,14 @@ function RelatedTag({
     setToken(nextToken);
     return () => analytics.finishOperation(nextToken, 'not_observed');
   }, [actionSequence, analytics, hasResult, tagIndex]);
+  useEffect(
+    () => () => {
+      if (token) {
+        analytics.finishOperation(token, 'not_observed');
+      }
+    },
+    [analytics, token],
+  );
 
   const retryWithToken = (retry: () => void) => {
     const retrySequence = analytics.action('discovery', 'retry', tagIndex);
@@ -436,6 +458,15 @@ function RelatedProfiles({
   }, [analytics, profiles.length, token]);
 
   const retryActionSequenceRef = useRef<number | undefined>(undefined);
+  const pageTokenRef = useRef<FirstProfileOperationToken | null>(null);
+  useEffect(
+    () => () => {
+      if (pageTokenRef.current) {
+        analytics.finishOperation(pageTokenRef.current, 'not_observed');
+      }
+    },
+    [analytics],
+  );
   const loadNext: LoadNext = (count, options) => {
     const actionSequence = retryActionSequenceRef.current;
     retryActionSequenceRef.current = undefined;
@@ -445,6 +476,7 @@ function RelatedProfiles({
       actionSequence,
       tagIndex,
     );
+    pageTokenRef.current = operationToken;
     pagination.loadNext(count, {
       onComplete: (error) => {
         analytics.finishOperation(

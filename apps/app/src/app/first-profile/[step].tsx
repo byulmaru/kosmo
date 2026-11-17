@@ -1,6 +1,6 @@
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
-import { useEffect } from 'react';
+import { useCallback } from 'react';
 import { useFirstProfileOnboarding } from '@/components/onboarding/FirstProfileOnboardingRoute';
 import { FirstProfileOnboardingScreen } from '@/components/onboarding/FirstProfileOnboardingScreen';
 import { firstProfileSteps } from '@/components/onboarding/firstProfileOnboardingState';
@@ -15,11 +15,13 @@ export default function FirstProfileStepRoute() {
   const validStep =
     (step !== 'complete' && !firstProfileSteps.includes(step as FirstProfileStep)) ||
     (step !== 'handle' && step !== 'complete' && !flow.profileSelected);
-  useEffect(() => {
-    if (!validStep && step !== 'complete') {
-      flow.analytics.viewStep(step as FirstProfileStep);
-    }
-  }, [flow.analytics, step, validStep]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!validStep && step !== 'complete') {
+        flow.analytics.viewStep(step as FirstProfileStep);
+      }
+    }, [flow.analytics, step, validStep]),
+  );
   if (validStep) {
     return <Redirect href="/first-profile/handle" />;
   }

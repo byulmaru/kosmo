@@ -59,7 +59,7 @@ Account가 바뀐 뒤 늦게 완료된 이전 요청은 새 Account에 귀속하
 
 `action` enum은 `next`, `save`, `skip`, `start_now`, `continue`, `retry`, `select_tag`, `follow`, `unfollow`, `cancel_request`다. `operation` enum은 `create_profile`, `select_profile`, `save_profile`, `upload_profile_image`, `load_saved_tags`, `load_related_profiles`, `load_more_related_profiles`, `follow_profile`, `unfollow_profile`, `cancel_follow_request`다. `discovery.stage`는 `saved_tags` 또는 `related_profiles`, 결과는 `loaded`, `empty`, `failed`; 완료의 `exit_reason`은 `no_saved_tags` 또는 `continued`다. 저장 태그 개수 상태는 `known` 또는 `unknown`이다.
 
-같은 화면의 재렌더와 성공적으로 보여준 태그 목록의 Relay cache 재사용은 새 단계 방문이나 새 목록 성공으로 기록하지 않는다. 목록 조회를 사용자가 다시 시도하면 별도 `retry` action과 새 operation attempt를 기록한다. 다른 태그의 목록은 각 `tag_index`에서 처음으로 화면에 나타난 결과를 기록한다.
+같은 화면의 재렌더와 성공적으로 보여준 태그 목록의 Relay cache 재사용은 새 단계 방문이나 새 목록 성공으로 기록하지 않는다. 시스템 뒤로가기나 프로필 상세에서 돌아와 단계 화면이 다시 활성화되면 새 방문으로 기록한다. 목록 조회를 사용자가 다시 시도하면 별도 `retry` action과 새 operation attempt를 기록한다. 다른 태그의 목록은 각 `tag_index`에서 처음으로 화면에 나타난 결과를 기록한다. 태그 전환이나 화면 이탈로 결과 관측이 끝난 조회·재시도·페이지 조회는 `not_observed`로 종료하며, 계속하기 순간의 pending snapshot은 이탈 전 상태를 유지한다.
 
 `profile_created`와 `profile_selected`는 기존 필수 property를 유지하고 `flow_id`, `action_sequence`, `operation_attempt` correlation property만 선택적으로 더한다. 프로필 생성은 유효한 생성 응답 뒤 한 번, 선택은 실제 actor 선택 뒤 한 번 기록한다. 실패한 선택 재시도는 성공한 생성을 다시 기록하지 않는다. `follow_succeeded` 역시 기존 property에 같은 correlation property만 선택적으로 더하며 실제 관계 또는 승인 요청 응답 뒤 기록한다. 자동 계정 설정 팔로우는 온보딩의 사용자 팔로우 수에 포함하지 않는다.
 

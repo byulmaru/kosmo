@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, useState } from 'react';
+import { createContext, createElement, useContext, useEffect, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
@@ -26,8 +26,16 @@ const analyticsEvents: Array<{
   properties: Record<string, unknown>;
 }> = [];
 const pendingHomeViews: Array<{ accountId: string | null; flowId: string | null }> = [];
+const FocusContext = createContext(true);
+let setRouteFocused: ((focused: boolean) => void) | undefined;
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+mockModule('expo-router', {
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const focused = useContext(FocusContext);
+    useEffect(() => (focused ? callback() : undefined), [callback, focused]);
+  },
+});
 mockModule('react-relay', {
   ...ReactRelay,
   graphql: (parts: TemplateStringsArray) => {
@@ -120,13 +128,18 @@ function environment() {
 }
 function App({ profileId }: { profileId: string }) {
   const [continued, setContinued] = useState(false);
+  const [focused, setFocused] = useState(true);
+  setRouteFocused = setFocused;
   return continued
     ? createElement('Home')
-    : createElement(Route, {
-        analytics,
-        profileId,
-        onContinue: () => setContinued(true),
-        onNoSavedTags: () => setContinued(true),
+    : createElement(FocusContext.Provider, {
+        value: focused,
+        children: createElement(Route, {
+          analytics,
+          profileId,
+          onContinue: () => setContinued(true),
+          onNoSavedTags: () => setContinued(true),
+        }),
       });
 }
 async function mount(env = environment(), profileId = 'owner') {
@@ -264,6 +277,7 @@ beforeEach(() => {
   mock.method(console, 'error', () => undefined);
   analyticsEvents.length = 0;
   pendingHomeViews.length = 0;
+  setRouteFocused = undefined;
   analytics = createOnboardingAnalytics('account-1');
 });
 afterEach(async () => {
@@ -320,6 +334,26 @@ function unfollowPayload() {
 }
 
 describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
+  it('유지된 사람 찾기 화면에 다시 돌아오면 새 방문만 기록한다', async () => {
+    await mount();
+    await loadFirst();
+    await act(async () => setRouteFocused!(false));
+    await act(async () => setRouteFocused!(true));
+    await press('#음악');
+    await resolveTag(secondTag.id, tagResult(secondTag.id));
+    await press('#Fediverse');
+
+    assert.deepEqual(
+      analyticsEvents
+        .filter(
+          ({ event, properties }) =>
+            event === 'first_profile_onboarding_step_viewed' && properties.step === 'discovery',
+        )
+        .map(({ properties }) => properties.visit_sequence),
+      [1, 2],
+    );
+  });
+
   it('선택한 태그 목록만 렌더하고 완료된 목록은 Relay 캐시에서 다시 읽는다', async () => {
     await mount();
     await loadTags();
@@ -417,6 +451,12 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
     assert.equal(completion?.properties.saved_tag_count_status, 'unknown');
     assert.equal(completion?.properties.operation_pending_count, 1);
     assert.equal(pendingHomeViews.length, 1);
+    assert.deepEqual(
+      analyticsEvents
+        .filter(({ event }) => event === 'first_profile_onboarding_operation')
+        .map(({ properties }) => [properties.operation, properties.result]),
+      [['load_saved_tags', 'not_observed']],
+    );
   });
 
   it('완료된 저장 태그 null 응답은 인라인 재시도로 실제 네트워크 요청을 시작한다', async () => {
@@ -486,6 +526,73 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
       ['@target', '@next-target'],
     );
     assert.equal(nodes('PaginationSurface')[0]?.props.hasNext, false);
+  });
+
+  it('관련 목록 재시도 중 태그를 바꾸면 중단된 조회를 한 번 종료한다', async () => {
+    await mount();
+    await loadTags();
+    await resolveTag(firstTag.id, { node: null });
+    await act(async () => nodes('StateView')[0]!.props.onAction());
+
+    await press('#음악');
+    await resolveTag(secondTag.id, tagResult(secondTag.id, [profile('second-target')]));
+    await resolveTag(firstTag.id, tagResult(firstTag.id, [profile('late-target')]));
+    assert.deepEqual(
+      nodes('ProfileRow').map((row) => row.props.relativeHandle),
+      ['@second-target'],
+    );
+    await press('계속하기');
+
+    assert.deepEqual(
+      analyticsEvents
+        .filter(
+          ({ event, properties }) =>
+            event === 'first_profile_onboarding_operation' &&
+            properties.operation === 'load_related_profiles' &&
+            properties.tag_index === 0,
+        )
+        .map(({ properties }) => [properties.operation_attempt, properties.result]),
+      [
+        [1, 'failed'],
+        [2, 'not_observed'],
+      ],
+    );
+    assert.equal(
+      analyticsEvents.find(({ event }) => event === 'first_profile_onboarding_completed')
+        ?.properties.operation_pending_count,
+      0,
+    );
+  });
+
+  it('다음 페이지 조회 중 태그를 바꾸면 중단된 조회를 한 번 종료한다', async () => {
+    await mount();
+    await loadFirst([profile('target')], true);
+    await act(async () => nodes('PaginationSurface')[0]!.props.onRetry());
+
+    await press('#음악');
+    await resolveTag(secondTag.id, tagResult(secondTag.id, [profile('second-target')]));
+    await resolve(nextPageName, tagResult(firstTag.id, [profile('late-target')]));
+    assert.deepEqual(
+      nodes('ProfileRow').map((row) => row.props.relativeHandle),
+      ['@second-target'],
+    );
+    await press('계속하기');
+
+    assert.deepEqual(
+      analyticsEvents
+        .filter(
+          ({ event, properties }) =>
+            event === 'first_profile_onboarding_operation' &&
+            properties.operation === 'load_more_related_profiles',
+        )
+        .map(({ properties }) => properties.result),
+      ['not_observed'],
+    );
+    assert.equal(
+      analyticsEvents.find(({ event }) => event === 'first_profile_onboarding_completed')
+        ?.properties.operation_pending_count,
+      0,
+    );
   });
 
   for (const followPolicy of ['OPEN', 'APPROVAL_REQUIRED'] as const) {
