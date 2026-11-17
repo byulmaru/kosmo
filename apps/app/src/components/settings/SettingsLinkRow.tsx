@@ -98,7 +98,7 @@ export function SettingsLinkRow({
       onPressIn={() => setPressed(true)}
       onPressOut={() => setPressed(false)}
       onPointerDown={() => setFocusVisible(false)}
-      style={[
+      style={StyleSheet.flatten([
         styles.entry,
         density === 'compact' ? styles.entryCompact : undefined,
         {
@@ -110,7 +110,7 @@ export function SettingsLinkRow({
           outlineStyle: focusVisible ? 'solid' : 'none',
           outlineWidth: focusVisible ? 2 : 0,
         } as unknown as ViewStyle,
-      ]}
+      ])}
       testID={testID}
     >
       <SettingsItemContent
