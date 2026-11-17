@@ -101,7 +101,10 @@ mock.module('react-native', {
       },
     },
     ActivityIndicator: 'ActivityIndicator',
-    Animated: { View: 'AnimatedView' },
+    Animated: {
+      View: 'AnimatedView',
+      createAnimatedComponent: <P>(component: ComponentType<P>) => component,
+    },
     Platform: {
       get OS() {
         return platform;
@@ -222,6 +225,15 @@ mock.module(new URL('./SettingsItem.tsx', import.meta.url), {
   exports: {
     SettingsItem: (props: Record<string, unknown>) =>
       createElement('SettingsItem', props, createElement('Text', null, props.label as string)),
+    SettingsItemContent: (props: Record<string, unknown>) =>
+      createElement(
+        'View',
+        null,
+        props.leading as ReactNode,
+        createElement('Text', null, props.label as string),
+        props.description ? createElement('Text', null, props.description as string) : null,
+        props.trailing as ReactNode,
+      ),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../ui/LoadingIndicator.tsx', import.meta.url), {
