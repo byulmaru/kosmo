@@ -777,11 +777,11 @@ export const prepareFollowersOnlyQuoteNote = async ({
     return null;
   }
   try {
-    const { document, hashtagNames, media, mentionProfileIds } = await projectRemoteNote(
-      context,
-      note,
-      'Unknown',
-    );
+    const projection = await projectRemoteNote(context, note, 'Unknown', false);
+    if (projection === null) {
+      return null;
+    }
+    const { document, hashtagNames, media, mentionProfileIds } = projection;
     if (!postContentDocumentToText(document).length && !media.length) {
       return null;
     }
