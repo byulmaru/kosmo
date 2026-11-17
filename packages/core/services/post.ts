@@ -653,6 +653,19 @@ export const deletePost = async ({
   readonly replyParentId: string | null;
   readonly sourcePostId: string | null;
 }> => {
+  // A retained Update result belongs to the original caller, so authorize every caller before joining.
+  const post = await db
+    .select({ profileId: Posts.profileId })
+    .from(Posts)
+    .where(eq(Posts.id, postId))
+    .then(first);
+  if (!post) {
+    throw new NotFoundError('Post not found');
+  }
+  if (post.profileId !== actorProfileId) {
+    throw new PermissionDeniedError('Post author permission is required');
+  }
+
   const result = unwrapPostTransition(
     await runWorkflow(postDeleteMutationWorkflow, {
       args: [{ actorProfileId, origin, postId }],
