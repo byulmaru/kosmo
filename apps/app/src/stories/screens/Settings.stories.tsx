@@ -10,7 +10,7 @@ import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDeta
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { ThemePreferenceProvider } from '@/theme/ThemePreferenceProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { colors, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ReactNode } from 'react';
@@ -253,11 +253,7 @@ export const FullMasterDetail: Story = {
       'href',
       '/settings/natural-language-mute',
     );
-    expect(profileEntry.firstElementChild).toHaveStyle({
-      backgroundColor: colors.light.selectedSurface,
-      borderColor: colors.light.selectedBorder,
-      borderWidth: '1px',
-    });
+    expect(profileEntry).toHaveAttribute('aria-selected', 'true');
     expect(profileEntry).not.toHaveAttribute('aria-current');
     expect(canvas.getByRole('button', { name: '브라우저 알림 켜기' })).toBeVisible();
     expect(canvas.getByRole('combobox', { name: '게시물 기본 공개 범위' })).toBeVisible();
