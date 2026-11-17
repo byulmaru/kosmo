@@ -197,9 +197,9 @@ describe('SettingsLinkRow', () => {
     assert.ok(label);
     assert.ok(description);
     const rowStyle = flattenStyle(row.props.style({ hovered: false, pressed: false }));
-    const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    const feedbackStyle = animatedStyle('backgroundColor');
     assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
-    assert.equal(feedbackStyle.borderWidth, 1);
+    assert.equal(animatedStyle('borderColor').borderWidth, 1);
     assert.equal(rowStyle.minHeight, 64);
     assert.equal(rowStyle.width, '100%');
     const chevronWrapper = rendered('View').find(
@@ -222,9 +222,9 @@ describe('SettingsLinkRow', () => {
     const row = byTestId('selected-parent-settings-row');
     assert.equal(row.props['aria-current'], undefined);
     assert.deepEqual(row.props.accessibilityState, { selected: true });
-    const feedbackStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    const feedbackStyle = animatedStyle('backgroundColor');
     assert.equal(colorValue(feedbackStyle.backgroundColor), '#fff8dc');
-    assert.equal(colorValue(feedbackStyle.borderColor), '#9a7800');
+    assert.equal(colorValue(animatedStyle('borderColor').borderColor), '#9a7800');
   });
 
   it('compact theme link exposes its accessible name and current value', async () => {
@@ -329,9 +329,9 @@ describe('SettingsLinkRow', () => {
       testID: 'selected-settings-row',
     });
 
-    const idleStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    const idleStyle = animatedStyle('backgroundColor');
     assert.equal(colorValue(idleStyle.backgroundColor), '#fff8dc');
-    assert.equal(colorValue(idleStyle.borderColor), '#9a7800');
+    assert.equal(colorValue(animatedStyle('borderColor').borderColor), '#9a7800');
     assert.equal(idleStyle.transitionDuration, undefined);
   });
 
@@ -344,7 +344,7 @@ describe('SettingsLinkRow', () => {
       testID: 'motion-settings-row',
     });
 
-    let style = flattenStyle(rendered('AnimatedView')[0].props.style);
+    let style = animatedStyle('backgroundColor');
     assert.equal(style.transitionDuration, undefined);
 
     await act(async () =>
@@ -359,7 +359,7 @@ describe('SettingsLinkRow', () => {
       ),
     );
     completePendingAnimations();
-    const selectedStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    const selectedStyle = animatedStyle('backgroundColor');
     assert.equal(colorValue(selectedStyle.backgroundColor), '#fff8dc');
     assert.equal(selectedStyle.transitionDuration, undefined);
 
@@ -375,7 +375,7 @@ describe('SettingsLinkRow', () => {
         }),
       ),
     );
-    style = flattenStyle(rendered('AnimatedView')[0].props.style);
+    style = animatedStyle('backgroundColor');
     assert.equal(colorValue(style.backgroundColor), '#fff8dc');
     assert.equal(style.transitionDuration, undefined);
 
@@ -427,7 +427,7 @@ describe('SettingsLinkRow', () => {
       timingCalls.some(({ duration, target }) => duration === 200 && target === 'transparent'),
       true,
     );
-    const finalStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    const finalStyle = animatedStyle('borderColor');
     assert.equal(colorValue(finalStyle.borderColor), 'transparent');
   });
 
@@ -460,9 +460,9 @@ describe('SettingsLinkRow', () => {
     assert.equal(setValueCalls, setValueCount);
 
     completePendingAnimations();
-    const finalStyle = flattenStyle(rendered('AnimatedView')[0].props.style);
+    const finalStyle = animatedStyle('backgroundColor');
     assert.equal(colorValue(finalStyle.backgroundColor), '#fff8dc');
-    assert.equal(colorValue(finalStyle.borderColor), '#9a7800');
+    assert.equal(colorValue(animatedStyle('borderColor').borderColor), '#9a7800');
     assert.equal(flattenStyle(row.props.style({ hovered: false, pressed: false })).outlineWidth, 2);
   });
 
@@ -523,6 +523,12 @@ function texts(): string[] {
   return rendered('Text').flatMap((node) =>
     typeof node.props.children === 'string' ? [node.props.children] : [],
   );
+}
+
+function animatedStyle(property: 'backgroundColor' | 'borderColor'): Record<string, unknown> {
+  const node = rendered('AnimatedView').find((node) => property in flattenStyle(node.props.style));
+  assert.ok(node);
+  return flattenStyle(node.props.style);
 }
 
 function flattenStyle(style: unknown): Record<string, unknown> {

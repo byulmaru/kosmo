@@ -61,12 +61,16 @@ function SettingsLinkFeedback({ children, hovered, pressed, selected }: Settings
     <>
       <Animated.View
         pointerEvents="none"
-        style={[
-          styles.feedback,
-          { backgroundColor: animatedBackground, borderColor: animatedBorder } as ViewStyle,
-        ]}
+        style={[styles.feedback, { backgroundColor: animatedBackground } as ViewStyle]}
       />
       {children}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.feedback,
+          { borderColor: animatedBorder, borderWidth: borderWidths[1] } as ViewStyle,
+        ]}
+      />
     </>
   );
 }
@@ -173,7 +177,6 @@ export function SettingsLinkRow({
 
 const styles = StyleSheet.create({
   feedback: {
-    borderWidth: borderWidths[1],
     bottom: 0,
     left: 0,
     position: 'absolute',

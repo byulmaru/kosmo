@@ -271,7 +271,8 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
 
 `SettingsLinkRow`의 hover·pressed·selected feedback은 전체 직사각형 link target과 같은 bounds를 채우며,
 label이나 description이 reflow되어 행이 커져도 두 bounds를 맞춘다. Selected row는 1px theme border와 기존 색상
-전이를 유지하고, Web의 keyboard `focus-visible` ring은 feedback과 별도로 유지한다.
+전이를 유지하며 네 변 모두 구분선에 가리지 않고 표시한다. Web의 keyboard `focus-visible` ring은 feedback과
+별도로 유지한다.
 
 ## Native channel과 OTA 진단
 
