@@ -71,6 +71,7 @@ mockModule('react-relay', {
   },
 });
 mockModule('react-native', {
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => undefined }) },
   ActivityIndicator: 'ActivityIndicator',
   Platform: { OS: 'ios' },
   Text: 'Text',

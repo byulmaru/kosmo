@@ -79,6 +79,7 @@ const SessionProviderQuery = graphql`
 `;
 
 export function SessionProvider({ children }: PropsWithChildren) {
+  const [fetchKey, setFetchKey] = useState(0);
   const authLifecycleKey = useRelayAuthLifecycleKey();
   const actorLifecycleKey = useRelayActorLifecycleKey();
   const lifecycleKeysRef = useRef({ authLifecycleKey, actorLifecycleKey });
@@ -163,6 +164,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     <AnalyticsIdentityAccountContext.Provider value={sessionState.value.accountId}>
       <SessionContext.Provider value={visibleSession}>
         <RelayFailOpenBoundary
+          onRetry={() => setFetchKey((key) => key + 1)}
           fallback={
             <SessionErrorReporter
               authLifecycleKey={authLifecycleKey}
@@ -173,6 +175,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
         >
           <Suspense fallback={<Splash label="세션을 확인하는 중입니다." />}>
             <SessionQuery
+              fetchKey={fetchKey}
               authLifecycleKey={authLifecycleKey}
               actorLifecycleKey={actorLifecycleKey}
               onSessionChange={setSession}
@@ -187,11 +190,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
 }
 
 function SessionQuery({
+  fetchKey,
   authLifecycleKey,
   actorLifecycleKey,
   onSessionChange,
   restoreRef,
 }: {
+  fetchKey: number;
   authLifecycleKey: string;
   actorLifecycleKey: string;
   restoreRef: { current: ProfileRestoreState | null };
@@ -211,7 +216,7 @@ function SessionQuery({
   const data = useLazyLoadQuery<SessionProviderQueryType>(
     SessionProviderQuery,
     {},
-    { fetchPolicy: 'store-and-network' },
+    { fetchKey, fetchPolicy: 'store-and-network' },
   );
   const sessionId = data.currentSession?.id ?? null;
   const accountId = data.me?.id ?? null;

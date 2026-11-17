@@ -13,6 +13,8 @@ const mockModule = (specifier: string | URL, exports: object) =>
     exports,
   } as unknown as Parameters<typeof mock.module>[1]);
 
+mockModule('react-native', { Platform: { OS: 'web' } });
+
 mockModule(new URL('./ui/StateView.tsx', import.meta.url), {
   StateView: (props: object) => createElement('StateView', props),
 });
