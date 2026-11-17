@@ -533,6 +533,7 @@ const pureRepost = {
 };
 const visibilityOwnershipSourcePost = post({
   bodyText: '공개 범위가 다른 Quote·Repost의 원문입니다.',
+  createdAt: '2026-04-27T21:14:00.000Z',
   id: 'visibility-ownership-source',
   profile: sourceAuthor,
   visibility: 'PUBLIC',
@@ -546,6 +547,7 @@ const visibilityOwnershipQuotePost = post({
 });
 const visibilityOwnershipPureRepost = post({
   bodyText: null,
+  createdAt: '2026-04-28T21:14:00.000Z',
   id: 'visibility-ownership-repost',
   profile: repostAuthor,
   repostSource: visibilityOwnershipSourcePost,
@@ -5361,6 +5363,7 @@ export const VisibilityListRows: Story = {
 
     const repostRow = canvas.getByTestId('visibility-pure-repost-row');
     const repostSourceRow = within(repostRow).getByTestId('post-list-standard-row');
+    const repostAttribution = within(repostRow).getByText('재게시한 코스모 사용자님이 재게시함');
     const repostSourceIcon = within(repostSourceRow).getByRole('img', { name: '공개' });
     const repostSourceTimestamp = repostSourceRow.querySelector<HTMLAnchorElement>(
       `a[href="/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}"]`,
@@ -5375,14 +5378,32 @@ export const VisibilityListRows: Story = {
       '[data-testid="post-timestamp"]',
     );
     expect(repostSourceTimestampText).not.toBeNull();
-    expectTimestampTopAligned(
-      repostSourceRow,
-      repostSourceTimestampText!,
-      visibilityOwnershipSourcePost.profile.relativeHandle,
+    expect(repostSourceTimestampText).toHaveTextContent(
+      formatTimelineTimestamp(visibilityOwnershipSourcePost.createdAt),
     );
+    expect(repostSourceTimestampText).not.toHaveTextContent(
+      formatTimelineTimestamp(visibilityOwnershipPureRepost.createdAt),
+    );
+    const repostAttributionRange = repostRow.ownerDocument.createRange();
+    repostAttributionRange.selectNodeContents(repostAttribution);
+    const repostAttributionBounds = repostAttributionRange.getBoundingClientRect();
     const repostSourceTextRange = repostSourceRow.ownerDocument.createRange();
     repostSourceTextRange.selectNodeContents(repostSourceTimestampText!);
     const repostSourceTextBounds = repostSourceTextRange.getBoundingClientRect();
+    expect(Math.abs(repostSourceTextBounds.top - repostAttributionBounds.top)).toBeLessThanOrEqual(
+      1,
+    );
+    const repostSourceAuthor = repostSourceRow
+      .querySelector<HTMLAnchorElement>(
+        `a[role="link"][href="/${visibilityOwnershipSourcePost.profile.relativeHandle}"]`,
+      )
+      ?.querySelector<HTMLElement>('[dir="auto"]');
+    expect(repostSourceAuthor).toBeTruthy();
+    const repostSourceAuthorRange = repostSourceRow.ownerDocument.createRange();
+    repostSourceAuthorRange.selectNodeContents(repostSourceAuthor!);
+    expect(repostSourceAuthorRange.getBoundingClientRect().top).toBeGreaterThan(
+      repostAttributionBounds.bottom,
+    );
     const repostSourceIconBounds = repostSourceIcon.getBoundingClientRect();
     expect(
       Math.abs(
