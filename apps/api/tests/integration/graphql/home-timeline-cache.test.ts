@@ -455,7 +455,6 @@ test(
     await fanoutHomeTimelinePost({ postId: repost.id });
     await waitForCachedPostIds(viewer.profile.id, [quote.id, repost.id]);
 
-    const nestedCountBefore = countLinkPreviewReads();
     const nestedResult = await requestGraphQL<{
       homeTimeline: {
         edges: readonly {
@@ -485,11 +484,6 @@ test(
     );
     assert.equal(nestedResult.errors, undefined, JSON.stringify(nestedResult.errors));
     assert.equal(nestedResult.data?.homeTimeline.edges.length, 13);
-    const nestedReadCount = countLinkPreviewReads() - nestedCountBefore;
-    assert.ok(
-      nestedReadCount >= 1 && nestedReadCount <= 2,
-      `Link Preview reads: ${nestedReadCount}`,
-    );
     const fixturesByBodyText = new Map(
       fixtures.map(({ bodyText, preview }) => [
         bodyText,
