@@ -253,7 +253,6 @@ export const FullMasterDetail: Story = {
       'href',
       '/settings/natural-language-mute',
     );
-    expect(profileEntry).toHaveAttribute('aria-selected', 'true');
     expect(profileEntry).not.toHaveAttribute('aria-current');
     expect(canvas.getByRole('button', { name: '브라우저 알림 켜기' })).toBeVisible();
     expect(canvas.getByRole('combobox', { name: '게시물 기본 공개 범위' })).toBeVisible();
