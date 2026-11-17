@@ -36,6 +36,30 @@ export function SettingsItem({
       ])}
       testID={testID}
     >
+      <SettingsItemContent
+        description={description}
+        label={label}
+        leading={leading}
+        trailing={trailing}
+      />
+      <View
+        pointerEvents="none"
+        style={[styles.divider, { backgroundColor: theme.borderSubtle }]}
+      />
+    </View>
+  );
+}
+
+export function SettingsItemContent({
+  description,
+  label,
+  leading,
+  trailing,
+}: Pick<SettingsItemProps, 'description' | 'label' | 'leading' | 'trailing'>) {
+  const theme = useTheme();
+
+  return (
+    <>
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={styles.copy}>
         <Text style={[styles.label, { color: theme.foregroundPrimary }]}>{label}</Text>
@@ -46,11 +70,7 @@ export function SettingsItem({
         ) : null}
       </View>
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
-      <View
-        pointerEvents="none"
-        style={[styles.divider, { backgroundColor: theme.borderSubtle }]}
-      />
-    </View>
+    </>
   );
 }
 

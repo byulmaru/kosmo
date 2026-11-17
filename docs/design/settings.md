@@ -267,6 +267,13 @@ entry로 둔다. 이 진입점은 Byulmaru ID가 소유하는 기존 Account Set
   destination은 이동을 전달할 수 있지만, 현재 화면에서 값을 바꾸는 control에는 장식용 chevron을 붙이지
   않는다.
 
+## Settings link rows
+
+`SettingsLinkRow`의 실제 클릭 가능한 행이 별도 overlay 없이 background와 border 색상을 소유한다.
+label이나 description이 reflow되어 행이 커져도 전체 직사각형 link target을 채운다. Selected row는 1px theme
+border의 네 변을 구분선에 가리지 않고 표시한다. 기존 색상 전이·reduced motion과 Web keyboard
+`focus-visible` ring을 유지한다.
+
 ## Native channel과 OTA 진단
 
 - 인증된 Android/iOS Native `설정 → 정보 → 개발 정보`에서만 `dev`·`prod` channel selector를 제공한다. 로그인
