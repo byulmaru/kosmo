@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { Platform } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
+import { match } from 'ts-pattern';
 import {
   deleteSelectedProfile,
   readSelectedProfile,
@@ -24,6 +25,7 @@ import {
 } from '@/relay/RelayActorProvider';
 import {
   errorSession,
+  getProfileRestoreDecision,
   guestSession,
   projectVisibleSession,
   reduceProfileRestoreState,
@@ -213,95 +215,77 @@ function SessionQuery({
       return;
     }
 
-    const confirmedGuest = sessionId === null && accountId === null;
-    if (confirmedGuest) {
-      if (actorSelectedProfileId !== null) {
-        resetActor(null);
-      }
-      return deactivate;
-    }
-
-    if (!sessionId || !accountId) {
-      return deactivate;
-    }
-
-    if (identityChange.accountChanged && actorSelectedProfileId !== null) {
-      resetActor(null);
-      return deactivate;
-    }
-
-    if (actorSelectedProfileId !== null) {
-      if (serverSelectedProfileId !== actorSelectedProfileId) {
-        void identityChange.cleanupPromise.then(() => {
-          if (!active) {
-            return;
-          }
-
-          if (serverSelectedProfileId) {
-            void writeSelectedProfile(serverSelectedProfileId);
-            resetActor(serverSelectedProfileId);
-          } else {
-            restoreRef.current = reduceProfileRestoreState(restoreRef.current, {
-              type: 'restore-server-rejected',
-              authKey: authLifecycleKey,
-              accountId,
-            });
-            resetRejectedCurrentActor();
-          }
-        });
-      }
-
-      return deactivate;
-    }
-
-    let restore = restoreRef.current;
-    if (restore?.authKey !== authLifecycleKey || restore.accountId !== accountId) {
-      const promise = identityChange.cleanupPromise
-        .then(() => readSelectedProfile())
-        .catch(() => null);
-      restore = reduceProfileRestoreState(restoreRef.current, {
-        type: 'restore-started',
-        authKey: authLifecycleKey,
-        accountId,
-        promise,
-      });
-      restoreRef.current = restore;
-    }
-
-    if (restore.phase === 'applied') {
-      if (serverSelectedProfileId) {
-        void identityChange.cleanupPromise.then(() => {
-          if (!active || restoreRef.current !== restore) {
-            return;
-          }
-
-          void writeSelectedProfile(serverSelectedProfileId);
-          resetActor(serverSelectedProfileId);
-        });
-      }
-      return deactivate;
-    }
-
-    void restore.promise.then((persistedProfileId) => {
-      if (!active || restoreRef.current !== restore) {
-        return;
-      }
-
-      const completedRestore = reduceProfileRestoreState(restoreRef.current, {
-        type: 'restore-read-completed',
-        authKey: authLifecycleKey,
-        accountId,
-      });
-      if (completedRestore) {
-        restoreRef.current = completedRestore;
-      }
-      if (persistedProfileId) {
-        resetActor(persistedProfileId);
-      } else if (serverSelectedProfileId) {
-        void writeSelectedProfile(serverSelectedProfileId);
-        resetActor(serverSelectedProfileId);
-      }
+    const decision = getProfileRestoreDecision({
+      sessionId,
+      accountId,
+      accountChanged: identityChange.accountChanged,
+      actorProfileId: actorSelectedProfileId,
+      serverProfileId: serverSelectedProfileId,
     });
+
+    void match(decision)
+      .with({ type: 'none' }, () => undefined)
+      .with({ type: 'reset-actor' }, () => resetActor(null))
+      .with({ type: 'select-server-profile' }, async ({ profileId }) => {
+        await identityChange.cleanupPromise;
+        if (!active) {
+          return;
+        }
+
+        void writeSelectedProfile(profileId);
+        resetActor(profileId);
+      })
+      .with({ type: 'reject-actor' }, async ({ accountId }) => {
+        await identityChange.cleanupPromise;
+        if (!active) {
+          return;
+        }
+
+        restoreRef.current = reduceProfileRestoreState(restoreRef.current, {
+          type: 'restore-server-rejected',
+          authKey: authLifecycleKey,
+          accountId,
+        });
+        resetRejectedCurrentActor();
+      })
+      .with({ type: 'restore-profile' }, async ({ accountId }) => {
+        let restore = restoreRef.current;
+        if (restore?.authKey !== authLifecycleKey || restore.accountId !== accountId) {
+          restore = reduceProfileRestoreState(restore, {
+            type: 'restore-started',
+            authKey: authLifecycleKey,
+            accountId,
+            promise: identityChange.cleanupPromise
+              .then(() => readSelectedProfile())
+              .catch(() => null),
+          });
+          restoreRef.current = restore;
+        }
+
+        const persistedProfileId = await match(restore)
+          .with({ phase: 'reading' }, ({ promise }) => promise)
+          .with({ phase: 'applied' }, () => identityChange.cleanupPromise.then(() => null))
+          .exhaustive();
+        if (!active || restoreRef.current !== restore) {
+          return;
+        }
+
+        restoreRef.current = reduceProfileRestoreState(restore, {
+          type: 'restore-read-completed',
+          authKey: authLifecycleKey,
+          accountId,
+        });
+        const profileId = persistedProfileId || serverSelectedProfileId;
+        if (!profileId) {
+          return;
+        }
+
+        if (!persistedProfileId) {
+          void writeSelectedProfile(profileId);
+        }
+        resetActor(profileId);
+      })
+      .exhaustive();
 
     return deactivate;
   }, [

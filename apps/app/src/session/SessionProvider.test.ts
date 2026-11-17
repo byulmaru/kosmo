@@ -296,15 +296,17 @@ describe('SessionProvider selected profile bootstrap', () => {
       resolveDelete = resolve;
     });
     pendingProfileDelete = deletion;
+    actorProfileId = 'profile-before-guest';
     serverSessionId = null;
     serverAccountId = null;
 
     await renderProvider();
 
     assert.equal(readSession().status, 'guest');
+    assert.equal(readSession().selectedProfileId, null);
+    assert.deepEqual(resetActorCalls, [null]);
     assert.equal(deleteCalls, 1);
     assert.equal(readCalls, 0);
-    assert.deepEqual(resetActorCalls, []);
 
     await act(async () => {
       resolveDelete();
@@ -458,19 +460,30 @@ describe('SessionProvider selected profile bootstrap', () => {
     });
   });
 
-  it('does not clear selection storage for actor changes, re-queries, or stale reports', async () => {
+  it('does not clear or reapply a server-matching actor across re-queries and stale reports', async () => {
     actorProfileId = 'profile-server';
     await renderProvider();
+    assert.equal(readSession().selectedProfileId, 'profile-server');
     assert.equal(deleteCalls, 0);
+    assert.equal(readCalls, 0);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(resetActorCalls, []);
 
     actorLifecycleKey = 'actor-2';
     await updateProvider();
+    assert.equal(readSession().selectedProfileId, 'profile-server');
     assert.equal(deleteCalls, 0);
+    assert.equal(readCalls, 0);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(resetActorCalls, []);
 
     assert.ok(latestSessionErrorReporter);
     await act(async () => latestSessionErrorReporter?.props.onError('stale-auth', 'stale-actor'));
     await updateProvider();
     assert.equal(deleteCalls, 0);
+    assert.equal(readCalls, 0);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(resetActorCalls, []);
   });
 
   it('ignores a pending prior-account restore and falls back after cleanup and storage reads fail', async () => {

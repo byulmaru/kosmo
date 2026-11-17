@@ -1,3 +1,5 @@
+import { match, P } from 'ts-pattern';
+
 export type SessionValue = {
   accountId: string | null;
   accountName: string | null;
@@ -44,25 +46,19 @@ export const guestSession: SessionValue = {
 export const errorSession: SessionValue = { ...guestSession, status: 'error' };
 
 export function reduceSessionState(state: SessionState, event: SessionStateEvent): SessionState {
-  switch (event.type) {
-    case 'session-resolved':
-      return {
-        phase: 'ready',
-        authLifecycleKey: event.authLifecycleKey,
-        actorLifecycleKey: event.actorLifecycleKey,
-        value: event.value,
-      };
-    case 'session-failed':
-      return {
-        phase: 'ready',
-        authLifecycleKey: event.authLifecycleKey,
-        actorLifecycleKey: event.actorLifecycleKey,
-        value:
-          state.authLifecycleKey === event.authLifecycleKey && state.phase === 'ready'
-            ? { ...state.value, selectedProfileId: null }
-            : errorSession,
-      };
-  }
+  return {
+    phase: 'ready',
+    authLifecycleKey: event.authLifecycleKey,
+    actorLifecycleKey: event.actorLifecycleKey,
+    value: match([state, event])
+      .with([P._, { type: 'session-resolved' }], ([, resolved]) => resolved.value)
+      .with(
+        [{ phase: 'ready', authLifecycleKey: event.authLifecycleKey }, { type: 'session-failed' }],
+        ([previous]) => ({ ...previous.value, selectedProfileId: null }),
+      )
+      .with([P._, { type: 'session-failed' }], () => errorSession)
+      .exhaustive(),
+  };
 }
 
 export function projectVisibleSession(
@@ -112,6 +108,46 @@ type ProfileRestoreEvent =
       accountId: string;
     };
 
+export type ProfileRestoreDecision =
+  | { type: 'none' }
+  | { type: 'reset-actor' }
+  | { type: 'select-server-profile'; profileId: string }
+  | { type: 'reject-actor'; accountId: string }
+  | { type: 'restore-profile'; accountId: string };
+
+export function getProfileRestoreDecision(input: {
+  sessionId: string | null;
+  accountId: string | null;
+  accountChanged: boolean;
+  actorProfileId: string | null;
+  serverProfileId: string | null;
+}): ProfileRestoreDecision {
+  return match({ ...input, authenticated: Boolean(input.sessionId && input.accountId) })
+    .returnType<ProfileRestoreDecision>()
+    .with({ sessionId: null, accountId: null, actorProfileId: P.string }, () => ({
+      type: 'reset-actor',
+    }))
+    .with({ authenticated: false }, () => ({ type: 'none' }))
+    .with({ accountChanged: true, actorProfileId: P.string }, () => ({
+      type: 'reset-actor',
+    }))
+    .with({ actorProfileId: null, accountId: P.string }, ({ accountId }) => ({
+      type: 'restore-profile',
+      accountId,
+    }))
+    .when(
+      ({ actorProfileId, serverProfileId }) => actorProfileId === serverProfileId,
+      () => ({ type: 'none' }),
+    )
+    .with(
+      { serverProfileId: P.string },
+      ({ serverProfileId }) => Boolean(serverProfileId),
+      ({ serverProfileId }) => ({ type: 'select-server-profile', profileId: serverProfileId }),
+    )
+    .with({ accountId: P.string }, ({ accountId }) => ({ type: 'reject-actor', accountId }))
+    .otherwise(() => ({ type: 'none' }));
+}
+
 export function reduceProfileRestoreState(
   state: ProfileRestoreState | null,
   event: Extract<ProfileRestoreEvent, { type: 'restore-started' }>,
@@ -124,25 +160,28 @@ export function reduceProfileRestoreState(
   state: ProfileRestoreState | null,
   event: ProfileRestoreEvent,
 ): ProfileRestoreState | null {
-  switch (event.type) {
-    case 'restore-started':
-      return {
-        phase: 'reading',
-        authKey: event.authKey,
-        accountId: event.accountId,
-        promise: event.promise,
-      };
-    case 'restore-read-completed':
-      if (
-        state?.phase !== 'reading' ||
-        state.authKey !== event.authKey ||
-        state.accountId !== event.accountId
-      ) {
-        return state;
-      }
-
-      return { phase: 'applied', authKey: event.authKey, accountId: event.accountId };
-    case 'restore-server-rejected':
-      return { phase: 'applied', authKey: event.authKey, accountId: event.accountId };
-  }
+  return match(event)
+    .returnType<ProfileRestoreState | null>()
+    .with({ type: 'restore-started' }, ({ authKey, accountId, promise }) => ({
+      phase: 'reading',
+      authKey,
+      accountId,
+      promise,
+    }))
+    .with({ type: 'restore-read-completed' }, ({ authKey, accountId }) =>
+      match(state)
+        .returnType<ProfileRestoreState | null>()
+        .with({ phase: 'reading', authKey, accountId }, () => ({
+          phase: 'applied',
+          authKey,
+          accountId,
+        }))
+        .otherwise(() => state),
+    )
+    .with({ type: 'restore-server-rejected' }, ({ authKey, accountId }) => ({
+      phase: 'applied',
+      authKey,
+      accountId,
+    }))
+    .exhaustive();
 }
