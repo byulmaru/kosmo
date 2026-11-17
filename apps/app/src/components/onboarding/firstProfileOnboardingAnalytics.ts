@@ -178,9 +178,6 @@ export function createFirstProfileOnboardingAnalytics(
     if (!finishOperation(token, result === 'failed' ? 'failed' : 'succeeded', errorType)) {
       return;
     }
-    if (token.tagIndex !== undefined) {
-      resolvedRelatedTagIndices.add(token.tagIndex);
-    }
     capture('first_profile_onboarding_discovery', {
       flow_id: flowId,
       stage: 'saved_tags',
@@ -197,6 +194,9 @@ export function createFirstProfileOnboardingAnalytics(
   ) => {
     if (!finishOperation(token, result === 'failed' ? 'failed' : 'succeeded', errorType)) {
       return;
+    }
+    if (result !== 'failed' && token.tagIndex !== undefined) {
+      resolvedRelatedTagIndices.add(token.tagIndex);
     }
     capture('first_profile_onboarding_discovery', {
       flow_id: flowId,
