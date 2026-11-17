@@ -99,7 +99,9 @@ test(
                 temporalClient.workflow,
                 'executeUpdateWithStart',
                 (...args: Parameters<typeof execute>) => {
-                  if (++requests === 2) secondReached.resolve();
+                  if (++requests === 2) {
+                    secondReached.resolve();
+                  }
                   return execute(...args);
                 },
               );
@@ -141,11 +143,13 @@ test(
                     release.resolve();
                     const [ownerResult, otherResult] = await results;
                     assert.equal(ownerResult.status, 'fulfilled');
-                    if (ownerResult.status === 'fulfilled')
+                    if (ownerResult.status === 'fulfilled') {
                       assert.equal(ownerResult.value.postId, post.id);
+                    }
                     assert.equal(otherResult.status, 'rejected');
-                    if (otherResult.status === 'rejected')
+                    if (otherResult.status === 'rejected') {
                       assert.ok(otherResult.reason instanceof PermissionDeniedError);
+                    }
                     assert.equal(
                       (
                         await db
