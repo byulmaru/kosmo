@@ -461,7 +461,11 @@ function PostListRow({
               <ProfileNameBlock
                 href={profileHref}
                 profile={post.profile}
-                style={[styles.authorText, { paddingTop: authorTopInset }]}
+                style={[
+                  styles.authorText,
+                  styles.attributedAuthorName,
+                  { paddingTop: authorTopInset },
+                ]}
               />
             </View>
           ) : (
@@ -543,6 +547,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   attributedAuthor: { flex: 1, minWidth: 0 },
+  attributedAuthorName: { alignSelf: 'flex-start', maxWidth: '100%' },
   repostAttributionContent: { minWidth: 0, pointerEvents: 'box-none' },
   authorText: { flex: -1 },
   timeLink: {

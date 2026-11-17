@@ -3783,6 +3783,9 @@ export const ProductionRepostQuoteListIntegration: Story = {
       .getByText('재게시한 코스모 사용자님이 재게시함')
       .closest<HTMLAnchorElement>('a')!;
     const pureRepostSourceRow = within(pureRepostRow!).getByTestId('post-list-standard-row');
+    const pureRepostSourceAvatar = within(pureRepostSourceRow).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
     const replyStandardRow = within(replyRow!).getByTestId('post-list-standard-row');
     expect(replyLabel.getBoundingClientRect().height).toBe(20);
     expect(
@@ -3805,7 +3808,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const replyBody = within(replyRow!).getByTestId('post-list-row-body');
     expect(pureRepostAttributionLink.getBoundingClientRect().height).toBe(20);
     expect(
-      pureRepostSourceRow.getBoundingClientRect().top -
+      pureRepostSourceAvatar.getBoundingClientRect().top -
         pureRepostAttributionLink.getBoundingClientRect().bottom,
     ).toBeCloseTo(0, 0);
     expect(
