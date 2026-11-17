@@ -139,6 +139,7 @@ stub('@/theme/tokens', {
   fontFamilies: { ui: 'ui' },
   radii: { full: 999, md: 12, sm: 4 },
   spacing: { lg: 16, md: 12, sm: 8, xs: 4, xxxl: 48 },
+  textStyles: { uiCopyM: { lineHeight: 20 } },
   typography: { sm: {} },
 });
 stub('@/lib/date', { formatTimelineTimestamp: () => 'now' });
