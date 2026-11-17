@@ -212,6 +212,7 @@ mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   }) => createElement('NavigationLink', { href }, children),
 });
 mockModule('react-native', {
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => undefined }) },
   Platform: platform,
   FlatList: NativeFlatList,
   Pressable: 'Pressable',

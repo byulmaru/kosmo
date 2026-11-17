@@ -1,17 +1,50 @@
 import { View } from 'react-native';
-import { expect, spyOn, userEvent, within } from 'storybook/test';
+import { graphql, useLazyLoadQuery } from 'react-relay';
+import { expect, fn, spyOn, userEvent, within } from 'storybook/test';
 import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
 import SettingsProfileMigrationRoute from '@/app/(tabs)/(protected)/settings/profile-migration';
 import SettingsThemeRoute from '@/app/(tabs)/(protected)/settings/theme';
 import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
+import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { ThemePreferenceProvider } from '@/theme/ThemePreferenceProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { colors, spacing } from '@/theme/tokens';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactNode } from 'react';
 import type { RequestParameters, Variables } from 'relay-runtime';
+import type { SettingsNavigationStoryQuery as SettingsNavigationStoryQueryType } from './__generated__/SettingsNavigationStoryQuery.graphql';
+
+const navigationQuery = graphql`
+  query SettingsNavigationStoryQuery {
+    currentSession {
+      selectedProfile {
+        id
+        ...SettingsNavigationList_profile
+      }
+    }
+  }
+`;
+const openProfileSwitcher = fn();
+
+function SettingsStoryChrome({ children }: { children: ReactNode }) {
+  const data = useLazyLoadQuery<SettingsNavigationStoryQueryType>(navigationQuery, {});
+
+  return (
+    <ShellChromeProvider
+      navigationDrawerOpen={false}
+      openNavigationDrawer={() => undefined}
+      openProfileSwitcher={openProfileSwitcher}
+      registerHomeReselection={() => () => undefined}
+      reselectHome={() => undefined}
+      selectedProfile={data.currentSession?.selectedProfile ?? null}
+    >
+      {children}
+    </ShellChromeProvider>
+  );
+}
 
 const selectedProfile = profile({
   displayName: '현재 Profile',
@@ -170,9 +203,11 @@ const meta = {
     router: { pathname: '/settings' },
   },
   render: () => (
-    <SettingsRouteLayout>
-      <SettingsRoute />
-    </SettingsRouteLayout>
+    <SettingsStoryChrome>
+      <SettingsRouteLayout>
+        <SettingsRoute />
+      </SettingsRouteLayout>
+    </SettingsStoryChrome>
   ),
   title: 'KOSMO/Screens/Settings',
 } satisfies Meta<typeof SettingsRouteLayout>;
@@ -187,23 +222,37 @@ export const FullMasterDetail: Story = {
     const canvas = within(canvasElement);
     const navigation = canvas.getByRole('navigation', { name: '설정 목록' });
     const account = within(navigation).getByRole('link', {
-      name: 'Byulmaru ID Account Settings 외부 서비스로 이동',
+      name: '별마루 ID 계정 설정 외부 서비스로 이동',
     });
     const profileEntry = within(navigation).getByRole('link', {
-      name: '프로필 설정 열기',
+      name: '일반 설정 열기',
     });
     const migrationEntry = within(navigation).getByRole('link', {
       name: '다른 서비스에서 이전 설정 열기',
     });
 
     expect(canvas.getByRole('heading', { name: /^설정$/ })).toBeVisible();
-    expect(canvas.getByRole('heading', { name: /^프로필 설정$/ })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: /^일반$/ })).toBeVisible();
     expect(migrationEntry).toHaveAttribute('href', '/settings/profile-migration');
     expect(canvas.queryByTestId('profile-migration-source-control')).toBeNull();
     expect(account).toHaveAttribute('href', 'https://id.byulmaru.co');
     expect(account).toHaveAttribute('target', '_blank');
     expect(account).toHaveAttribute('rel', 'noopener noreferrer');
     expect(profileEntry).toHaveAttribute('href', '/settings/profile');
+    expect(within(navigation).getByRole('heading', { name: '프로필' })).toBeVisible();
+    expect(within(navigation).getByRole('heading', { name: '앱' })).toBeVisible();
+    expect(within(navigation).getByRole('heading', { name: '계정' })).toBeVisible();
+    expect(within(navigation).getByText('현재 Profile')).toBeVisible();
+    expect(within(navigation).getByText('@settings-owner')).toBeVisible();
+    expect(
+      within(navigation).getByRole('button', {
+        name: /현재 Profile.*@settings-owner.*다른 Profile 선택/,
+      }),
+    ).toBeVisible();
+    expect(within(navigation).getByRole('link', { name: '스마트 필터 설정 열기' })).toHaveAttribute(
+      'href',
+      '/settings/natural-language-mute',
+    );
     expect(profileEntry.firstElementChild).toHaveStyle({
       backgroundColor: colors.light.selectedSurface,
       borderColor: colors.light.selectedBorder,
@@ -224,7 +273,7 @@ export const CompactRootFirst: Story = {
     expect(canvas.getByRole('heading', { name: /^설정$/ })).toBeVisible();
     expect(canvas.getByRole('navigation', { name: '설정 목록' })).toBeVisible();
     expect(canvas.queryByRole('radiogroup')).toBeNull();
-    expect(canvas.getByRole('link', { name: '프로필 설정 열기' })).not.toHaveAttribute(
+    expect(canvas.getByRole('link', { name: '일반 설정 열기' })).not.toHaveAttribute(
       'aria-current',
     );
     expect(canvas.getByRole('link', { name: '다른 서비스에서 이전 설정 열기' })).toHaveAttribute(
@@ -293,9 +342,11 @@ export const ProfileMigrationFullWeb: Story = {
     expectProfileMigrationControlLayout(canvasElement, 'horizontal');
   },
   render: () => (
-    <SettingsRouteLayout>
-      <SettingsProfileMigrationRoute />
-    </SettingsRouteLayout>
+    <SettingsStoryChrome>
+      <SettingsRouteLayout>
+        <SettingsProfileMigrationRoute />
+      </SettingsRouteLayout>
+    </SettingsStoryChrome>
   ),
 };
 

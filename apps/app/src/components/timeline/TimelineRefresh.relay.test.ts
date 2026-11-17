@@ -20,6 +20,7 @@ import { colors } from '@/theme/tokens';
 import deletePostMutation from '../post/__generated__/PostDeletionActionDeletePostMutation.graphql';
 import { createTabReselectionRegistry } from '../shell/tabReselection';
 import type { ComponentType, ReactNode } from 'react';
+import type { AppStateStatus } from 'react-native';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse, Variables } from 'relay-runtime';
 
@@ -63,8 +64,19 @@ const browserDocument = {
   addEventListener: () => undefined,
   removeEventListener: () => undefined,
 };
+const appStateListeners = new Set<(state: AppStateStatus) => void>();
 const appState = {
-  addEventListener: () => ({ remove: () => undefined }),
+  currentState: 'active' as AppStateStatus,
+  addEventListener: (_event: 'change', listener: (state: AppStateStatus) => void) => {
+    appStateListeners.add(listener);
+    return { remove: () => appStateListeners.delete(listener) };
+  },
+  change(state: AppStateStatus) {
+    this.currentState = state;
+    for (const listener of appStateListeners) {
+      listener(state);
+    }
+  },
 };
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -345,6 +357,8 @@ afterEach(async () => {
   subscriptions.length = 0;
   toasts.length = 0;
   platform.OS = 'ios';
+  appState.currentState = 'active';
+  appStateListeners.clear();
   sessionStatus = 'valid';
   postRequestSummaryMode = 'empty';
   browserWindow.scrollY = 0;
@@ -531,6 +545,80 @@ function assertConnection(
 }
 
 describe('Timeline refresh and pagination with real Relay', () => {
+  for (const os of ['ios', 'android', 'web']) {
+    for (const timeline of ['Local', 'Federated'] as const) {
+      it(`${os} ${timeline}: failed refresh resumes through the existing retry while preserving rows and Store`, async () => {
+        platform.OS = os;
+        const store = new Store(new RecordSource());
+        const environment = new Environment({ network: createTimelineNetwork(), store });
+        const field = timeline === 'Local' ? 'localTimeline' : 'federatedTimeline';
+        const refetchQuery = `${timeline}ContentRefetchQuery`;
+        const resume = async () => {
+          await act(async () => appState.change('background'));
+          await act(async () => appState.change('active'));
+        };
+        await act(async () => {
+          renderer = create(
+            createElement(ReactRelay.RelayEnvironmentProvider, {
+              environment,
+              children: timelineScreenWithPushContext(timeline),
+            }),
+          );
+        });
+        await respond(latest(`${timeline}PageQuery`), payload(field, ['a', 'b']));
+        assertConnection(environment, field, ['a', 'b']);
+        const firstRow = renderer!.root.findByProps({ id: 'a' });
+        await resume();
+        assert.equal(requests.length, 1, 'successful queries are not retried on resume');
+
+        await act(async () => shellChrome.reselectHome());
+        const failedRefresh = latest(refetchQuery);
+        await act(async () => failedRefresh.sink.error(new Error('refresh failed')));
+        const firstToast = visibleToast();
+        assertConnection(environment, field, ['a', 'b']);
+
+        await resume();
+        if (os === 'web') {
+          assert.equal(requests.length, 2, 'Web keeps manual retry without resume recovery');
+          assert.equal(firstToast.visible, true);
+        } else {
+          const resumedRefresh = latest(refetchQuery);
+          assert.notEqual(resumedRefresh, failedRefresh);
+          assert.equal(requests.length, 3);
+          assert.equal(firstToast.visible, false);
+          assertConnection(environment, field, ['a', 'b']);
+
+          await resume();
+          assert.equal(requests.length, 3, 'pending refresh is not duplicated on resume');
+          await act(async () => resumedRefresh.sink.error(new Error('still offline')));
+          const resumedToast = visibleToast();
+          assert.equal(resumedToast.options.persistent, true);
+          assertConnection(environment, field, ['a', 'b']);
+
+          await resume();
+          const nextResumeRefresh = latest(refetchQuery);
+          assert.notEqual(nextResumeRefresh, resumedRefresh);
+          assert.equal(requests.length, 4, 'a later resume can retry after another failure');
+          await act(async () => nextResumeRefresh.sink.error(new Error('offline again')));
+        }
+
+        assert.equal(renderer!.root.findByProps({ id: 'a' }), firstRow);
+        assert.equal(environment.getStore(), store);
+        assertConnection(environment, field, ['a', 'b']);
+        const toast = visibleToast();
+        await act(async () => toast.options.action!.onPress());
+        const manualRetry = latest(refetchQuery);
+        await respond(manualRetry, payload(field, ['fresh', 'a']));
+        assertConnection(environment, field, ['fresh', 'a']);
+        assert.equal(toast.visible, false);
+        assert.equal(environment.getStore(), store);
+        const requestCount = requests.length;
+        await resume();
+        assert.equal(requests.length, requestCount);
+      });
+    }
+  }
+
   it('Home: pending optional request summary preserves actual posts and connection', async () => {
     postRequestSummaryMode = 'pending';
     const environment = new Environment({

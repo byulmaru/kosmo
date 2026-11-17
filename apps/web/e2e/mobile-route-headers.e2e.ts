@@ -36,7 +36,7 @@ test('설정 direct link의 route 헤더는 부모 이동과 breakpoint 전환�
   await page.goto('/settings/theme');
   for (const width of [390, 767, 768, 1280]) {
     await page.setViewportSize({ width, height: 844 });
-    await expect(page.getByRole('heading', { name: '테마', exact: true })).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: '화면', exact: true })).toHaveCount(1);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '설정으로 돌아가기' }).click();

@@ -13,7 +13,10 @@ export function getSettingsMenuSelection(pathname: string) {
       P.union('/settings/profile-migration', '/settings/following-import'),
       () => 'profile-migration' as const,
     )
-    .with(P.union('/settings/labs', '/settings/natural-language-mute'), () => 'labs' as const)
+    .with(
+      P.union('/settings/labs', '/settings/natural-language-mute'),
+      () => 'natural-language-mute' as const,
+    )
     .with(
       P.union('/settings/info', '/settings/developer', '/settings/licenses'),
       () => 'info' as const,
@@ -28,9 +31,6 @@ export function getSettingsMenuSelection(pathname: string) {
 }
 
 function getSettingsParentPath(pathname: string) {
-  if (pathname === '/settings/natural-language-mute') {
-    return '/settings/labs';
-  }
   if (pathname === '/settings/muted-profiles' || pathname === '/settings/blocked-profiles') {
     return '/settings/mute-and-block';
   }

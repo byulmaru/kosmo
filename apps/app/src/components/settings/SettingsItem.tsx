@@ -1,9 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, fontFamilies, layoutRecipes, typography } from '@/theme/tokens';
+import { borderWidths, fontFamilies, layoutRecipes, space, typography } from '@/theme/tokens';
 import type { ReactNode } from 'react';
 
 export type SettingsItemProps = {
+  density?: 'default' | 'compact';
   description?: string;
   label: string;
   leading?: ReactNode;
@@ -13,6 +14,7 @@ export type SettingsItemProps = {
 };
 
 export function SettingsItem({
+  density = 'default',
   description,
   label,
   leading,
@@ -26,6 +28,7 @@ export function SettingsItem({
     <View
       style={StyleSheet.flatten([
         styles.root,
+        density === 'compact' ? styles.compact : undefined,
         {
           backgroundColor: selected ? theme.stateSelectedSurface : 'transparent',
           borderColor: 'transparent',
@@ -59,6 +62,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: '100%',
   },
+  compact: { minHeight: 40, paddingVertical: space[4] },
   leading: { flexShrink: 0 },
   copy: { ...layoutRecipes.labelSupportStack, flex: 1, minWidth: 0 },
   label: {

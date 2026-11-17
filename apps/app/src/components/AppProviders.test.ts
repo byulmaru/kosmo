@@ -207,6 +207,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => undefined }) },
   Modal: 'Modal',
   PanResponder: { create: () => ({ panHandlers: {} }) },
   Platform: platform,

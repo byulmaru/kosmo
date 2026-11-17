@@ -36,6 +36,7 @@ mock.module(require.resolve('lucide-react-native'), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsItem: ComponentType<{
+  density?: 'default' | 'compact';
   description?: string;
   label: string;
   leading?: ReactNode;
@@ -94,6 +95,28 @@ describe('SettingsItem', () => {
     assert.equal(rendered('Leading').length, 0);
     assert.equal(rendered('Trailing').length, 0);
     assert.equal(texts().includes('계정 설정'), true);
+  });
+
+  it('compact item은 세로 간격을 줄이고 label과 설명을 유지한다', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(SettingsItem, {
+          density: 'compact',
+          description: '현재 상태와 긴 안내 문구는 여러 줄로 표시될 수 있습니다.',
+          label: '알림 설정',
+          testID: 'compact-settings-item',
+        }),
+      );
+    });
+
+    const item = byTestId('compact-settings-item');
+    assert.equal(item.props.style.minHeight, 40);
+    assert.equal(item.props.style.paddingVertical, 4);
+    assert.equal(item.props.style.paddingHorizontal, 16);
+    assert.deepEqual(texts(), [
+      '알림 설정',
+      '현재 상태와 긴 안내 문구는 여러 줄로 표시될 수 있습니다.',
+    ]);
   });
 });
 

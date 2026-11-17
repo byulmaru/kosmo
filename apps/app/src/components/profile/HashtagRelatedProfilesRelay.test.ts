@@ -68,6 +68,7 @@ mockModule('react-relay', {
   },
 });
 mockModule('react-native', {
+  Platform: { OS: 'web' },
   ScrollView: 'div',
   View: 'div',
   StyleSheet: { create: <T>(styles: T) => styles },

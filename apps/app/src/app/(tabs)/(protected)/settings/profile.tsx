@@ -35,7 +35,7 @@ export default function SettingsProfileRoute() {
       webStyle={styles.webRoot}
     >
       <MobileWebRouteChrome>
-        <PageHeader leading={backButton} title="프로필 설정" />
+        <PageHeader leading={backButton} title="일반" />
       </MobileWebRouteChrome>
       <SettingsProfileDetail />
     </RouteScrollContainer>
