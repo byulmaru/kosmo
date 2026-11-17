@@ -118,3 +118,16 @@ hydration/serialization 회귀, PROD-792의 Quote/QuoteAuthorization 계약을 �
 승인 참조가 없는 embedded Update는 새 승인 근거가 없는 것으로 처리한다. 이미 검증된 승인과 승인 참조는
 유지하며, 누락만으로 Pending으로 전이하거나 Source를 숨기지 않는다. 이 결정은 2026-09-17 범위 중
 승인 참조 제거에 따른 Pending 전이를 대체한다. 신규·교체 승인 참조의 검증 대기와 유효한 거절·철회 처리는 유지한다.
+
+## 2026-11-18 미저장 원격 인용 원문의 출처 검증
+
+사용자는 미저장 원격 인용 원문의 ID와 작성자 Actor ID가 서로 다른 origin이면 신규 저장을 거절하도록
+선택했다. 내장 원문의 내용은 저장 근거로 사용하지 않고 원문 URI에서 독립적으로 조회한다. 조회한 Note는
+요청한 원문 ID와 일치하고, 유일한 `attributedTo` Actor ID가 원문 ID와 같은 origin이어야 한다.
+origin은 scheme·host·port로 비교하며 계정 표시 주소나 WebFinger 도메인으로 대체하지 않는다.
+
+이 검증은 Public·Unlisted 원문의 신규 저장에 적용한다. 기존 저장 원문의 연결·조회 권한과 인용 승인 판단은
+각각의 기존 계약을 유지한다. 서로 다른 origin의 작성자를 별도 증거로 검증해 허용하는 경로는 추가하지 않는다.
+
+출처 보안 모델의 근거는 [FEP-fe34의 Ownership](https://codeberg.org/fediverse/fep/src/branch/main/fep/fe34/fep-fe34.md#ownership)이다.
+FEP-fe34는 Draft 제안이며, 이 문서 전체를 Kosmo 계약으로 채택한다는 의미는 아니다.

@@ -802,6 +802,98 @@ test('an embedded public target stores only the independently fetched source', a
   assert.equal(storedQuote.status, PostQuoteConsentStatus.PENDING);
 });
 
+const assertQuoteSourceWithMismatchedOriginIsNotStored = async ({
+  actorUri,
+  representation,
+  targetUri: targetUriHref,
+}: {
+  actorUri: string;
+  representation: 'URL' | 'embedded';
+  targetUri: string;
+}) => {
+  await createRemoteActor('source-author', actorUri);
+  const quoteActorUri = 'https://quote.example/users/quote';
+  const quoteActor = await createRemoteActor('quote', quoteActorUri);
+  const targetUri = new URL(targetUriHref);
+  const quoteUri = new URL('https://quote.example/notes/origin-mismatch');
+  const quote = await createRemotePost(quoteActor.id, quoteUri.href);
+  const canonicalSource = new Note({
+    attribution: new URL(actorUri),
+    content: 'canonical source from another origin',
+    id: targetUri,
+    to: PUBLIC_COLLECTION,
+  });
+  const quoteTarget =
+    representation === 'embedded'
+      ? new Note({
+          attribution: new URL(actorUri),
+          content: 'untrusted embedded source',
+          id: targetUri,
+          to: PUBLIC_COLLECTION,
+        })
+      : targetUri;
+  const context = createContext(new Map(), async (identifier) =>
+    identifier.toString() === targetUri.href ? canonicalSource : null,
+  );
+
+  await handleInboundQuote({
+    actorUri: quoteActorUri,
+    context,
+    note: new Note({
+      attribution: new URL(quoteActorUri),
+      content: 'quote body',
+      id: quoteUri,
+      quote: quoteTarget,
+      to: PUBLIC_COLLECTION,
+    }),
+    postId: quote.post.id,
+    receivedAt,
+  });
+
+  assert.equal(await db.$count(ActivityPubActors, eq(ActivityPubActors.uri, actorUri)), 1);
+  assert.equal(await db.$count(ActivityPubPosts, eq(ActivityPubPosts.uri, targetUri.href)), 0);
+  assert.equal(await db.$count(Posts), 1);
+  assert.equal(await db.$count(PostContents), 1);
+  const storedQuote = await db
+    .select({ status: Posts.quoteConsentStatus, sourcePostId: Posts.repostSourceId })
+    .from(Posts)
+    .where(eq(Posts.id, quote.post.id))
+    .then(firstOrThrow);
+  assert.equal(storedQuote.status, PostQuoteConsentStatus.PENDING);
+  assert.equal(storedQuote.sourcePostId, null);
+};
+
+for (const representation of ['URL', 'embedded'] as const) {
+  test(`a public ${representation} Quote target is not stored when its author origin differs`, async () => {
+    await assertQuoteSourceWithMismatchedOriginIsNotStored({
+      actorUri: 'https://victim.example/users/victim',
+      representation,
+      targetUri: `https://attacker.example/notes/${representation}-mismatched-author`,
+    });
+  });
+}
+
+for (const { description, actorUri, targetUri } of [
+  {
+    description: 'scheme',
+    actorUri: 'https://source.example/users/source',
+    targetUri: 'http://source.example/notes/scheme-mismatched-author',
+  },
+  {
+    description: 'port',
+    actorUri: 'https://source.example:9443/users/source',
+    targetUri: 'https://source.example:8443/notes/port-mismatched-author',
+  },
+] as const) {
+  test(`a public URL Quote target is not stored when its ${description} differs from its author origin`, async () => {
+    await assertQuoteSourceWithMismatchedOriginIsNotStored({
+      actorUri,
+      representation: 'URL',
+      targetUri,
+    });
+  });
+}
+
 for (const result of ['missing', 'unavailable'] as const) {
   test(`an embedded public target is not stored when its canonical lookup is ${result}`, async () => {
     await createRemoteActor('source', 'https://source.example/users/source');

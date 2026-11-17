@@ -15,7 +15,7 @@ import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { and, eq, isNull } from 'drizzle-orm';
 import { findPostByActivityPubUri, resolveActivityPubPostUri } from './activitypub-post-uri';
-import { isHttpUri } from './activitypub-uri';
+import { isHttpUri, uniqueHref } from './activitypub-uri';
 import { materializeHydratedRemoteNote } from './inbound-create-note';
 import { RemoteActorDiscoveryUnavailableError } from './remote-actor-materialization';
 import type { Context } from '@fedify/fedify';
@@ -273,6 +273,14 @@ const materializeTarget = async ({
     !targetObject.id ||
     targetObject.id.href !== extraction.targetUri
   ) {
+    return { kind: 'permanent_failure' };
+  }
+  const attributionHref = uniqueHref(targetObject.attributionIds);
+  if (!attributionHref) {
+    return { kind: 'permanent_failure' };
+  }
+  const attributionUri = new URL(attributionHref);
+  if (!isHttpUri(attributionUri) || attributionUri.origin !== targetObject.id.origin) {
     return { kind: 'permanent_failure' };
   }
   if (
