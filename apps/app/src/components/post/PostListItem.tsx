@@ -439,19 +439,19 @@ function PostListRow({
       testID="post-list-standard-row"
     >
       {attribution ? (
-        <View>
+        <PostDetailBackground onBackgroundPress={openDetail}>
           <PostDetailBackground onBackgroundPress={openDetail} style={styles.attributionIconColumn}>
             <View style={{ pointerEvents: 'none' }}>{attribution.icon}</View>
           </PostDetailBackground>
           {avatarLink}
-        </View>
+        </PostDetailBackground>
       ) : (
         avatarLink
       )}
       <PostDetailBackground onBackgroundPress={openDetail} style={styles.content}>
         <PostDetailBackground onBackgroundPress={openDetail} style={styles.header}>
           {attribution ? (
-            <View style={styles.attributedAuthor}>
+            <PostDetailBackground onBackgroundPress={openDetail} style={styles.attributedAuthor}>
               <PostDetailBackground
                 onBackgroundPress={openDetail}
                 style={styles.repostAttributionContent}
@@ -467,7 +467,7 @@ function PostListRow({
                   { paddingTop: authorTopInset },
                 ]}
               />
-            </View>
+            </PostDetailBackground>
           ) : (
             <ProfileNameBlock
               href={profileHref}
