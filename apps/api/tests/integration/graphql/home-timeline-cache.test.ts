@@ -17,7 +17,9 @@ import {
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { homeTimelinePubSub } from '@kosmo/core/home-timeline/events';
+import { getLinkPreviewUrlHash, normalizeLinkPreviewUrl } from '@kosmo/core/link-preview';
 import {
+  canonicalizePostContentDocument,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
 } from '@kosmo/core/post-content/server';
@@ -31,6 +33,7 @@ import {
   waitForSubscriberCount,
   withTimeout,
 } from '../../../src/graphql/subscription-test-helpers';
+import type { TestContext } from 'node:test';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as HomeTimelineCache from '@kosmo/core/home-timeline/cache';
 import type * as NaturalLanguageMuteCache from '@kosmo/core/home-timeline/natural-language-mute-cache';
@@ -55,9 +58,11 @@ let firstOrThrow: typeof CoreDb.firstOrThrow;
 let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let Instances: typeof CoreDb.Instances;
+let LinkPreviews: typeof CoreDb.LinkPreviews;
 let Media: typeof CoreDb.Media;
 let NaturalLanguageMuteRules: typeof CoreDb.NaturalLanguageMuteRules;
 let pg: typeof CoreDb.pg;
+let pgRead: typeof CoreDb.pgRead;
 let Posts: typeof CoreDb.Posts;
 let PostContents: typeof CoreDb.PostContents;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
@@ -83,6 +88,16 @@ const fixtureAccountIds: string[] = [];
 const fixturePostIds: string[] = [];
 const fixtureContentIds: string[] = [];
 const fixtureMediaIds: string[] = [];
+const fixtureLinkPreviewHashes: string[] = [];
+
+type LinkPreviewValue = {
+  readonly url: string;
+  readonly title: string | null;
+  readonly description: string | null;
+  readonly imageUrl: string | null;
+  readonly imageWidth: number | null;
+  readonly imageHeight: number | null;
+};
 
 type GraphQLResult<TData> = {
   readonly data?: TData | null;
@@ -177,9 +192,11 @@ before(async () => {
     db,
     firstOrThrow,
     Instances,
+    LinkPreviews,
     Media,
     NaturalLanguageMuteRules,
     pg,
+    pgRead,
     Posts,
     PostContents,
     ProfileBlocks,
@@ -258,6 +275,7 @@ after(async () => {
     await db.delete(PostContents).where(inArray(PostContents.id, fixtureContentIds));
     await db.delete(Posts).where(inArray(Posts.id, fixturePostIds));
     await db.delete(Media).where(inArray(Media.id, fixtureMediaIds));
+    await db.delete(LinkPreviews).where(inArray(LinkPreviews.urlHash, fixtureLinkPreviewHashes));
     await db
       .delete(NaturalLanguageMuteRules)
       .where(inArray(NaturalLanguageMuteRules.ownerProfileId, fixtureProfileIds));
@@ -279,6 +297,240 @@ after(async () => {
     process.env.PUBLIC_ORIGIN = previousPublicOrigin;
   }
 });
+
+test(
+  'batches Link Preview reads for cached Home timeline contents',
+  { skip: !testRedisUrl },
+  async (t) => {
+    const viewer = await createAuth();
+    const fixtures: {
+      readonly postId: string;
+      readonly bodyText: string;
+      readonly preview: LinkPreviewValue | null;
+      readonly url: string;
+    }[] = [];
+
+    for (let index = 0; index < 10; index += 1) {
+      const bodyText = `cached link preview ${index}`;
+      const url = `https://home-cache-preview.example/${crypto.randomUUID()}`;
+      const normalizedUrl = normalizeLinkPreviewUrl(url);
+      assert.ok(normalizedUrl);
+      const post = await createContentfulPost(viewer.profile.id, bodyText);
+      await db
+        .update(PostContents)
+        .set({ document: postContentDocumentWithLink(url, bodyText) })
+        .where(eq(PostContents.id, post.contentId));
+
+      let preview: LinkPreviewValue | null = null;
+      if (index !== 3) {
+        preview = {
+          url: normalizedUrl,
+          title: index === 5 ? null : `title ${index}`,
+          description: `description ${index}`,
+          imageUrl: index === 6 ? null : `https://home-cache-preview.example/${index}.png`,
+          imageWidth: 800,
+          imageHeight: 600,
+        };
+        const urlHash = getLinkPreviewUrlHash(normalizedUrl);
+        fixtureLinkPreviewHashes.push(urlHash);
+        await db.insert(LinkPreviews).values({
+          ...preview,
+          urlHash,
+          lastSuccessfulFetchAt: Temporal.Now.instant(),
+        });
+      }
+
+      fixtures.push({ postId: post.id, bodyText, preview, url: normalizedUrl });
+      await fanoutHomeTimelinePost({ postId: post.id });
+      if (index === 0) {
+        const repeatedBodyText = 'cached link preview repeat';
+        const repeated = await createContentfulPost(viewer.profile.id, repeatedBodyText);
+        await db
+          .update(PostContents)
+          .set({ document: postContentDocumentWithLink(normalizedUrl, repeatedBodyText) })
+          .where(eq(PostContents.id, repeated.contentId));
+        fixtures.push({
+          postId: repeated.id,
+          bodyText: repeatedBodyText,
+          preview,
+          url: normalizedUrl,
+        });
+        await fanoutHomeTimelinePost({ postId: repeated.id });
+      }
+    }
+    await waitForCachedPostIds(
+      viewer.profile.id,
+      fixtures.map(({ postId }) => postId),
+    );
+
+    const query = `query CachedHomeLinkPreviews($first: Int!) {
+      homeTimeline(first: $first) {
+        edges { node { content { bodyText linkPreview { url title description imageUrl imageWidth imageHeight } } } }
+      }
+    }`;
+    const request = (first: number) =>
+      requestGraphQL<{
+        homeTimeline: {
+          edges: readonly {
+            node: {
+              content: {
+                bodyText: string;
+                linkPreview: LinkPreviewValue | null;
+              } | null;
+            };
+          }[];
+        };
+      }>(query, { first }, viewer.token);
+    const countLinkPreviewReads = trackLinkPreviewSelects(t);
+    let previousCount = countLinkPreviewReads();
+
+    for (const first of [5, 10, 11]) {
+      const result = await request(first);
+      assert.equal(result.errors, undefined, JSON.stringify(result.errors));
+      const edges = result.data!.homeTimeline.edges;
+      assert.equal(edges.length, first);
+      assert.equal(countLinkPreviewReads() - previousCount, 1);
+      previousCount = countLinkPreviewReads();
+
+      const resolvedUrls: string[] = [];
+      const fixturesByBodyText = new Map(
+        fixtures.map(({ bodyText, preview }) => [
+          bodyText,
+          preview?.title == null
+            ? null
+            : {
+                ...preview,
+                imageWidth: preview.imageUrl === null ? null : preview.imageWidth,
+                imageHeight: preview.imageUrl === null ? null : preview.imageHeight,
+              },
+        ]),
+      );
+      for (const { node } of edges) {
+        assert.ok(node.content);
+        const fixture = fixtures.find(({ bodyText }) => bodyText === node.content!.bodyText);
+        assert.ok(fixture);
+        resolvedUrls.push(fixture.url);
+        assert.deepEqual(
+          node.content.linkPreview,
+          fixturesByBodyText.get(node.content.bodyText),
+          node.content.bodyText,
+        );
+      }
+      assert.equal(new Set(resolvedUrls).size, first === 11 ? 10 : first);
+    }
+
+    const quoteBodyText = 'cached link preview quote';
+    const quoteUrl = `https://home-cache-preview.example/${crypto.randomUUID()}`;
+    const normalizedQuoteUrl = normalizeLinkPreviewUrl(quoteUrl);
+    assert.ok(normalizedQuoteUrl);
+    const quote = await createQuote(viewer.profile.id, fixtures[0]!.postId, quoteBodyText);
+    await db
+      .update(PostContents)
+      .set({ document: postContentDocumentWithLink(quoteUrl, quoteBodyText) })
+      .where(eq(PostContents.id, quote.contentId));
+    const quotePreview: LinkPreviewValue = {
+      url: normalizedQuoteUrl,
+      title: 'quote title',
+      description: 'quote description',
+      imageUrl: null,
+      imageWidth: null,
+      imageHeight: null,
+    };
+    const quoteUrlHash = getLinkPreviewUrlHash(normalizedQuoteUrl);
+    fixtureLinkPreviewHashes.push(quoteUrlHash);
+    await db.insert(LinkPreviews).values({
+      ...quotePreview,
+      urlHash: quoteUrlHash,
+      lastSuccessfulFetchAt: Temporal.Now.instant(),
+    });
+    fixtures.push({
+      postId: quote.id,
+      bodyText: quoteBodyText,
+      preview: quotePreview,
+      url: normalizedQuoteUrl,
+    });
+    await fanoutHomeTimelinePost({ postId: quote.id });
+
+    const repost = await createContentlessRepost(viewer.profile.id, fixtures[1]!.postId);
+    await fanoutHomeTimelinePost({ postId: repost.id });
+    await waitForCachedPostIds(viewer.profile.id, [quote.id, repost.id]);
+
+    const nestedCountBefore = countLinkPreviewReads();
+    const nestedResult = await requestGraphQL<{
+      homeTimeline: {
+        edges: readonly {
+          node: {
+            content: { bodyText: string; linkPreview: LinkPreviewValue | null } | null;
+            repostSource: {
+              content: { bodyText: string; linkPreview: LinkPreviewValue | null } | null;
+            } | null;
+          };
+        }[];
+      };
+    }>(
+      `query CachedHomeLinkPreviewSources {
+        homeTimeline(first: 13) {
+          edges {
+            node {
+              content { bodyText linkPreview { url title description imageUrl imageWidth imageHeight } }
+              repostSource {
+                content { bodyText linkPreview { url title description imageUrl imageWidth imageHeight } }
+              }
+            }
+          }
+        }
+      }`,
+      {},
+      viewer.token,
+    );
+    assert.equal(nestedResult.errors, undefined, JSON.stringify(nestedResult.errors));
+    assert.equal(nestedResult.data?.homeTimeline.edges.length, 13);
+    const nestedReadCount = countLinkPreviewReads() - nestedCountBefore;
+    assert.ok(
+      nestedReadCount >= 1 && nestedReadCount <= 2,
+      `Link Preview reads: ${nestedReadCount}`,
+    );
+    const fixturesByBodyText = new Map(
+      fixtures.map(({ bodyText, preview }) => [
+        bodyText,
+        preview?.title == null
+          ? null
+          : {
+              ...preview,
+              imageWidth: preview.imageUrl === null ? null : preview.imageWidth,
+              imageHeight: preview.imageUrl === null ? null : preview.imageHeight,
+            },
+      ]),
+    );
+    const nestedEdges = nestedResult.data!.homeTimeline.edges;
+    for (const { node } of nestedEdges) {
+      if (node.content) {
+        assert.deepEqual(
+          node.content.linkPreview,
+          fixturesByBodyText.get(node.content.bodyText),
+          node.content.bodyText,
+        );
+      }
+      if (node.repostSource?.content) {
+        assert.deepEqual(
+          node.repostSource.content.linkPreview,
+          fixturesByBodyText.get(node.repostSource.content.bodyText),
+          node.repostSource.content.bodyText,
+        );
+      }
+    }
+    assert.ok(
+      nestedEdges.some(({ node }) => node.content?.bodyText === quoteBodyText),
+      'The Home page should include the quote content.',
+    );
+    assert.ok(
+      nestedEdges.some(
+        ({ node }) => node.repostSource?.content?.bodyText === fixtures[1]!.bodyText,
+      ),
+      'The Home page should include the repost source content.',
+    );
+  },
+);
 
 test(
   'keeps a cached Home Post and body stale after Block while a direct Node read is denied in the same operation',
@@ -3297,6 +3549,49 @@ async function requestGraphQL<TData>(
   assert.equal(response.status, 200);
   return (await response.json()) as GraphQLResult<TData>;
 }
+
+function trackLinkPreviewSelects(testContext: TestContext): () => number {
+  let count = 0;
+  const connections = new Set([pg, ...(pgRead ? [pgRead] : [])]);
+
+  for (const connection of connections) {
+    const unsafe = connection.unsafe.bind(connection);
+    testContext.mock.method(
+      connection,
+      'unsafe',
+      (...args: Parameters<typeof connection.unsafe>) => {
+        const query = args[0];
+        if (typeof query === 'string' && /\bselect\b[\s\S]*?\bfrom\s+"link_preview"/i.test(query)) {
+          count += 1;
+        }
+        return unsafe(...args);
+      },
+    );
+  }
+
+  return () => count;
+}
+
+const postContentDocumentWithLink = (url: string, text: string) =>
+  canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text,
+              marks: [{ type: 'link', attrs: { href: url } }],
+            },
+          ],
+        },
+      ],
+    },
+  });
 
 function naturalMuteInputText(request: NaturalMuteRequest): string {
   return request.input
