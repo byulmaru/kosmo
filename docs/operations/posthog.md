@@ -1,6 +1,6 @@
 # PostHog 제품 분석 운영
 
-Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posthogHost`가 모두 주입된 경우에만 초기화한다. `dev` 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 승인된 production 분석 설정은 EU PostHog host(`https://eu.i.posthog.com`)를 사용한다. Web은 `disable_session_recording: true`와 Cloud Replay OFF로 Session Replay를 수집하지 않는다. Native는 명시적으로 호출된 앱 event만 전달하고 app lifecycle event와 Session Replay를 수집하지 않는다. Native는 기존 session bridge에서 로그인 Account를 identify하고, 성공한 로그아웃 또는 Account 삭제 뒤 local session 정리에서 reset한다. 이는 목표 설정 계약이며 배포 증거는 아니다.
+Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`와 `posthogHost`가 모두 주입된 경우에만 초기화한다. `dev` 채널과 설정이 없는 build에는 client와 분석 요청이 없어야 한다. 승인된 production 분석 설정은 EU PostHog host(`https://eu.i.posthog.com`)를 사용한다. Web은 `disable_session_recording: true`와 Cloud Replay OFF로 Session Replay를 수집하지 않는다. Native는 명시적으로 호출된 앱 event와 Expo Router 경로 template 기반 `$screen`, SDK 기본 app lifecycle event를 수집하며 Session Replay는 수집하지 않는다. Screen 이름은 route group을 제외한 `useSegments` template만 사용해 `/[profileHandle]`처럼 기록한다. 실제 pathname, query, dynamic route 값과 ID는 screen 이름에 넣지 않는다. Native의 `Application Opened` event는 `before_send`에서 SDK가 추가한 `url`만 제거해 OAuth 초기 URL의 code·state를 보내지 않으며, 나머지 SDK event property는 유지한다. Native session은 SDK의 기본 event 기반 수명을 따른다. 수집 event가 30분간 없거나 session이 24시간에 도달하면 만료되고, 앱 재시작 시 session ID를 이어 쓰지 않는다. 별도 체류 시간 timer나 heartbeat는 두지 않는다. Native는 기존 session bridge에서 로그인 Account를 identify하고, 성공한 로그아웃 또는 Account 삭제 뒤 local session 정리에서 reset한다. 이는 목표 설정 계약이며 배포 증거는 아니다.
 
 ## Identity와 개인정보 경계
 
@@ -22,7 +22,7 @@ Kosmo Web·Native의 PostHog client는 `prod` 채널에서 공개 `posthogKey`�
 | `reaction_removed` | `reaction_type`: `default` 또는 `custom`; 허용된 Unicode 값이면 `emoji_kind`, `reaction_emoji_key` | `deleteReaction` payload 반환 뒤. `reactionId: null`인 멱등 성공도 포함                                                             |
 | `bookmark_added`   | 없음                                                                                               | 생성 payload의 `bookmark.id`를 확인한 뒤. 별도 projection 오류는 기존 UI 오류 처리를 유지                                           |
 | `bookmark_removed` | 없음                                                                                               | 응답의 `requestedBookmarkId`가 요청 ID와 일치할 때. 다른 projection의 GraphQL error가 함께 있어도 대상 삭제가 확인되면 포함         |
-| `post_created`     | `selected_profile_id`, `visibility`, `ai_prohibit_image_count` | 유효한 `createPost` 응답의 Post ID 또는 PostRequest ID를 확인한 뒤 한 번                                                            |
+| `post_created`     | `selected_profile_id`, `visibility`, `ai_prohibit_image_count`                                     | 유효한 `createPost` 응답의 Post ID 또는 PostRequest ID를 확인한 뒤 한 번                                                            |
 
 현재 Post Composer는 유효한 `createPost.post.id` 또는 `acceptedRequest.id`가 있는 응답에서 기존
 `trackAnalytics` SDK 경로로 `post_created`를 기록한다. `ai_prohibit_image_count`는 실제 제출 snapshot에서
@@ -103,19 +103,20 @@ Saved event-backed views: [production database counts dashboard](https://us.post
 
 쿼리는 식별된 Web 이벤트만 집계하며 전체 제품 사용량, 노출을 통제한 선호도, 또는 현재 남아 있는 Reaction 수를 뜻하지 않는다. key 없는 과거 이벤트와 수집 중단 기간을 특정 종류에 배분하거나 backfill하지 않는다. PostHog Cloud Insight를 만들거나 설정을 바꾸는 일은 이 변경 범위에 포함하지 않는다.
 
-7. Native 개발 build에서 초기 화면을 열고 route를 이동해도 PostHog client가 초기화되지 않고 요청이 없는지 확인한다.
-8. Native production build에서 초기 route와 실제 이동마다 `$screen`이 발생하고, `$screen_name`은 route group을 제외한 template segment만 포함하는지 확인한다. `[profileHandle]` placeholder는 유지하고 실제 pathname, query, handle, 기타 dynamic value나 ID는 보내지 않는다. 기본 `Application Installed`, `Application Updated`, `Application Opened`, `Application Became Active`, `Application Backgrounded` event를 확인하고, `Application Opened`에는 초기 deep link `url`이 없으며 다른 SDK property는 유지되는지 확인한다. Session Replay event가 발생하지 않는지도 확인한다.
-9. Native에서 PostHog 초기화·전송 실패를 유발해도 route 이동과 화면 사용이 동일하게 완료되는지 확인한다.
-
 ## Production 확인
 
 새 Reaction 종류 속성의 공개 고지 적합성을 판단한 뒤 production build와 PostHog project에서 실제 payload를 확인한다. 실제 사용자 식별자나 콘텐츠를 ticket·스크린샷에 복사하지 않는다.
 
-1. 설정이 없는 dev build에서 PostHog 요청이 없는지 확인한다.
-2. production Web에서 로그인 후 Account ID 하나의 identify가 발생하는지 확인한다. 이름·handle·email이 identity trait에 없는지 확인하고, `selected_profile_id`는 해당 event allowlist와 대조한다.
-3. 재게시 생성·취소, Reaction 추가·삭제, 북마크 추가·취소에서 allowlist event와 property만 확인한다. Reaction의 Unicode 변형별 key가 달라지고 Reaction event에 원문 Reaction과 Post·Profile 식별자가 없는지 확인한다.
-4. 각 동작의 network error·실패 응답·payload 누락과 Account 전환 뒤 늦은 Reaction callback에서 성공 event가 발생하지 않고 UI 오류 처리가 유지되는지 확인한다.
-5. PostHog endpoint를 차단한 상태에서도 재게시·Reaction·북마크가 동일하게 완료되는지 확인한다.
-6. 위 조건을 확인한 뒤 Reaction 종류별 쿼리를 승인된 project에서 실행하고 결과 해석을 기록한다.
+1. 설정이 없는 `dev` build에서 PostHog 요청이 없는지 확인한다.
+2. production Web에서 로그인 후 Account ID 하나의 `$identify`가 발생하는지 확인한다. 이름·handle·email·Profile ID가 payload에 없는지 확인한다.
+3. 재게시 생성·취소, Reaction 추가·삭제, 북마크 추가·취소와 Post 요청 접수를 각각 성공시켜 allowlist event와 enum만 확인한다. Post 요청은 pending 접수와 즉시 `PUBLISHED` 응답을 포함한다.
+4. 각 동작을 network error, 실패 응답, 필요한 payload 누락 상태에서 반복해 성공 event가 발생하지 않고 UI의 기존 오류 처리가 유지되는지 확인한다. Post 요청은 유효한 접수 ID가 없을 때만 event를 생략하며, 접수 뒤의 게시 실패나 취소는 event를 회수하지 않는다.
+5. 각 event allowlist 밖의 Post·Profile 식별자나 Reaction 원문이 추가되지 않는지 확인한다.
+6. PostHog endpoint를 차단한 상태에서도 재게시·Reaction·북마크·Post 요청 접수가 동일하게 완료되는지 확인한다.
+7. Native 개발 build에서 초기 화면을 열고 route를 이동해도 PostHog client가 초기화되지 않고 요청이 없는지 확인한다.
+8. Native production build에서 초기 route와 실제 이동마다 `$screen`이 발생하고, `$screen_name`은 route group을 제외한 template segment만 포함하는지 확인한다. `[profileHandle]` placeholder는 유지하고 실제 pathname, query, handle, 기타 dynamic value나 ID는 보내지 않는다. 기본 `Application Installed`, `Application Updated`, `Application Opened`, `Application Became Active`, `Application Backgrounded` event를 확인하고, `Application Opened`에는 초기 deep link `url`이 없으며 다른 SDK property는 유지되는지 확인한다. Session Replay event가 발생하지 않는지도 확인한다.
+9. Native에서 PostHog 초기화·전송 실패를 유발해도 route 이동과 화면 사용이 동일하게 완료되는지 확인한다.
+10. Reaction의 Unicode 변형별 key가 달라지고 원문 Reaction과 Post·Profile 식별자가 Reaction event에 없는지 확인한다. Account 전환 뒤 늦은 callback에서는 Reaction event를 보내지 않아야 한다.
+11. 위 조건을 확인한 뒤 Reaction 종류별 쿼리를 승인된 project에서 실행하고 결과 해석을 기록한다.
 
 PostHog Cloud 설정 변경, production 배포와 acceptance는 별도 책임이다. Web event의 집계 Dashboard·funnel 정의와 Native event의 추가 집계·funnel 분석은 Worker 스냅샷과 별도 범위다. Event taxonomy가 바뀌면 이 문서와 canonical product contract를 함께 갱신한다.
