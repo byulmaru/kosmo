@@ -5,7 +5,7 @@ import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-nat
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { borderWidths, fontFamilies, radius, space, typography } from '@/theme/tokens';
+import { borderWidths, fontFamilies, space, typography } from '@/theme/tokens';
 import { SettingsItem } from './SettingsItem';
 import type { Href, WebAnchorProps } from 'expo-router';
 import type { ReactNode } from 'react';
@@ -114,8 +114,6 @@ export function SettingsLinkRow({
           styles.entry,
           density === 'compact' ? styles.entryCompact : undefined,
           {
-            borderColor: 'transparent',
-            borderWidth: borderWidths[1],
             outlineColor: focusVisible ? theme.stateFocusRing : undefined,
             outlineOffset: 2,
             outlineStyle: focusVisible ? 'solid' : 'none',
@@ -176,12 +174,11 @@ export function SettingsLinkRow({
 const styles = StyleSheet.create({
   feedback: {
     borderWidth: borderWidths[1],
-    borderRadius: radius[8],
-    bottom: space[4] / 2,
-    left: space[4] / 2,
+    bottom: 0,
+    left: 0,
     position: 'absolute',
-    right: space[4] / 2,
-    top: space[4] / 2,
+    right: 0,
+    top: 0,
   },
   entry: {
     minHeight: 64,
