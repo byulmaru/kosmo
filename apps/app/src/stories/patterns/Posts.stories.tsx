@@ -4883,8 +4883,13 @@ export const Quote: Story = {
       formatTimelineTimestamp(sourcePost.createdAt),
     );
     const sourceTimestampLink = sourceTimestamp.closest('[role="link"]');
-    expect(window.getComputedStyle(sourceTimestamp).textAlign).toBe('right');
     expect(sourceTimestampLink).not.toBeNull();
+    expect(
+      Math.abs(
+        sourceTimestamp.getBoundingClientRect().right -
+          sourceTimestampLink!.getBoundingClientRect().right,
+      ),
+    ).toBeLessThanOrEqual(1);
     expect(sourceTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(sourceTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     const sourceAvatar = within(preview).getByLabelText(
