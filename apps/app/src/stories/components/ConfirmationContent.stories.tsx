@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 import { ConfirmationContent } from '@/components/ui/ConfirmationContent';
 import { useTheme } from '@/theme/ThemeProvider';
 import { space, textStyles } from '@/theme/tokens';
@@ -126,7 +126,10 @@ export const InteractionContract: Story = {
 
     await step('비활성 확인과 취소 action 확인', async () => {
       expect(confirm).toHaveAttribute('aria-disabled', 'true');
-      await userEvent.click(confirm);
+      cancel.focus();
+      await userEvent.tab();
+      expect(confirm).not.toHaveFocus();
+      await fireEvent.click(confirm);
       expect(args.onConfirm).not.toHaveBeenCalled();
 
       await userEvent.click(cancel);
@@ -164,8 +167,11 @@ export const Pending: Story = {
       expect(confirm).toHaveAttribute('aria-disabled', 'true');
       expect(confirm).toHaveAttribute('aria-busy', 'true');
 
-      await userEvent.click(confirm);
-      await userEvent.click(cancel);
+      await userEvent.tab();
+      expect(confirm).not.toHaveFocus();
+      expect(cancel).not.toHaveFocus();
+      await fireEvent.click(confirm);
+      await fireEvent.click(cancel);
       expect(args.onConfirm).not.toHaveBeenCalled();
       expect(args.onCancel).not.toHaveBeenCalled();
     });
