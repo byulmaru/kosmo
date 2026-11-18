@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { OpenSourceLicenseList } from '@/components/settings/OpenSourceLicenseList';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import openSourceLicenseData from '@/data/open-source-licenses.json';
@@ -34,9 +35,9 @@ export default function SettingsLicensesRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? (
+      <MobileWebRouteChrome>
         <PageHeader leading={backButton} title="오픈소스 라이선스" />
-      ) : null}
+      </MobileWebRouteChrome>
       <OpenSourceLicenseList notices={openSourceLicenseData.notices} />
     </RouteScrollContainer>
   );

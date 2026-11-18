@@ -1,12 +1,25 @@
-import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
+import { db, Instances, Posts, ProfilePinnedPosts, Profiles } from '@kosmo/core/db';
 import { PostVisibility } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
-import { and, asc, desc, eq, getColumns, gt, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  getColumns,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  notExists,
+} from 'drizzle-orm';
 import { env } from '@/env';
 import { builder } from '@/graphql/builder';
 import { postAccessWhere } from '../access';
 import { Post, PostConnection } from '../ref';
+import { filterNaturalLanguageMuteExcludes } from './filter-natural-language-mute-excludes';
 
 type PostRow = typeof Posts.$inferSelect;
 
@@ -18,7 +31,7 @@ builder.queryField('localTimeline', (t) =>
       resolve: async (_, args, ctx) => {
         const localInstance = await resolveConfiguredLocalInstance();
 
-        return resolveCursorConnection<Promise<PostRow[]>>(
+        const connection = await resolveCursorConnection<Promise<PostRow[]>>(
           {
             args,
             defaultSize: 20,
@@ -41,6 +54,17 @@ builder.queryField('localTimeline', (t) =>
                   isNotNull(Posts.currentContentId),
                   isNull(Posts.replyParentId),
                   postAccessWhere({ ctx, profileMute: 'exclude' }),
+                  notExists(
+                    db
+                      .select({ id: ProfilePinnedPosts.id })
+                      .from(ProfilePinnedPosts)
+                      .where(
+                        and(
+                          eq(ProfilePinnedPosts.profileId, Posts.profileId),
+                          eq(ProfilePinnedPosts.postId, Posts.id),
+                        ),
+                      ),
+                  ),
                   before ? gt(Posts.id, before) : undefined,
                   after ? lt(Posts.id, after) : undefined,
                 ),
@@ -48,6 +72,12 @@ builder.queryField('localTimeline', (t) =>
               .orderBy(inverted ? asc(Posts.id) : desc(Posts.id))
               .limit(limit),
         );
+
+        const edges = await filterNaturalLanguageMuteExcludes(
+          connection.edges,
+          ctx.session?.profile?.id,
+        );
+        return edges === connection.edges ? connection : { ...connection, edges };
       },
     },
     PostConnection as never,

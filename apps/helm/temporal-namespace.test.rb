@@ -33,6 +33,8 @@ def render_temporal_namespace_job(environment:, namespace:)
     command.concat(['--set', "imageDigest=sha256:#{'a' * 64}"])
   end
 
+  # Fixed dev/prod fixtures are passed as argv to helm, without shell interpolation.
+  # nosemgrep: ruby.lang.security.dangerous-exec.dangerous-exec
   rendered, status = Open3.capture2e(*command, chdir: ROOT)
   assert(status.success?, "Helm failed rendering #{environment}: #{rendered}")
 
@@ -85,6 +87,8 @@ def run_job(command:, args:, job_environment:, create_status:, update_status:)
       'FAKE_NEXUS_CREATE_EXIT_STATUS' => create_status.to_s,
       'FAKE_NEXUS_UPDATE_EXIT_STATUS' => update_status.to_s,
     )
+    # Executes the checked-in Helm script with fixture values and a fake temporal binary.
+    # nosemgrep: ruby.lang.security.dangerous-exec.dangerous-exec
     stdout, stderr, status = Open3.capture3(environment, *command, *args, chdir: ROOT)
     output = stdout + stderr
     calls =

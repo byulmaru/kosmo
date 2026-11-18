@@ -384,7 +384,7 @@ function ReactionRepostNotificationTargets({
         : preview.bodyText;
   const media =
     preview && !preview.contentWarning && !preview.sensitiveMedia ? preview.media?.[0] : undefined;
-  const label = `${subject} ${actions[kind]}. ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''}${excerpt ? ` ${excerpt}.` : ''}${media ? ` ${media.altText?.trim() || '첨부 이미지'}.` : ''} 게시글로 이동`;
+  const label = `${subject} ${actions[kind]}. ${timestamp}.${unread ? ' 읽지 않은 알림.' : ''}${excerpt ? ` ${excerpt}.` : ''}${media ? ` ${media.altText?.trim() || '첨부 이미지'}.${media.aiProhibitFilterApplied === true ? ' 학습방지 필터 적용됨.' : ''}` : ''} 게시글로 이동`;
   const KindIcon = notificationKindPresentations[kind].Icon;
   const iconColor = kind === 'reaction' ? theme.actionReactionBase : theme.actionRepostBase;
   const visibleActors = actors.slice(0, 3);

@@ -18,6 +18,7 @@ createEnumRef('ContentReportTargetType');
 createEnumRef('HashtagMuteDecision');
 createEnumRef('HashtagMuteScope');
 createEnumRef('MediaState');
+createEnumRef('MediaUsePermission');
 createEnumRef('PostState');
 createEnumRef('PostVisibility');
 createEnumRef('ProfileFollowPolicy');

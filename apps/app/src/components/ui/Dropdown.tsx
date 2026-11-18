@@ -18,7 +18,7 @@ export type DropdownProps = {
   maxHeight?: number;
   placement?: 'overlap-end';
   horizontalPlacement?: 'after' | 'end' | 'start';
-  verticalPlacement?: 'after' | 'end' | 'start';
+  verticalPlacement?: 'after' | 'auto' | 'end' | 'start';
 };
 
 export function Dropdown({

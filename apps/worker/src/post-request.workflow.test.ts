@@ -9,6 +9,7 @@ import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
 import { POST_CREATE_WORKFLOW_V2_TYPE } from '@kosmo/core/temporal/post-create';
 import {
   POST_REQUEST_CANCEL_UPDATE,
+  POST_REQUEST_QUOTE_ADMIT_UPDATE,
   POST_REQUEST_STATE_QUERY,
   POST_REQUEST_WORKFLOW_TYPE,
   PostRequestStatus,
@@ -22,15 +23,14 @@ import {
   WorkflowIdReusePolicy,
 } from '@temporalio/client';
 import { getClient, startWorkflow, WorkflowRunOperationHandler } from '@temporalio/nexus';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { operation, service, serviceHandler } from 'nexus-rpc';
 import { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
 import { getPostRequestMediaStateActivity } from './activities/post-request';
 import { mediaUploadServiceHandler } from './nexus/media-upload';
-import { temporalTestExecutable } from './temporal-test-executable.js';
-import { POST_REQUEST_TEST_SEARCH_ATTRIBUTES } from './temporal-test-search-attributes.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
+import { createMediaUploadTestEndpoint } from './temporal-test-media-endpoint.js';
 import {
   MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_CANCEL_SIGNAL,
   MEDIA_UPLOAD_NEXUS_CANCEL_PROBE_FINISH_SIGNAL,
@@ -39,18 +39,22 @@ import {
   mockMediaUploadNexusOperationWorkflow,
 } from './test-fixtures/media-upload-nexus-operation';
 import type { TestContext } from 'node:test';
+import type { MediaPublicationMetadata } from '@kosmo/core/media-metadata';
 import type { NexusMediaUploadContentType } from '@kosmo/core/media-upload';
-import type { MediaUploadWorkflowResult } from '@kosmo/core/temporal/media-upload';
+import type {
+  MediaUploadWorkflowInput,
+  MediaUploadWorkflowResult,
+} from '@kosmo/core/temporal/media-upload';
 import type {
   PostCreateActivityInput,
   PostCreateActivityResult,
 } from '@kosmo/core/temporal/post-create';
 import type { PostRequestState, PostRequestWorkflowArgs } from '@kosmo/core/temporal/post-request';
+import type { TestWorkflowEnvironment } from '@temporalio/testing';
 import type { SQL } from 'drizzle-orm';
 import type * as activities from './activities';
 import type { capturePostCreatedActivity as CapturePostCreatedActivity } from './activities/post-created';
 
-const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 type CapturePostCreatedInput = Parameters<typeof CapturePostCreatedActivity>[0];
 const mediaUploadNexusWorkflowPath = new URL(
   './test-fixtures/media-upload-nexus-operation.ts',
@@ -75,6 +79,21 @@ const createPostRequest = (
     requestId: randomUUID(),
     ...(submissionFingerprint === undefined ? {} : { submissionFingerprint }),
     submittedAt: '2026-10-29T00:00:00.000Z',
+  };
+};
+
+const createPostRequestWithMedia = (mediaIds: readonly string[]): PostRequestWorkflowArgs => {
+  const args = createPostRequest();
+  return {
+    ...args,
+    input: {
+      ...args.input,
+      media: mediaIds.map((mediaId) => ({
+        altText: null,
+        applyNightshade: false,
+        mediaId,
+      })),
+    },
   };
 };
 
@@ -111,7 +130,7 @@ const createWorker = (
     connection: environment.nativeConnection,
     namespace: environment.namespace,
     taskQueue,
-    workflowsPath,
+    ...testWorkflowSource,
     ...options,
   });
 
@@ -150,14 +169,21 @@ const registerTestCleanup = (
   environment: TestWorkflowEnvironment,
   releaseGates: readonly (() => void)[] = [],
   workers: RunningTestWorker[] = [],
+  resourceCleanups: readonly (() => Promise<void>)[] = [],
 ): void => {
   t.after(async () => {
     releaseGates.forEach((release) => release());
     const failures: unknown[] = [];
     const stopResults = await Promise.allSettled([stopWorkers(workers)]);
+    const resourceCleanupResults = await Promise.allSettled(
+      resourceCleanups.map((cleanup) => cleanup()),
+    );
     const teardownResults = await Promise.allSettled([environment.teardown()]);
     failures.push(
       ...stopResults.flatMap((result) => (result.status === 'rejected' ? [result.reason] : [])),
+      ...resourceCleanupResults.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : [],
+      ),
       ...teardownResults.flatMap((result) => (result.status === 'rejected' ? [result.reason] : [])),
     );
     if (failures.length > 0) {
@@ -282,8 +308,9 @@ const createMediaUploadTestNexusWorker = async (
   taskQueue: string,
   appliedNightshadeUploadIds: string[],
   options: {
-    readonly beforePublish?: () => Promise<void>;
-    readonly shouldFail?: boolean;
+    readonly beforePublish?: (uploadId: string) => Promise<void>;
+    readonly onStartUpload?: (uploadId: string) => void;
+    readonly shouldFail?: boolean | ((uploadId: string) => boolean);
   } = {},
 ) => {
   const worker = await Worker.create({
@@ -294,8 +321,9 @@ const createMediaUploadTestNexusWorker = async (
         startUpload: new WorkflowRunOperationHandler<
           MediaUploadTestStartInput,
           MediaUploadWorkflowResult
-        >(async (context, input) =>
-          startWorkflow(context, mockMediaUploadNexusOperationWorkflow, {
+        >(async (context, input) => {
+          options.onStartUpload?.(input.id);
+          return startWorkflow(context, mockMediaUploadNexusOperationWorkflow, {
             args: [
               {
                 result: {
@@ -303,19 +331,22 @@ const createMediaUploadTestNexusWorker = async (
                   mediaType: 'image/jpeg',
                   url: 'https://media.example/' + input.id + '.jpg',
                 },
-                shouldFail: options.shouldFail ?? false,
+                shouldFail:
+                  typeof options.shouldFail === 'function'
+                    ? options.shouldFail(input.id)
+                    : (options.shouldFail ?? false),
               },
             ],
             workflowExecutionTimeout: '25 hours',
             workflowId: 'mock-media-upload:' + input.id,
-          }),
-        ),
+          });
+        }),
         applyHope: async (_context, { id }) => {
           appliedNightshadeUploadIds.push(id);
           return { id };
         },
         publishUpload: async (_context, { id }) => {
-          await options.beforePublish?.();
+          await options.beforePublish?.(id);
           const operation = getClient().workflow.getHandle('mock-media-upload:' + id);
           await operation.signal(MEDIA_UPLOAD_TEST_PUBLISHED_SIGNAL);
           await operation.signal(MEDIA_UPLOAD_TEST_COMPLETE_SIGNAL);
@@ -331,10 +362,23 @@ const createMediaUploadTestNexusWorker = async (
   return { worker, workerRun };
 };
 
-const createMediaUploadNexusEndpoints = async (environment: TestWorkflowEnvironment) => {
+const createMediaUploadNexusEndpoints = async (
+  environment: TestWorkflowEnvironment,
+  signal: AbortSignal,
+  resourceCleanups: Array<() => Promise<void>>,
+) => {
   const remoteTaskQueue = `post-request-remote-media-${process.pid}-${randomUUID()}`;
-  await environment.createNexusEndpoint(`${environment.namespace}-media-upload`, KOSMO_TASK_QUEUE);
-  await environment.createNexusEndpoint('media-upload', remoteTaskQueue);
+  const namespaceEndpoint = await environment.createNexusEndpoint(
+    `${environment.namespace}-media-upload`,
+    KOSMO_TASK_QUEUE,
+  );
+  resourceCleanups.push(() => environment.deleteNexusEndpoint(namespaceEndpoint));
+  const mediaUploadEndpoint = await createMediaUploadTestEndpoint(
+    environment,
+    remoteTaskQueue,
+    signal,
+  );
+  resourceCleanups.push(mediaUploadEndpoint.dispose);
   return remoteTaskQueue;
 };
 
@@ -342,11 +386,22 @@ type PostRequestMediaRow = {
   readonly accountId: string;
   readonly id: string;
   readonly mediaType?: string | null;
+  readonly publicationMetadata?: MediaPublicationMetadata | null;
   readonly source: MediaSource;
   readonly state: MediaState;
   readonly storageReference?: string | null;
   readonly url?: string | null;
 };
+
+const createPostRequestMediaRows = (
+  accountId: string,
+  mediaStates: readonly (readonly [string, MediaState])[],
+): Map<string, PostRequestMediaRow> =>
+  new Map(
+    mediaStates.map(
+      ([id, state]) => [id, { accountId, id, source: MediaSource.LOCAL, state }] as const,
+    ),
+  );
 
 const mockPostRequestMediaDatabase = (
   t: TestContext,
@@ -381,11 +436,13 @@ const mockPostRequestMediaDatabase = (
         reject?: (reason: unknown) => unknown,
       ) =>
         Promise.resolve(
-          [...mediaRows.values()].filter(
-            ({ accountId, id }) =>
-              queriedMediaIds.includes(id) &&
-              (!requiresAccountScope || queriedAccountIds.includes(accountId)),
-          ),
+          [...mediaRows.values()]
+            .filter(
+              ({ accountId, id }) =>
+                queriedMediaIds.includes(id) &&
+                (!requiresAccountScope || queriedAccountIds.includes(accountId)),
+            )
+            .map((row) => ({ ...row, publicationMetadata: row.publicationMetadata ?? null })),
         ).then(resolve, reject),
     };
     return query as never;
@@ -449,27 +506,24 @@ const committedPost = (input: PostCreateActivityInput): PostCreateActivityResult
 });
 
 const postCreateEffectsActivities = {
+  collectPostLinkPreviewActivity: async () => {},
   createNotificationActivity: async () => {},
   createReplyNotificationActivity: async () => [],
+  fanoutHomeTimelinePostActivity: async () => {},
+  loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+  insertHomeTimelinePostActivity: async () => undefined,
   sendLocalPostCreateActivity: async () => {},
 };
 
-const createPostRequestTestEnvironment = () =>
-  TestWorkflowEnvironment.createLocal({
-    server: {
-      executable: temporalTestExecutable,
-      namespace: 'default',
-      searchAttributes: [...POST_REQUEST_TEST_SEARCH_ATTRIBUTES],
-    },
-  });
+const createPostRequestTestEnvironment = () => createTestWorkflowEnvironment();
 
 const createMockMediaUploadActivities = (
   mediaRows: Map<string, PostRequestMediaRow>,
-  onPrepare: (input: Parameters<typeof prepareMediaUploadActivity>[0]) => void = () => {},
+  onPrepare: (input: MediaUploadWorkflowInput) => void = () => {},
   onFinalize: (input: Parameters<typeof finalizeMediaUploadActivity>[0]) => void = () => {},
 ) => ({
   prepareMediaUploadActivity: async (input: Parameters<typeof prepareMediaUploadActivity>[0]) => {
-    onPrepare(input);
+    onPrepare(input as MediaUploadWorkflowInput);
     return {
       contentType: 'image/jpeg' as const,
       id: `u_${input.mediaId}`,
@@ -485,6 +539,58 @@ const createMockMediaUploadActivities = (
   },
 });
 
+const createParallelMediaUploadHarness = async (
+  t: TestContext,
+  environment: TestWorkflowEnvironment,
+  mediaRows: Map<string, PostRequestMediaRow>,
+  options: {
+    readonly beforePublish: (uploadId: string) => Promise<void>;
+    readonly releaseGates: readonly (() => void)[];
+    readonly shouldFail?: boolean | ((uploadId: string) => boolean);
+    readonly generatePostIdActivity?: () => Promise<string>;
+  },
+) => {
+  const remoteWorkers: RunningTestWorker[] = [];
+  const resourceCleanups: Array<() => Promise<void>> = [];
+  registerTestCleanup(t, environment, options.releaseGates, remoteWorkers, resourceCleanups);
+  mockPostRequestMediaDatabase(t, mediaRows);
+
+  const startedUploadIds: string[] = [];
+  const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+    environment,
+    t.signal,
+    resourceCleanups,
+  );
+  remoteWorkers.push(
+    await createMediaUploadTestNexusWorker(environment, remoteTaskQueue, [], {
+      beforePublish: options.beforePublish,
+      onStartUpload: (uploadId) => startedUploadIds.push(uploadId),
+      shouldFail: options.shouldFail,
+    }),
+  );
+
+  const postCreateInputs: PostCreateActivityInput[] = [];
+  const worker = await createWorker(
+    environment,
+    KOSMO_TASK_QUEUE,
+    {
+      ...postCreateEffectsActivities,
+      ...createMockMediaUploadActivities(mediaRows),
+      createPostActivityV2: async (input) => {
+        postCreateInputs.push(input);
+        return committedPost(input);
+      },
+      getPostRequestMediaStateActivity,
+      ...(options.generatePostIdActivity === undefined
+        ? {}
+        : { generatePostIdActivity: options.generatePostIdActivity }),
+    },
+    { nexusServices: [mediaUploadServiceHandler] },
+  );
+
+  return { postCreateInputs, startedUploadIds, worker };
+};
+
 test(
   'Post Requests share the independently started Media Upload through Nexus with one Activity slot',
   { timeout: 120_000 },
@@ -492,7 +598,14 @@ test(
     const environment = await createPostRequestTestEnvironment();
     const releasePublish = Promise.withResolvers<void>();
     const remoteWorkers: RunningTestWorker[] = [];
-    registerTestCleanup(t, environment, [() => releasePublish.resolve()], remoteWorkers);
+    const resourceCleanups: Array<() => Promise<void>> = [];
+    registerTestCleanup(
+      t,
+      environment,
+      [() => releasePublish.resolve()],
+      remoteWorkers,
+      resourceCleanups,
+    );
 
     const args = createPostRequest(true);
     const mediaId = args.input.media![0]!.mediaId;
@@ -528,7 +641,11 @@ test(
 
     const publishStarted = Promise.withResolvers<void>();
     const appliedNightshadeUploadIds: string[] = [];
-    const remoteTaskQueue = await createMediaUploadNexusEndpoints(environment);
+    const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+      environment,
+      t.signal,
+      resourceCleanups,
+    );
     remoteWorkers.push(
       await createMediaUploadTestNexusWorker(
         environment,
@@ -665,13 +782,355 @@ test(
 );
 
 test(
+  'Post Request starts pending Media uploads together and preserves attachment order',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createPostRequestTestEnvironment();
+    const firstMediaId = randomUUID();
+    const readyMediaId = randomUUID();
+    const secondMediaId = randomUUID();
+    const args = withoutPostId(
+      createPostRequestWithMedia([firstMediaId, readyMediaId, secondMediaId]),
+    );
+    const generatedPostId = randomUUID();
+    let postIdGenerationCalls = 0;
+    const pendingMediaIds = [firstMediaId, secondMediaId];
+    const pendingUploadIds = pendingMediaIds.map((mediaId) => `u_${mediaId}`);
+    const publishStarted = new Map<string, PromiseWithResolvers<void>>(
+      pendingUploadIds.map((uploadId) => [uploadId, Promise.withResolvers<void>()] as const),
+    );
+    const releasePublish = new Map<string, PromiseWithResolvers<void>>(
+      pendingUploadIds.map((uploadId) => [uploadId, Promise.withResolvers<void>()] as const),
+    );
+    const mediaRows = createPostRequestMediaRows(args.input.accountId, [
+      [firstMediaId, MediaState.UPLOADING],
+      [readyMediaId, MediaState.READY],
+      [secondMediaId, MediaState.UPLOADING],
+    ]);
+    const expectedPostMedia = args.input.media?.map(({ altText, mediaId }) => ({
+      altText,
+      mediaId,
+    }));
+    const { postCreateInputs, startedUploadIds, worker } = await createParallelMediaUploadHarness(
+      t,
+      environment,
+      mediaRows,
+      {
+        beforePublish: async (uploadId) => {
+          publishStarted.get(uploadId)?.resolve();
+          await releasePublish.get(uploadId)?.promise;
+        },
+        releaseGates: [...releasePublish.values()].map(
+          ({ resolve }) =>
+            () =>
+              resolve(),
+        ),
+        generatePostIdActivity: async () => {
+          postIdGenerationCalls += 1;
+          return generatedPostId;
+        },
+      },
+    );
+
+    await worker.runUntil(async () => {
+      const handle = await startPostRequest(environment, KOSMO_TASK_QUEUE, args);
+      assert.equal((await waitForScheduledNexusOperations(handle, 2)).length, 2);
+      assert.equal(await waitForStartedNexusOperations(handle, 2), 2);
+      await Promise.all(
+        pendingUploadIds.map((uploadId) =>
+          waitFor(publishStarted.get(uploadId)!.promise, `${uploadId} publish gate`),
+        ),
+      );
+
+      assert.deepEqual(startedUploadIds.toSorted(), pendingUploadIds.toSorted());
+      assert.equal(
+        (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
+        PostRequestStatus.PROCESSING,
+      );
+      assert.equal(
+        (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).snapshot.postId,
+        undefined,
+      );
+      assert.equal(postCreateInputs.length, 0);
+      assert.equal(postIdGenerationCalls, 0);
+
+      const firstUpload = environment.client.workflow.getHandle(
+        mediaUploadWorkflow.workflowIdFromArgs({
+          accountId: args.input.accountId,
+          mediaId: firstMediaId,
+        }),
+      );
+      const secondUpload = environment.client.workflow.getHandle(
+        mediaUploadWorkflow.workflowIdFromArgs({
+          accountId: args.input.accountId,
+          mediaId: secondMediaId,
+        }),
+      );
+      releasePublish.get(`u_${secondMediaId}`)!.resolve();
+      assert.equal(
+        (await waitFor(secondUpload.result(), 'second Media Upload completion')).id,
+        `u_${secondMediaId}`,
+      );
+      assert.equal((await firstUpload.describe()).status.name, 'RUNNING');
+      assert.equal(mediaRows.get(secondMediaId)?.state, MediaState.READY);
+      assert.equal(
+        (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
+        PostRequestStatus.PROCESSING,
+      );
+      assert.equal(postCreateInputs.length, 0);
+      assert.equal(postIdGenerationCalls, 0);
+
+      releasePublish.get(`u_${firstMediaId}`)!.resolve();
+      const [firstResult, result] = await Promise.all([
+        waitFor(firstUpload.result(), 'first Media Upload completion'),
+        waitFor<PostRequestState>(handle.result(), 'Post Request publication'),
+      ]);
+      assert.equal(firstResult.id, `u_${firstMediaId}`);
+      assert.equal(result.status, PostRequestStatus.PUBLISHED);
+      assert.equal(result.result?.postId, generatedPostId);
+      assert.equal(postIdGenerationCalls, 1);
+      assert.equal(postCreateInputs[0]?.postId, generatedPostId);
+      assert.deepEqual(
+        postCreateInputs.map(({ input }) => input.media),
+        [expectedPostMedia],
+      );
+      assert.deepEqual(
+        result.snapshot.input.media?.map(({ mediaId }) => mediaId),
+        [firstMediaId, readyMediaId, secondMediaId],
+      );
+      assert.equal(mediaRows.get(firstMediaId)?.state, MediaState.READY);
+      assert.equal(mediaRows.get(readyMediaId)?.state, MediaState.READY);
+      assert.equal(mediaRows.get(secondMediaId)?.state, MediaState.READY);
+    });
+  },
+);
+
+test(
+  'Post Request waits for every started Media upload after one fails',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createPostRequestTestEnvironment();
+    const failedMediaId = randomUUID();
+    const pendingMediaId = randomUUID();
+    const args = createPostRequestWithMedia([failedMediaId, pendingMediaId]);
+    const failedUploadId = `u_${failedMediaId}`;
+    const pendingUploadId = `u_${pendingMediaId}`;
+    const publishStarted = new Map<string, PromiseWithResolvers<void>>(
+      [failedUploadId, pendingUploadId].map(
+        (uploadId) => [uploadId, Promise.withResolvers<void>()] as const,
+      ),
+    );
+    const releasePending = Promise.withResolvers<void>();
+    const mediaRows = createPostRequestMediaRows(args.input.accountId, [
+      [failedMediaId, MediaState.UPLOADING],
+      [pendingMediaId, MediaState.UPLOADING],
+    ]);
+    const { postCreateInputs, startedUploadIds, worker } = await createParallelMediaUploadHarness(
+      t,
+      environment,
+      mediaRows,
+      {
+        beforePublish: async (uploadId) => {
+          publishStarted.get(uploadId)?.resolve();
+          if (uploadId === pendingUploadId) {
+            await releasePending.promise;
+          }
+        },
+        releaseGates: [() => releasePending.resolve()],
+        shouldFail: (uploadId) => uploadId === failedUploadId,
+      },
+    );
+
+    await worker.runUntil(async () => {
+      const handle = await startPostRequest(environment, KOSMO_TASK_QUEUE, args);
+      assert.equal((await waitForScheduledNexusOperations(handle, 2)).length, 2);
+      assert.equal(await waitForStartedNexusOperations(handle, 2), 2);
+      await Promise.all(
+        [failedUploadId, pendingUploadId].map((uploadId) =>
+          waitFor(publishStarted.get(uploadId)!.promise, `${uploadId} publish gate`),
+        ),
+      );
+      assert.deepEqual(startedUploadIds.toSorted(), [failedUploadId, pendingUploadId].toSorted());
+
+      const failedUpload = environment.client.workflow.getHandle(
+        mediaUploadWorkflow.workflowIdFromArgs({
+          accountId: args.input.accountId,
+          mediaId: failedMediaId,
+        }),
+      );
+      const pendingUpload = environment.client.workflow.getHandle(
+        mediaUploadWorkflow.workflowIdFromArgs({
+          accountId: args.input.accountId,
+          mediaId: pendingMediaId,
+        }),
+      );
+      const failure = await waitFor(
+        failedUpload.result(),
+        'failed Media Upload workflow result',
+      ).then(
+        () => assert.fail('The selected Media Upload must fail'),
+        (error: unknown) => error,
+      );
+      assert.ok(failure instanceof Error);
+
+      await waitForCondition(async () => {
+        const history = await handle.fetchHistory();
+        const events = history.events ?? [];
+        const failedOperationIndex = events.findIndex(
+          ({ nexusOperationFailedEventAttributes }) => nexusOperationFailedEventAttributes != null,
+        );
+        const mediaStateLookups = events.flatMap((event, index) =>
+          event.activityTaskScheduledEventAttributes?.activityType?.name ===
+          'getPostRequestMediaStateActivity'
+            ? [{ eventId: event.eventId?.toString(), index }]
+            : [],
+        );
+        const recoveryLookup = mediaStateLookups[1];
+        if (
+          failedOperationIndex < 0 ||
+          recoveryLookup?.eventId === undefined ||
+          recoveryLookup.index <= failedOperationIndex
+        ) {
+          return false;
+        }
+
+        const recoveryCompleted = events.find(
+          (event) =>
+            event.activityTaskCompletedEventAttributes?.scheduledEventId?.toString() ===
+            recoveryLookup.eventId,
+        );
+        const recoveryCompletedEventId = recoveryCompleted?.eventId?.toString();
+        if (recoveryCompletedEventId === undefined) {
+          return false;
+        }
+
+        return events.some(
+          (event) =>
+            event.workflowTaskCompletedEventAttributes != null &&
+            event.eventId != null &&
+            BigInt(event.eventId.toString()) > BigInt(recoveryCompletedEventId),
+        );
+      }, 'the recovery lookup and following workflow task after the Media failure');
+      assert.equal((await pendingUpload.describe()).status.name, 'RUNNING');
+      assert.equal(
+        (await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY)).status,
+        PostRequestStatus.PROCESSING,
+      );
+      assert.equal(postCreateInputs.length, 0);
+
+      releasePending.resolve();
+      const [pendingResult, result] = await Promise.all([
+        waitFor(pendingUpload.result(), 'remaining Media Upload completion'),
+        waitFor(handle.result(), 'failed Post Request completion'),
+      ]);
+      assert.equal(pendingResult.id, pendingUploadId);
+      assert.equal(result.status, PostRequestStatus.FAILED);
+      assert.equal(mediaRows.get(failedMediaId)?.state, MediaState.UPLOADING);
+      assert.equal(mediaRows.get(pendingMediaId)?.state, MediaState.READY);
+      assert.equal(postCreateInputs.length, 0);
+    });
+  },
+);
+
+test(
+  'Post Request cancellation detaches every pending upload wait and leaves shared uploads running',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createPostRequestTestEnvironment();
+    const mediaIds = [randomUUID(), randomUUID()];
+    const args = createPostRequestWithMedia(mediaIds);
+    const uploadIds = mediaIds.map((mediaId) => `u_${mediaId}`);
+    const publishStarted = new Map<string, PromiseWithResolvers<void>>(
+      uploadIds.map((uploadId) => [uploadId, Promise.withResolvers<void>()] as const),
+    );
+    const releasePublish = new Map<string, PromiseWithResolvers<void>>(
+      uploadIds.map((uploadId) => [uploadId, Promise.withResolvers<void>()] as const),
+    );
+    const mediaRows = createPostRequestMediaRows(
+      args.input.accountId,
+      mediaIds.map((id) => [id, MediaState.UPLOADING] as const),
+    );
+    const { postCreateInputs, startedUploadIds, worker } = await createParallelMediaUploadHarness(
+      t,
+      environment,
+      mediaRows,
+      {
+        beforePublish: async (uploadId) => {
+          publishStarted.get(uploadId)?.resolve();
+          await releasePublish.get(uploadId)?.promise;
+        },
+        releaseGates: [...releasePublish.values()].map(
+          ({ resolve }) =>
+            () =>
+              resolve(),
+        ),
+      },
+    );
+
+    await worker.runUntil(async () => {
+      const handle = await startPostRequest(environment, KOSMO_TASK_QUEUE, args);
+      assert.equal((await waitForScheduledNexusOperations(handle, 2)).length, 2);
+      assert.equal(await waitForStartedNexusOperations(handle, 2), 2);
+      await Promise.all(
+        uploadIds.map((uploadId) =>
+          waitFor(publishStarted.get(uploadId)!.promise, `${uploadId} publish gate`),
+        ),
+      );
+      assert.deepEqual(startedUploadIds.toSorted(), uploadIds.toSorted());
+
+      const uploadHandles = mediaIds.map((mediaId) =>
+        environment.client.workflow.getHandle(
+          mediaUploadWorkflow.workflowIdFromArgs({ accountId: args.input.accountId, mediaId }),
+        ),
+      );
+      const cancelled = await handle.executeUpdate<PostRequestState, []>(
+        POST_REQUEST_CANCEL_UPDATE,
+        { args: [] },
+      );
+      assert.equal(cancelled.status, PostRequestStatus.CANCELLED);
+      assert.equal(
+        (await waitFor(handle.result(), 'cancelled Post Request', 3_000)).status,
+        PostRequestStatus.CANCELLED,
+      );
+      assert.deepEqual(
+        await Promise.all(
+          uploadHandles.map(async (upload) => (await upload.describe()).status.name),
+        ),
+        ['RUNNING', 'RUNNING'],
+      );
+      assert.equal(postCreateInputs.length, 0);
+
+      releasePublish.forEach(({ resolve }) => resolve());
+      const results = await Promise.all(
+        uploadHandles.map((upload, index) =>
+          waitFor(upload.result(), `independent Media Upload ${index + 1} completion`),
+        ),
+      );
+      assert.deepEqual(
+        results.map(({ id }) => id),
+        uploadIds,
+      );
+      assert.ok(mediaIds.every((mediaId) => mediaRows.get(mediaId)?.state === MediaState.READY));
+      assert.equal(postCreateInputs.length, 0);
+    });
+  },
+);
+
+test(
   'Post Request callers cancel without cancelling their shared Media Upload',
   { timeout: 120_000 },
   async (t) => {
     const environment = await createPostRequestTestEnvironment();
     const releasePublish = Promise.withResolvers<void>();
     const remoteWorkers: RunningTestWorker[] = [];
-    registerTestCleanup(t, environment, [() => releasePublish.resolve()], remoteWorkers);
+    const resourceCleanups: Array<() => Promise<void>> = [];
+    registerTestCleanup(
+      t,
+      environment,
+      [() => releasePublish.resolve()],
+      remoteWorkers,
+      resourceCleanups,
+    );
 
     const args = createPostRequest(true);
     const mediaId = args.input.media![0]!.mediaId;
@@ -690,7 +1149,11 @@ test(
 
     const publishStarted = Promise.withResolvers<void>();
     const appliedNightshadeUploadIds: string[] = [];
-    const remoteTaskQueue = await createMediaUploadNexusEndpoints(environment);
+    const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+      environment,
+      t.signal,
+      resourceCleanups,
+    );
     remoteWorkers.push(
       await createMediaUploadTestNexusWorker(
         environment,
@@ -963,7 +1426,14 @@ test(
     const environment = await createPostRequestTestEnvironment();
     const releasePublish = Promise.withResolvers<void>();
     const remoteWorkers: RunningTestWorker[] = [];
-    registerTestCleanup(t, environment, [() => releasePublish.resolve()], remoteWorkers);
+    const resourceCleanups: Array<() => Promise<void>> = [];
+    registerTestCleanup(
+      t,
+      environment,
+      [() => releasePublish.resolve()],
+      remoteWorkers,
+      resourceCleanups,
+    );
 
     const args = createPostRequest(true);
     const mediaId = args.input.media![0]!.mediaId;
@@ -982,7 +1452,11 @@ test(
 
     const publishStarted = Promise.withResolvers<void>();
     const appliedNightshadeUploadIds: string[] = [];
-    const remoteTaskQueue = await createMediaUploadNexusEndpoints(environment);
+    const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+      environment,
+      t.signal,
+      resourceCleanups,
+    );
     remoteWorkers.push(
       await createMediaUploadTestNexusWorker(
         environment,
@@ -1083,12 +1557,13 @@ test(
 );
 
 test(
-  'Post Request resumes a legacy snapshot in upload order and preserves attachment order',
+  'Post Request preserves legacy snapshot processing flags and attachment order',
   { timeout: 120_000 },
   async (t) => {
     const environment = await createPostRequestTestEnvironment();
     const remoteWorkers: RunningTestWorker[] = [];
-    registerTestCleanup(t, environment, [], remoteWorkers);
+    const resourceCleanups: Array<() => Promise<void>> = [];
+    registerTestCleanup(t, environment, [], remoteWorkers, resourceCleanups);
 
     const mediaIdA = randomUUID();
     const mediaIdB = randomUUID();
@@ -1137,7 +1612,11 @@ test(
     mockPostRequestMediaDatabase(t, mediaRows);
 
     const appliedNightshadeUploadIds: string[] = [];
-    const remoteTaskQueue = await createMediaUploadNexusEndpoints(environment);
+    const remoteTaskQueue = await createMediaUploadNexusEndpoints(
+      environment,
+      t.signal,
+      resourceCleanups,
+    );
     remoteWorkers.push(
       await createMediaUploadTestNexusWorker(
         environment,
@@ -1185,10 +1664,13 @@ test(
         { altText: 'A attachment', applyNightshade: true, mediaId: mediaIdA },
       ]);
       assert.deepEqual(mediaStateChecks, [[mediaIdA, mediaIdB]]);
-      assert.deepEqual(preparedMedia, [
-        { applyNightshade: true, mediaId: mediaIdA },
-        { applyNightshade: false, mediaId: mediaIdB },
-      ]);
+      assert.deepEqual(
+        preparedMedia.toSorted((left, right) => left.mediaId.localeCompare(right.mediaId)),
+        [
+          { applyNightshade: true, mediaId: mediaIdA },
+          { applyNightshade: false, mediaId: mediaIdB },
+        ].toSorted((left, right) => left.mediaId.localeCompare(right.mediaId)),
+      );
       assert.deepEqual(appliedNightshadeUploadIds, [`u_${mediaIdA}`]);
       assert.deepEqual(postCreateInputs, [
         {
@@ -1395,6 +1877,9 @@ test(
       },
       createNotificationActivity: async () => {},
       createReplyNotificationActivity: async () => [],
+      fanoutHomeTimelinePostActivity: async () => {},
+      loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+      insertHomeTimelinePostActivity: async () => undefined,
       sendLocalPostCreateActivity: async () => {
         effectsStarted.resolve();
         await releaseEffects.promise;
@@ -1627,6 +2112,68 @@ test(
       assert.equal(effectCalls, 1);
       assert.equal(effectsCompleted, true);
       assert.deepEqual(analyticsCalls, [{ analyticsPlatform: 'native', postId }]);
+    });
+  },
+);
+
+test(
+  'Quote request keeps its first payload while repeated submissions join processing',
+  { timeout: 120_000 },
+  async (t) => {
+    const environment = await createPostRequestTestEnvironment();
+    t.after(() => environment.teardown());
+    const taskQueue = `quote-request-admission-${randomUUID()}`;
+    const args: PostRequestWorkflowArgs = {
+      ...withoutPostId(createPostRequest()),
+      input: {
+        ...createPostRequest(true).input,
+        admissionId: `${Date.now()}:${randomUUID()}`,
+        repostSourceId: randomUUID(),
+      },
+      submissionFingerprint: 'a'.repeat(64),
+      quoteContentId: randomUUID(),
+    };
+    const mediaRead = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const worker = await createWorker(environment, taskQueue, {
+      getPostRequestMediaStateActivity: async () => {
+        mediaRead.resolve();
+        await release.promise;
+        return { readyMediaIds: [] };
+      },
+    });
+    await worker.runUntil(async () => {
+      const handle = await startPostRequest(environment, taskQueue, args);
+      await mediaRead.promise;
+      try {
+        const joined = await handle.executeUpdate<PostRequestState, [string]>(
+          POST_REQUEST_QUOTE_ADMIT_UPDATE,
+          { args: [args.submissionFingerprint!] },
+        );
+        assert.equal(joined.snapshot.input.admissionId, args.input.admissionId);
+        assert.equal(joined.snapshot.input.bodyText, args.input.bodyText);
+        assert.equal(joined.status, PostRequestStatus.PROCESSING);
+        await assert.rejects(
+          handle.executeUpdate(POST_REQUEST_QUOTE_ADMIT_UPDATE, { args: ['b'.repeat(64)] }),
+          (error: unknown) => {
+            let cause: unknown = error;
+            while (cause instanceof Error && !(cause instanceof ApplicationFailure)) {
+              cause = cause.cause;
+            }
+            return (
+              cause instanceof ApplicationFailure &&
+              cause.type === 'VALIDATION' &&
+              cause.details?.[0] === 'admissionId'
+            );
+          },
+        );
+        const state = await handle.query<PostRequestState>(POST_REQUEST_STATE_QUERY);
+        assert.equal(state.snapshot.submissionFingerprint, args.submissionFingerprint);
+        await handle.executeUpdate(POST_REQUEST_CANCEL_UPDATE, { args: [] });
+      } finally {
+        release.resolve();
+      }
+      assert.equal((await handle.result()).status, PostRequestStatus.CANCELLED);
     });
   },
 );

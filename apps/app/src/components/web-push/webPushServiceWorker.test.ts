@@ -21,6 +21,13 @@ type NotificationClickEvent = {
   waitUntil(promise: Promise<unknown>): void;
 };
 
+type MockFirebaseNamespace = {
+  initializeApp(input: Record<string, unknown>): void;
+  messaging?: () => {
+    onBackgroundMessage(handler: (payload: unknown) => unknown): void;
+  };
+};
+
 function startWorker(
   firebaseConfig?: string,
   failOnImport = false,
@@ -38,7 +45,6 @@ function startWorker(
   }
 
   const listeners = new Map<string, (event: NotificationClickEvent) => void>();
-  const imports: string[] = [];
   const notifications: Array<{ title: string; options: Record<string, unknown> }> = [];
   const openedWindows: string[] = [];
   const cacheHadTapAtWindowOpen: boolean[] = [];
@@ -61,18 +67,6 @@ function startWorker(
   let initializedConfig: Record<string, unknown> | undefined;
   let backgroundMessageHandler: ((payload: unknown) => unknown) | undefined;
 
-  const firebase = {
-    initializeApp(input: Record<string, unknown>) {
-      initializedConfig = JSON.parse(JSON.stringify(input));
-    },
-    messaging() {
-      return {
-        onBackgroundMessage(handler: (payload: unknown) => unknown) {
-          backgroundMessageHandler = handler;
-        },
-      };
-    },
-  };
   const self = {
     location,
     addEventListener(type: string, listener: (event: NotificationClickEvent) => void) {
@@ -80,12 +74,40 @@ function startWorker(
     },
     importScripts(url: string) {
       assert.equal(typeof listeners.get('notificationclick'), 'function');
-      imports.push(url);
+      const sdk =
+        /^https:\/\/www\.gstatic\.com\/firebasejs\/[^/]+\/firebase-(app|messaging)-compat\.js$/.exec(
+          url,
+        )?.[1];
+      if (!sdk) {
+        throw new Error(`Unsupported Firebase SDK import: ${url}`);
+      }
       if (failOnImport) {
         throw new Error('external SDK import failed');
       }
+      if (sdk === 'app') {
+        self.firebase ??= {
+          initializeApp(input) {
+            initializedConfig = JSON.parse(JSON.stringify(input));
+          },
+        };
+        return;
+      }
+
+      if (!self.firebase) {
+        throw new Error('Firebase messaging SDK was imported out of order');
+      }
+      self.firebase.messaging = () => {
+        if (initializedConfig === undefined) {
+          throw new Error('Firebase app was not initialized');
+        }
+        return {
+          onBackgroundMessage(handler) {
+            backgroundMessageHandler = handler;
+          },
+        };
+      };
     },
-    firebase,
+    firebase: undefined as MockFirebaseNamespace | undefined,
     crypto: {
       randomUUID() {
         if (options.failRandomUUID) {
@@ -139,7 +161,6 @@ function startWorker(
 
   return {
     listeners,
-    imports,
     notifications,
     openedWindows,
     cacheHadTapAtWindowOpen,
@@ -153,10 +174,6 @@ test('handles a data-only FCM message with one tagged notification and route dat
   const worker = startWorker(JSON.stringify({ ...config, privateKey: 'must be ignored' }));
   const handleBackgroundMessage = worker.getBackgroundMessageHandler();
 
-  assert.deepEqual(worker.imports, [
-    'https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js',
-    'https://www.gstatic.com/firebasejs/12.17.1/firebase-messaging-compat.js',
-  ]);
   assert.deepEqual(worker.initializedConfig, config);
   assert.ok(handleBackgroundMessage);
 
@@ -277,7 +294,6 @@ test('ignores malformed notification text and opens the push fallback for malfor
 
 test('keeps the click fallback when Firebase configuration is missing or malformed', async () => {
   const worker = startWorker('{invalid-json');
-  assert.deepEqual(worker.imports, []);
   assert.equal(worker.initializedConfig, undefined);
   assert.equal(worker.getBackgroundMessageHandler(), undefined);
 

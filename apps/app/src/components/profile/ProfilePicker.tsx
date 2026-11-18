@@ -11,7 +11,7 @@ export type ProfilePickerSurface = 'compact' | 'drawer' | 'full';
 
 export type ProfilePickerProfile = Readonly<{
   avatar?: Readonly<{ url: string | null | undefined }> | null;
-  displayName: string;
+  displayName: string | null | undefined;
   id: string;
   relativeHandle: string;
   unreadNotificationCount?: number | null;
@@ -69,12 +69,13 @@ export function ProfilePicker({
   const profileOptions = profiles.map((profile) => {
     const selected = selectedProfileId === profile.id;
     const hasUnread = (profile.unreadNotificationCount ?? 0) > 0;
+    const displayName = profile.displayName ?? profile.relativeHandle;
 
     return (
       <Pressable
         aria-current={drawerWeb && selected ? true : undefined}
         aria-pressed={desktopWebSurface ? selected : undefined}
-        accessibilityLabel={`${profile.displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
+        accessibilityLabel={`${displayName}, ${profile.relativeHandle}${hasUnread ? ', 읽지 않은 알림 있음' : ''}`}
         accessibilityRole={Platform.OS === 'web' ? 'button' : 'radio'}
         accessibilityState={
           Platform.OS === 'web' ? { disabled: busy } : { checked: selected, disabled: busy }
@@ -91,14 +92,10 @@ export function ProfilePicker({
           },
         ]}
       >
-        <Avatar
-          imageUri={profile.avatar?.url}
-          label={profile.displayName}
-          size={selected ? 48 : 32}
-        />
+        <Avatar imageUri={profile.avatar?.url} label={displayName} size={selected ? 48 : 32} />
         <View style={styles.profileLabel}>
           <Text numberOfLines={1} style={[styles.displayName, { color: theme.foregroundPrimary }]}>
-            {profile.displayName}
+            {displayName}
           </Text>
           <Text numberOfLines={1} style={[styles.handle, { color: theme.foregroundSecondary }]}>
             {profile.relativeHandle}

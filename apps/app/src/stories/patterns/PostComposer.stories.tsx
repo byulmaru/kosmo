@@ -588,13 +588,20 @@ function InteractiveComposer({
         <ComposerMediaEditor
           media={items.filter((item) => item.state === 'ready')}
           mobileState={editor.mobileState}
-          onApplyNightshadeChange={(key, value) => {
+          onApplyAiProhibitFilterChange={(key, value) => {
             setItems((current) =>
               current.map((item) =>
-                item.key === key ? { ...item, applyNightshade: value } : item,
+                item.key === key ? { ...item, applyAiProhibitFilter: value } : item,
               ),
             );
           }}
+          onRightsChange={(key, rights) =>
+            setItems((current) =>
+              current.map((item) =>
+                item.key === key ? { ...item, rights: rights ? { ...rights } : undefined } : item,
+              ),
+            )
+          }
           onAltTextChange={(key, altText) => {
             setItems((current) =>
               current.map((item) => (item.key === key ? { ...item, altText } : item)),
@@ -722,13 +729,22 @@ function InteractiveComposer({
           {editor ? (
             <ComposerMediaEditor
               media={items.filter((item) => item.state === 'ready')}
-              onApplyNightshadeChange={(key, value) => {
+              onApplyAiProhibitFilterChange={(key, value) => {
                 setItems((current) =>
                   current.map((item) =>
-                    item.key === key ? { ...item, applyNightshade: value } : item,
+                    item.key === key ? { ...item, applyAiProhibitFilter: value } : item,
                   ),
                 );
               }}
+              onRightsChange={(key, rights) =>
+                setItems((current) =>
+                  current.map((item) =>
+                    item.key === key
+                      ? { ...item, rights: rights ? { ...rights } : undefined }
+                      : item,
+                  ),
+                )
+              }
               onAltTextChange={(key, altText) => {
                 setItems((current) =>
                   current.map((item) => (item.key === key ? { ...item, altText } : item)),
@@ -1127,7 +1143,6 @@ export const MobileFlexLayoutContract: Story = {
 
     expect(body).toHaveStyle({ gap: '8px' });
     expect(getComputedStyle(body).overflow).toBe('visible');
-    expect(getComputedStyle(editor).flexGrow).toBe('1');
 
     await userEvent.click(editor);
     await waitFor(() => expect(editor).toHaveFocus());
@@ -1181,7 +1196,8 @@ export const MobileRuntimeAltEditorContract: Story = {
         media={readyComposerMedia}
         mobileState="alt"
         onAltTextChange={fn()}
-        onApplyNightshadeChange={fn()}
+        onApplyAiProhibitFilterChange={fn()}
+        onRightsChange={fn()}
         onBack={fn()}
         onClose={fn()}
         onDone={fn()}

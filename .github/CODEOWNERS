@@ -1,9 +1,10 @@
 * @robin-maki
 
 # Design decisions and app presentation
-/docs/design/ @yeeun-uwu
-/apps/app/.storybook/ @robin-maki @yeeun-uwu
-/apps/app/src/app/ @robin-maki @yeeun-uwu
-/apps/app/src/components/ @robin-maki @yeeun-uwu
-/apps/app/src/stories/ @robin-maki @yeeun-uwu
-/apps/app/src/theme/ @robin-maki @yeeun-uwu
+# 최종발표기간 임시 제거
+# /docs/design/ @yeeun-uwu
+# /apps/app/.storybook/ @robin-maki @yeeun-uwu
+# /apps/app/src/app/ @robin-maki @yeeun-uwu
+# /apps/app/src/components/ @robin-maki @yeeun-uwu
+# /apps/app/src/stories/ @robin-maki @yeeun-uwu
+# /apps/app/src/theme/ @robin-maki @yeeun-uwu

@@ -158,9 +158,18 @@ describe('Local Media upload GraphQL 경계', () => {
     );
     assert.ok(storedFirst);
     assert.equal(firstMediaId, encodeGlobalId('Media', storedFirst.id));
+    assert.equal(storedFirst.thumbhash, null);
     assert.deepEqual(await requestMediaNode(firstMediaId, first.token), {
       id: firstMediaId,
       state: 'UPLOADING',
+      thumbhash: null,
+    });
+    const thumbhash = 'AQIDBAUGBwg=';
+    await db.update(Media).set({ thumbhash }).where(eq(Media.id, storedFirst.id));
+    assert.deepEqual(await requestMediaNode(firstMediaId, first.token), {
+      id: firstMediaId,
+      state: 'UPLOADING',
+      thumbhash,
     });
     assert.equal(await requestMediaNode(firstMediaId, other.token), null);
   });
@@ -1005,10 +1014,10 @@ const requestCompleteMediaUpload = (id: string, token?: string, applyAiProhibitF
 
 const requestMediaNode = async (id: string, token: string) => {
   const result = await requestGraphQL<{
-    node: { id: string; state: string } | null;
+    node: { id: string; state: string; thumbhash: string | null } | null;
   }>(
     `query MediaNode($id: ID!) {
-      node(id: $id) { ... on Media { id state } }
+      node(id: $id) { ... on Media { id state thumbhash } }
     }`,
     { id },
     token,

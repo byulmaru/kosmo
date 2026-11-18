@@ -11,16 +11,25 @@ import {
 } from '../db';
 import { AccountState, ProfileState, SessionState } from '../enums';
 import { PermissionDeniedError } from '../error';
+import { publishSessionEnded } from '../session/events';
+import { noPostCommit, oncePostCommit } from './post-commit';
 import type { DatabaseHandle, Transaction } from '../db';
+import type { PostCommit } from './post-commit';
 
 type VerifiedOidcIdentity = {
   displayName: string;
   oidcSubject: string;
 };
 
-export type RevokeCurrentSessionResult =
-  | { readonly status: 'REVOKED' }
-  | { readonly status: 'ALREADY_UNAUTHENTICATED' };
+export type RevokeCurrentSessionResult = {
+  readonly postCommit: PostCommit;
+  readonly status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED';
+};
+
+type RevokeCurrentSessionOutcome = {
+  readonly sessionId?: string;
+  readonly status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED';
+};
 
 type CurrentSessionState = {
   readonly accountState: AccountState;
@@ -60,52 +69,63 @@ export const revokeCurrentSession = async (
   tx?: DatabaseHandle,
 ): Promise<RevokeCurrentSessionResult> => {
   if (!token) {
-    return { status: 'ALREADY_UNAUTHENTICATED' };
+    return { postCommit: noPostCommit, status: 'ALREADY_UNAUTHENTICATED' };
   }
 
-  return getDatabaseConnection(tx).transaction(async (transaction) => {
-    const current = await loadCurrentSession(token, transaction);
-    if (!current) {
-      return { status: 'ALREADY_UNAUTHENTICATED' } as const;
-    }
+  const outcome: RevokeCurrentSessionOutcome = await getDatabaseConnection(tx).transaction(
+    async (transaction) => {
+      const current = await loadCurrentSession(token, transaction);
+      if (!current) {
+        return { status: 'ALREADY_UNAUTHENTICATED' } as const;
+      }
 
-    if (current.accountState === AccountState.DISABLED) {
-      return { status: 'ALREADY_UNAUTHENTICATED' } as const;
-    }
+      if (current.accountState === AccountState.DISABLED) {
+        return { sessionId: current.id, status: 'ALREADY_UNAUTHENTICATED' } as const;
+      }
 
-    if (current.state !== SessionState.ACTIVE) {
-      await transaction
-        .delete(PushInstallations)
-        .where(eq(PushInstallations.sessionId, current.id));
-      return { status: 'ALREADY_UNAUTHENTICATED' } as const;
-    }
+      if (current.state !== SessionState.ACTIVE) {
+        await transaction
+          .delete(PushInstallations)
+          .where(eq(PushInstallations.sessionId, current.id));
+        return { sessionId: current.id, status: 'ALREADY_UNAUTHENTICATED' } as const;
+      }
 
-    const revoked = await transaction
-      .update(Sessions)
-      .set({ state: SessionState.REVOKED })
-      .where(and(eq(Sessions.id, current.id), eq(Sessions.state, SessionState.ACTIVE)))
-      .returning({ id: Sessions.id })
-      .then((rows) => rows[0]);
+      const revoked = await transaction
+        .update(Sessions)
+        .set({ state: SessionState.REVOKED })
+        .where(and(eq(Sessions.id, current.id), eq(Sessions.state, SessionState.ACTIVE)))
+        .returning({ id: Sessions.id })
+        .then((rows) => rows[0]);
 
-    if (revoked) {
-      await transaction
-        .delete(PushInstallations)
-        .where(eq(PushInstallations.sessionId, current.id));
+      if (revoked) {
+        await transaction
+          .delete(PushInstallations)
+          .where(eq(PushInstallations.sessionId, current.id));
 
-      return { status: 'REVOKED' } as const;
-    }
+        return { sessionId: current.id, status: 'REVOKED' } as const;
+      }
 
-    const settled = await loadCurrentSession(token, transaction);
-    if (
-      !settled ||
-      settled.accountState === AccountState.DISABLED ||
-      settled.state !== SessionState.ACTIVE
-    ) {
-      return { status: 'ALREADY_UNAUTHENTICATED' } as const;
-    }
+      const settled = await loadCurrentSession(token, transaction);
+      if (
+        !settled ||
+        settled.accountState === AccountState.DISABLED ||
+        settled.state !== SessionState.ACTIVE
+      ) {
+        return {
+          ...(settled ? { sessionId: settled.id } : {}),
+          status: 'ALREADY_UNAUTHENTICATED',
+        } as const;
+      }
 
-    throw new Error('Current Session revoke did not settle');
-  });
+      throw new Error('Current Session revoke did not settle');
+    },
+  );
+
+  const { sessionId } = outcome;
+  return {
+    postCommit: sessionId ? oncePostCommit(() => publishSessionEnded(sessionId)) : noPostCommit,
+    status: outcome.status,
+  };
 };
 
 /**

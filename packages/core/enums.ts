@@ -113,6 +113,13 @@ export const MediaState = {
 } as const;
 export type MediaState = keyof typeof MediaState;
 
+export const MediaUsePermission = {
+  DENY: 'DENY',
+  ORIGINAL: 'ORIGINAL',
+  EDIT: 'EDIT',
+} as const;
+export type MediaUsePermission = keyof typeof MediaUsePermission;
+
 export const NotificationKind = {
   FOLLOW: 'FOLLOW',
   FOLLOW_REQUEST: 'FOLLOW_REQUEST',

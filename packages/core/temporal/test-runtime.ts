@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { fileURLToPath } from 'node:url';
 import type { ChildProcess } from 'node:child_process';
@@ -7,8 +8,18 @@ const rootDirectory = fileURLToPath(new URL('../../../', import.meta.url));
 const workerDirectory = `${rootDirectory}/apps/worker`;
 const defaultDatabaseUrl = 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const startupTimeoutMs = 120_000;
+const shutdownTimeoutMs = 30_000;
+const forcedShutdownTimeoutMs = 5_000;
 
 let runtimePromise: Promise<void> | undefined;
+let stopPromise: Promise<void> | undefined;
+let worker: ChildProcess | undefined;
+let server: ChildProcess | undefined;
+let stopping = false;
+let shutdownSignal: NodeJS.Signals | undefined;
+let onSigint: (() => void) | undefined;
+let onSigterm: (() => void) | undefined;
+let onBeforeExit: (() => void) | undefined;
 
 /**
  * Start the same Temporal CLI server and production Worker entrypoint used by
@@ -22,9 +33,17 @@ export const startTestTemporalRuntime = async (): Promise<void> => {
   return runtimePromise;
 };
 
+export const stopTestTemporalRuntime = async (): Promise<void> => {
+  stopPromise ??= stopRuntime();
+  return stopPromise;
+};
+
 async function startRuntime(): Promise<void> {
   const host = '127.0.0.1';
-  const namespace = process.env.TEMPORAL_NAMESPACE?.trim() || 'test';
+  const sharedTemporalAddress = process.env.KOSMO_TEST_TEMPORAL_ADDRESS?.trim();
+  const namespace = sharedTemporalAddress
+    ? `kosmo-test-${randomUUID()}`
+    : process.env.TEMPORAL_NAMESPACE?.trim() || 'test';
   const databaseUrl = process.env.DATABASE_URL ?? defaultDatabaseUrl;
   const workerEnvironment: NodeJS.ProcessEnv = {
     ...process.env,
@@ -38,7 +57,7 @@ async function startRuntime(): Promise<void> {
     PUBLIC_ORIGIN: process.env.PUBLIC_ORIGIN ?? 'http://127.0.0.1:4173',
     TEMPORAL_NAMESPACE: namespace,
   };
-  const server = spawn(process.execPath, ['--import', 'tsx', 'src/temporal-test-server.ts'], {
+  server = spawn(process.execPath, ['--import', 'tsx', 'src/temporal-test-server.ts'], {
     cwd: workerDirectory,
     env: {
       ...workerEnvironment,
@@ -48,7 +67,7 @@ async function startRuntime(): Promise<void> {
     // with a long-lived stderr pipe after the children are unref'ed.
     stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
   });
-  let worker: ChildProcess | undefined;
+  installShutdownHandlers();
 
   try {
     const healthPort = await waitForChildPort(server, startupTimeoutMs);
@@ -57,6 +76,9 @@ async function startRuntime(): Promise<void> {
       server,
       startupTimeoutMs,
     );
+    if (stopping) {
+      throw new Error('Temporal test runtime stopped during startup.');
+    }
     worker = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
       cwd: workerDirectory,
       env: workerEnvironment,
@@ -65,9 +87,13 @@ async function startRuntime(): Promise<void> {
     const workerPort = await waitForChildPort(worker, startupTimeoutMs);
     await waitForChildHealth(`http://${host}:${workerPort}/ready`, worker, startupTimeoutMs);
   } catch (error) {
-    terminate(server);
-    if (worker) {
-      terminate(worker);
+    try {
+      await stopTestTemporalRuntime();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'Temporal test runtime startup and cleanup failed.',
+      );
     }
     throw error;
   }
@@ -75,24 +101,142 @@ async function startRuntime(): Promise<void> {
   process.env.TEMPORAL_ADDRESS = workerEnvironment.TEMPORAL_ADDRESS;
   process.env.TEMPORAL_NAMESPACE = namespace;
 
-  // Keep the test process from being held open by child handles. The exit
-  // hook still sends SIGTERM so normal test completion tears both services
-  // down; the child entrypoints perform their own async cleanup.
+  // The beforeExit hook performs awaited cleanup; the exit hook below is a last resort.
   server.unref();
   worker.unref();
-  const terminateChildren = () => {
-    terminate(worker);
-    terminate(server);
+}
+
+async function stopRuntime(): Promise<void> {
+  stopping = true;
+  const cleanupErrors: unknown[] = [];
+  try {
+    for (const [child, label] of [
+      [worker, 'Temporal test Worker'],
+      [server, 'Temporal test server helper'],
+    ] as const) {
+      try {
+        await stopChild(child, label);
+      } catch (error) {
+        cleanupErrors.push(error);
+      }
+    }
+  } finally {
+    if (!worker || worker.exitCode !== null || worker.signalCode !== null) {
+      worker = undefined;
+    }
+    if (!server || server.exitCode !== null || server.signalCode !== null) {
+      server = undefined;
+    }
+    if (!worker && !server) {
+      if (onSigint) {
+        process.off('SIGINT', onSigint);
+      }
+      if (onSigterm) {
+        process.off('SIGTERM', onSigterm);
+      }
+      if (onBeforeExit) {
+        process.off('beforeExit', onBeforeExit);
+      }
+      process.off('exit', emergencyTerminateChildren);
+    }
+  }
+  if (cleanupErrors.length > 0) {
+    throw new AggregateError(cleanupErrors, 'Temporal test runtime cleanup failed.');
+  }
+}
+
+function installShutdownHandlers(): void {
+  const onSignal = (signal: NodeJS.Signals) => {
+    if (shutdownSignal) {
+      return;
+    }
+    shutdownSignal = signal;
+    if (onSigint) {
+      process.off('SIGINT', onSigint);
+    }
+    if (onSigterm) {
+      process.off('SIGTERM', onSigterm);
+    }
+    void stopTestTemporalRuntime()
+      .catch((error: unknown) => {
+        console.error(error);
+        process.exitCode = 1;
+      })
+      .finally(() => {
+        process.kill(process.pid, shutdownSignal ?? signal);
+      });
   };
-  process.once('exit', terminateChildren);
-  process.once('SIGINT', () => {
-    terminateChildren();
-    process.exit(130);
-  });
-  process.once('SIGTERM', () => {
-    terminateChildren();
-    process.exit(143);
-  });
+  onSigint = () => onSignal('SIGINT');
+  onSigterm = () => onSignal('SIGTERM');
+  onBeforeExit = () => {
+    void stopTestTemporalRuntime().catch((error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+  };
+
+  process.once('SIGINT', onSigint);
+  process.once('SIGTERM', onSigterm);
+  process.once('beforeExit', onBeforeExit);
+  process.once('exit', emergencyTerminateChildren);
+}
+
+function emergencyTerminateChildren(): void {
+  terminate(worker);
+  terminate(server);
+}
+
+async function stopChild(child: ChildProcess | undefined, label: string): Promise<void> {
+  if (!child || child.exitCode !== null || child.signalCode !== null) {
+    return;
+  }
+
+  child.ref();
+  child.kill('SIGTERM');
+  const exitedDuringGrace = await waitForChildExit(child, shutdownTimeoutMs);
+  const exitCodeAfterGrace = child.exitCode;
+  const signalCodeAfterGrace = child.signalCode;
+  if (exitedDuringGrace || exitCodeAfterGrace !== null || signalCodeAfterGrace !== null) {
+    return;
+  }
+
+  const forcedShutdownRequested = child.kill('SIGKILL');
+  const exitedAfterForce = await waitForChildExit(child, forcedShutdownTimeoutMs);
+  const exitCodeAfterForce = child.exitCode;
+  const signalCodeAfterForce = child.signalCode;
+  if (!exitedAfterForce && exitCodeAfterForce === null && signalCodeAfterForce === null) {
+    throw new Error(`${label} did not exit after SIGTERM or SIGKILL (${formatChildExit(child)}).`);
+  }
+  if (signalCodeAfterForce === 'SIGKILL') {
+    throw new Error(`${label} exceeded its shutdown grace period and required SIGKILL.`);
+  }
+  if (forcedShutdownRequested) {
+    throw new Error(
+      `${label} exceeded its shutdown grace period before exiting (${formatChildExit(child)}).`,
+    );
+  }
+}
+
+async function waitForChildExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return true;
+  }
+
+  const controller = new AbortController();
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      once(child, 'exit', { signal: controller.signal }).then(() => true),
+      new Promise<boolean>((resolve) => {
+        timeout = setTimeout(() => resolve(false), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+    controller.abort();
+  }
 }
 
 async function waitForHealth(url: string, child: ChildProcess, timeoutMs: number): Promise<string> {
@@ -189,8 +333,8 @@ function formatChildExit(child: ChildProcess): string {
   return `exitCode=${child.exitCode ?? 'null'}, signal=${child.signalCode ?? 'null'}`;
 }
 
-function terminate(child: ChildProcess): void {
-  if (child.exitCode === null && child.signalCode === null) {
+function terminate(child: ChildProcess | undefined): void {
+  if (child && child.exitCode === null && child.signalCode === null) {
     child.kill('SIGTERM');
   }
 }

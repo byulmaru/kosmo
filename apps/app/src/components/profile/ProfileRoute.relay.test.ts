@@ -61,6 +61,9 @@ mockModule('react-relay', {
     return require(`./__generated__/${name}.graphql.ts`).default;
   },
 });
+mockModule(new URL('../shell/MobileWebRouteMenu.tsx', import.meta.url), {
+  MobileWebRouteMenu: () => null,
+});
 mockModule('expo-router', {
   Slot: () => {
     const Route = routePath.endsWith('/followers')
@@ -74,6 +77,7 @@ mockModule('expo-router', {
   useGlobalSearchParams: () => ({ profileHandle: routeHandle }),
   useCurrentRouteInfo: () => ({ params: { profileHandle: routeHandle }, pathname: routePath }),
   useNavigation: () => navigation,
+  useIsFocused: () => true,
   useLocalSearchParams: () => ({ profileHandle: routeHandle }),
   usePathname: () => globalPath,
   useRouter: () => ({ back: () => undefined, replace: () => undefined }),

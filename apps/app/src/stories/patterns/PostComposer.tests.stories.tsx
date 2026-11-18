@@ -249,6 +249,32 @@ export const MobileMediaScrollContract: Story = {
     await waitFor(() => expect(canvas.queryByLabelText('첨부 이미지 갤러리, 1개')).toBeNull());
   },
 };
+export const MobileTextOnlyScrollContract: Story = {
+  ...mobilePlaygroundStory,
+  args: {
+    ...mobilePlaygroundStory.args,
+    body: '',
+    items: [],
+    mode: 'post',
+    remaining: 500,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const body = canvas.getByRole('textbox', { name: '게시글 본문' }) as HTMLTextAreaElement;
+    const scroll = canvas.getByTestId('mobile-fullscreen-composer-scroll');
+    const footer = canvas.getByTestId('mobile-composer-footer');
+
+    const footerTop = footer.getBoundingClientRect().top;
+    await userEvent.type(body, '\n긴 본문\n'.repeat(20));
+    await waitFor(() => {
+      expect(body.getBoundingClientRect().height).toBeGreaterThan(scroll.clientHeight);
+      expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+      expect(body.scrollHeight).toBeLessThanOrEqual(body.clientHeight + 1);
+    });
+    expect(scroll).toContainElement(body);
+    expect(footer.getBoundingClientRect().top).toBeCloseTo(footerTop, 0);
+  },
+};
 export const MobileReplyMediaScrollContract: Story = {
   ...mobileReplyShellContract,
   args: {

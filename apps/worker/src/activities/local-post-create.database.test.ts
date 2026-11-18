@@ -31,10 +31,9 @@ import {
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { temporalTestExecutable } from '../temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from '../temporal-test-environment.js';
 import { createLocalPostActivity, generateLocalPostIdActivity } from './local-post-create';
 import { createPostActivity, generatePostIdActivity } from './post-create';
 import { getPostRequestMediaStateActivity, reconcilePostRequestActivity } from './post-request';
@@ -166,6 +165,25 @@ const createReadyMedia = async (accountId: string, profileId: string) => {
   return media;
 };
 
+const uuidV7Timestamp = (id: string) => Number.parseInt(id.replaceAll('-', '').slice(0, 12), 16);
+
+test('generatePostIdActivity uses remote publication time and keeps the local default', async () => {
+  const publishedAt = '2010-07-18T00:00:00.000Z';
+  const receivedAt = '2010-07-19T00:00:00.000Z';
+  const startedAt = Temporal.Now.instant().epochMilliseconds;
+  const remoteId = await generatePostIdActivity({ publishedAt, receivedAt });
+  const localId = await generatePostIdActivity();
+  const finishedAt = Temporal.Now.instant().epochMilliseconds;
+
+  assert.ok(
+    Math.abs(uuidV7Timestamp(remoteId) - Temporal.Instant.from(publishedAt).epochMilliseconds) <=
+      1_000,
+  );
+  assert.equal(localId[14], '7');
+  assert.ok(uuidV7Timestamp(localId) >= startedAt - 1_000);
+  assert.ok(uuidV7Timestamp(localId) <= finishedAt + 1_000);
+});
+
 const localInput = (
   author: Awaited<ReturnType<typeof createAuthor>>,
   overrides: Partial<LocalPostCreateInput> = {},
@@ -255,9 +273,7 @@ test(
   'Local Post UWS retries a committed Activity response loss with the same allocated ID',
   { timeout: 120_000 },
   async () => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     process.env.TEMPORAL_ADDRESS = environment.address;
     process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
     let worker: Worker | undefined;
@@ -297,7 +313,7 @@ test(
         connection: environment.nativeConnection,
         namespace: environment.namespace,
         taskQueue: KOSMO_TASK_QUEUE,
-        workflowsPath: new URL('../workflows/index.ts', import.meta.url).pathname,
+        ...testWorkflowSource,
       });
       workerRun = worker.run();
 
@@ -695,7 +711,7 @@ test('Post request rechecks current membership and reconciles an already committ
   );
 });
 
-test('Post request rejects unavailable Reply Parent and Quote instead of publishing standalone', async () => {
+test('Post request rejects unavailable Reply Parent instead of publishing standalone', async () => {
   const author = await createAuthor('post-request-unavailable-reference');
   const hiddenParentAuthor = await createAuthor('post-request-hidden-parent');
   const hiddenParentId = await createParentPost(
@@ -710,10 +726,6 @@ test('Post request rejects unavailable Reply Parent and Quote instead of publish
     {
       input: localInput(author, { replyParentId: hiddenParentId }),
       kind: 'unavailable Reply Parent',
-    },
-    {
-      input: localInput(author, { repostSourceId: crypto.randomUUID() }),
-      kind: 'missing Quote source',
     },
   ];
 

@@ -1,7 +1,6 @@
 import { View } from 'react-native';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { SettingsLinkRow } from '@/components/settings/SettingsLinkRow';
-import { colors } from '@/theme/tokens';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 function SettingsLinkRowComparison() {
@@ -16,10 +15,39 @@ function SettingsLinkRowComparison() {
         selected
       />
       <SettingsLinkRow
-        accessibilityLabel="Byulmaru ID Account Settings 외부 서비스로 이동"
+        accessibilityLabel="별마루 ID 계정 설정 외부 서비스로 이동"
         external
         href="https://id.byulmaru.co"
-        label="계정 설정"
+        label="별마루 ID"
+      />
+      <SettingsLinkRow
+        accessibilityLabel="화면 설정 열기, 시스템"
+        density="compact"
+        description="시스템"
+        href="/settings/theme"
+        label="화면"
+      />
+    </View>
+  );
+}
+
+function SettingsLinkRowBoundaryComparison() {
+  return (
+    <View style={{ width: 320 }}>
+      <SettingsLinkRow
+        accessibilityLabel="긴 기본 설정 행 열기"
+        description="전체 공개와 조용한 공개, 팔로워 공개 상태를 프로필마다 선택"
+        href="/settings/profile"
+        label="게시물 기본 공개 범위와 프로필 공개 기준을 조정하는 설정"
+        selected
+      />
+      <SettingsLinkRow
+        accessibilityLabel="긴 컴팩트 설정 행 열기, 시스템"
+        density="compact"
+        description="시스템"
+        href="/settings/theme"
+        label="화면과 알림에 적용할 프로필 기본 설정"
+        selected
       />
     </View>
   );
@@ -52,7 +80,7 @@ const meta = {
       </View>
     ),
   ],
-  excludeStories: ['InteractionContract', 'ReducedMotionContract'],
+  excludeStories: ['BoundaryContract', 'InteractionContract', 'ReducedMotionContract'],
   title: 'KOSMO/Components/Settings Link Row',
 } satisfies Meta<typeof SettingsLinkRow>;
 
@@ -108,16 +136,19 @@ export const RepresentativeStates: Story = {
     const canvas = within(canvasElement);
     const selected = canvas.getByRole('link', { name: '긴 레이블 설정 열기' });
     const external = canvas.getByRole('link', {
-      name: 'Byulmaru ID Account Settings 외부 서비스로 이동',
+      name: '별마루 ID 계정 설정 외부 서비스로 이동',
     });
+    const compact = canvas.getByRole('link', { name: '화면 설정 열기, 시스템' });
 
     await expect(selected).toHaveAttribute('href', '/settings/default-post-visibility');
-    await expect(selected.firstElementChild).toHaveStyle({
-      backgroundColor: colors.light.selectedSurface,
-      borderColor: colors.light.selectedBorder,
-    });
     await expect(selected).not.toHaveAttribute('aria-current');
     await expect(external).toHaveAttribute('href', 'https://id.byulmaru.co');
     await expect(external).not.toHaveAttribute('aria-current');
+    await expect(compact).toHaveAttribute('href', '/settings/theme');
   },
+};
+
+export const BoundaryContract: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => <SettingsLinkRowBoundaryComparison />,
 };

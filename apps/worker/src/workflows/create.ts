@@ -2,6 +2,7 @@ import { NotificationKind } from '@kosmo/core/enums';
 import { patched, proxyActivities } from '@temporalio/workflow';
 import { match } from 'ts-pattern';
 import { workflowActivityOptions } from './activity-options';
+import { startHomeTimelineFanout } from './home-timeline-fanout';
 import { settleEffects } from './settle-effects';
 import type { WorkflowDefinition } from '@kosmo/core/temporal/client';
 import type { PostAnalyticsPlatform } from '@kosmo/core/temporal/post-create';
@@ -19,6 +20,7 @@ const {
   createMentionNotificationActivity,
   createReplyNotificationActivity,
   capturePostCreatedActivity,
+  fanoutHomeTimelinePostActivity,
   sendLocalPostCreateActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
@@ -30,7 +32,16 @@ export async function postCreateEffectsWorkflow({
   const pushNotificationDispatchEnabled = patched('post-create-effects-push-notification-v1');
   const mentionNotificationEnabled = patched('post-create-effects-mention-notification-v1');
   const postCreatedAnalyticsEnabled = patched('post-create-effects-post-created-analytics-v1');
+  const homeTimelineFanoutEnabled = patched('post-create-effects-home-timeline-fanout-v1');
+  const homeTimelineFanoutChildEnabled = patched(
+    'post-create-effects-home-timeline-child-fanout-v1',
+  );
   await settleEffects([
+    ...(homeTimelineFanoutChildEnabled
+      ? [startHomeTimelineFanout(postId)]
+      : homeTimelineFanoutEnabled
+        ? [fanoutHomeTimelinePostActivity({ postId })]
+        : []),
     pushNotificationDispatchEnabled
       ? createNotificationActivity({ kind: NotificationKind.REPLY, sourceId: postId })
       : createReplyNotificationActivity(postId),

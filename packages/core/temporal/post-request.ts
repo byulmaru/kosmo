@@ -6,6 +6,7 @@ import type { PostAnalyticsPlatform } from './post-create';
 export const POST_REQUEST_WORKFLOW_TYPE = 'postRequestWorkflow';
 export const POST_REQUEST_STATE_QUERY = 'postRequestState';
 export const POST_REQUEST_CANCEL_UPDATE = 'cancelPostRequest';
+export const POST_REQUEST_QUOTE_ADMIT_UPDATE = 'admitQuotePostRequest';
 
 export const POST_REQUEST_SEARCH_ATTRIBUTES = {
   ownerAccountId: 'KosmoPostRequestOwnerAccountId',
@@ -38,6 +39,7 @@ export type PostRequestSnapshot = {
   readonly input: PostRequestLocalPostInput;
   readonly postId?: string;
   readonly requestId: string;
+  readonly quoteContentId?: string;
   readonly submissionFingerprint?: string;
   readonly submittedAt: string;
 };
@@ -60,11 +62,17 @@ export type PostRequestState = {
 export const postRequestWorkflowId = (accountId: string, requestId: string): string =>
   `post-request:${accountId}:${requestId}`;
 
+export const postQuoteRequestWorkflowId = (requestId: string): string =>
+  `post-request:quote:${requestId}`;
+
 export const postRequestWorkflow: WorkflowDefinition<
   (args: PostRequestWorkflowArgs) => Promise<PostRequestState>
 > = {
   workflow: POST_REQUEST_WORKFLOW_TYPE,
-  workflowIdFromArgs: ({ input, requestId }) => postRequestWorkflowId(input.accountId, requestId),
+  workflowIdFromArgs: ({ input, requestId }) =>
+    input.admissionId === undefined
+      ? postRequestWorkflowId(input.accountId, requestId)
+      : postQuoteRequestWorkflowId(requestId),
 };
 
 export const postRequestCancelUpdateDefinition: WorkflowUpdateDefinition<
@@ -74,4 +82,13 @@ export const postRequestCancelUpdateDefinition: WorkflowUpdateDefinition<
 > = {
   ...postRequestWorkflow,
   update: POST_REQUEST_CANCEL_UPDATE,
+};
+
+export const postQuoteRequestAdmitDefinition: WorkflowUpdateDefinition<
+  (args: PostRequestWorkflowArgs) => Promise<PostRequestState>,
+  PostRequestState,
+  [string]
+> = {
+  ...postRequestWorkflow,
+  update: POST_REQUEST_QUOTE_ADMIT_UPDATE,
 };

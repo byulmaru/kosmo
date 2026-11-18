@@ -117,6 +117,20 @@ export function postContentDocumentToText(
   return postContentBodyToText(canonicalizePostContentDocument(value).body, mentionHandles);
 }
 
+export function getPostContentMentionProfileIds(document: PostContentDocumentV1): string[] {
+  return [
+    ...new Set(
+      document.body.content.flatMap((block) =>
+        block.type === 'paragraph'
+          ? (block.content ?? []).flatMap((node) =>
+              node.type === 'mention' ? [node.attrs.profileId] : [],
+            )
+          : [],
+      ),
+    ),
+  ];
+}
+
 export function validateLocalPostContentDocument(
   value: unknown,
   authoredBodyText?: string,

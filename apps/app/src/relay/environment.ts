@@ -1,6 +1,6 @@
 import { Environment, Network, RecordSource, ROOT_TYPE, Store } from 'relay-runtime';
 import { captureHandledMessage } from '@/observability/sentry';
-import { executeGraphQLRequest } from './network';
+import { createGraphQLSubscription, executeGraphQLRequest } from './network';
 import type { MissingFieldHandler, RelayFieldLogger } from 'relay-runtime';
 
 const MISSING_EXPECTED_DATA_KIND = 'missing_expected_data.log';
@@ -50,8 +50,10 @@ export function createRelayEnvironment(
   };
 
   return new Environment({
-    network: Network.create((request, variables) =>
-      executeGraphQLRequest(request, variables, token, fetch, selectedProfileId),
+    network: Network.create(
+      (request, variables) =>
+        executeGraphQLRequest(request, variables, token, fetch, selectedProfileId),
+      createGraphQLSubscription(token, selectedProfileId),
     ),
     missingFieldHandlers: [postNodeMissingFieldHandler],
     relayFieldLogger,

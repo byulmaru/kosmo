@@ -1,23 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
+  buildLicenseData,
   buildLicenseEntries,
-  checkLicenseArtifact,
   normalizeRepositoryUrl,
-  sourceSha256,
   writeLicenseArtifact,
 } from './generate-app-licenses.mjs';
 
@@ -26,10 +17,12 @@ function fixture(t) {
   const notice = join(root, 'NOTICE.md');
   const supplemental = join(root, 'supplemental.json');
   const pendingFile = join(root, 'apps/app/licenses/pending-notices.json');
+  const hopeReLicense = join(root, 'apps/app/licenses/hope-re.LICENSE');
   writeFileSync(notice, 'Complete attribution notice\n');
   writeFileSync(supplemental, '[]\n');
   mkdirSync(dirname(pendingFile), { recursive: true });
   writeFileSync(pendingFile, '[]\n');
+  writeFileSync(hopeReLicense, 'Complete Hope:RE MIT license\n');
   t.after(() => rmSync(root, { recursive: true, force: true }));
   return { root, notice, supplemental, pendingFile };
 }
@@ -60,20 +53,6 @@ function reportRow(name, versions, paths, license = 'MIT') {
   return { name, versions, paths, license };
 }
 
-function updateManifest(packagePath, updates) {
-  const manifestPath = join(packagePath, 'package.json');
-  writeFileSync(
-    manifestPath,
-    `${JSON.stringify({ ...JSON.parse(readFileSync(manifestPath, 'utf8')), ...updates })}\n`,
-  );
-}
-
-function linkInstalledPackage(root, name, packagePath) {
-  const linkPath = join(root, 'node_modules', ...name.split('/'));
-  mkdirSync(dirname(linkPath), { recursive: true });
-  symlinkSync(packagePath, linkPath, 'dir');
-}
-
 test('reports pnpm license failures written to stdout and stderr', (t) => {
   const binDirectory = mkdtempSync(join(tmpdir(), 'kosmo-app-licenses-pnpm-'));
   t.after(() => rmSync(binDirectory, { recursive: true, force: true }));
@@ -92,7 +71,7 @@ exit 1
 
   const result = spawnSync(
     process.execPath,
-    [fileURLToPath(new URL('./generate-app-licenses.mjs', import.meta.url)), '--check'],
+    [fileURLToPath(new URL('./generate-app-licenses.mjs', import.meta.url))],
     {
       cwd: process.cwd(),
       encoding: 'utf8',
@@ -181,6 +160,7 @@ test('builds sorted package entries from local originals and exact supplements',
     [
       '@kosmo/published@1.0.0',
       '@scope/fallback@3.0.0',
+      'Hope:RE@',
       'plain@1.0.0',
       'plain@2.0.0',
       'supplemented@4.0.0',
@@ -215,6 +195,17 @@ test('builds sorted package entries from local originals and exact supplements',
       license: 'MIT',
       text: supplementalText,
       sourceUrl: 'https://github.com/example/supplemented/blob/0123456789abcdef/LICENSE',
+    },
+  );
+  assert.deepEqual(
+    entries.find((entry) => entry.name === 'Hope:RE'),
+    {
+      name: 'Hope:RE',
+      version: '',
+      license: 'MIT',
+      text: 'Complete Hope:RE MIT license\n',
+      sourceUrl:
+        'https://github.com/byulmaru/hope-re/blob/509e641253d84110eaa9dc9c35f4d40810ee7608/LICENSE',
     },
   );
   assert.equal(entries.at(-1).text, 'Complete attribution notice\n');
@@ -276,14 +267,6 @@ test('keeps only exact pending package versions with an empty original text', (t
       sourceUrl: 'https://www.npmjs.com/package/pending/v/1.0.0',
     },
   );
-  const outputPath = join(root, 'open-source-licenses.json');
-  const pendingData = {
-    sourceSha256: 'a'.repeat(64),
-    notices: [entries.find((entry) => entry.name === 'pending')],
-  };
-  writeLicenseArtifact(pendingData, outputPath);
-  assert.doesNotThrow(() => checkLicenseArtifact(pendingData, outputPath, pendingFile));
-
   writeFileSync(
     pendingFile,
     `${JSON.stringify([
@@ -294,10 +277,6 @@ test('keeps only exact pending package versions with an empty original text', (t
         evidenceUrls: ['https://www.npmjs.com/package/pending/v/1.0.0'],
       },
     ])}\n`,
-  );
-  assert.throws(
-    () => checkLicenseArtifact(pendingData, outputPath, pendingFile),
-    /contains an invalid notice/,
   );
   assert.throws(
     () => buildLicenseEntries(report, { root, notice, supplementalFiles: [supplemental] }),
@@ -339,66 +318,21 @@ test('rejects mismatched version paths and conflicting supplement duplicates', (
   );
 });
 
-test('checks the installed subset against committed all-platform data', (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'kosmo-license-output-'));
+test('serializes generated license notices as JSON', (t) => {
+  const { root, notice, supplemental } = fixture(t);
+  const packagePath = addPackage(root, 'pkg', '1.0.0', 'owner/pkg', {
+    LICENSE: 'Full license text\n',
+  });
+  const data = buildLicenseData(
+    { MIT: [reportRow('pkg', ['1.0.0'], [packagePath])] },
+    { root, notice, supplementalFiles: [supplemental] },
+  );
   const outputPath = join(root, 'data/licenses.json');
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const entry = {
-    name: 'pkg',
-    version: '1.0.0',
-    license: 'MIT',
-    text: 'Full text',
-    sourceUrl: 'https://github.com/example/pkg',
-  };
-  const current = {
-    sourceSha256: 'a'.repeat(64),
-    notices: [entry],
-  };
-  const generatedData = {
-    sourceSha256: current.sourceSha256,
-    notices: [entry, { ...entry, name: 'pkg-linux' }],
-  };
-  writeLicenseArtifact(generatedData, outputPath);
-  const generated = readFileSync(outputPath, 'utf8');
-  assert.equal(generated, `${JSON.stringify(generatedData, null, 2)}\n`);
-  assert.doesNotThrow(() => checkLicenseArtifact(current, outputPath));
-  assert.throws(
-    () => checkLicenseArtifact({ ...current, sourceSha256: 'b'.repeat(64) }, outputPath),
-    /stale for pnpm-lock\.yaml/,
-  );
-  assert.throws(
-    () =>
-      checkLicenseArtifact({ ...current, notices: [{ ...entry, text: 'changed' }] }, outputPath),
-    /stale for pkg@1\.0\.0/,
-  );
-  assert.equal(readFileSync(outputPath, 'utf8'), generated);
-});
 
-test('checks one checksum over lock, supplemental, pending, and emoji notice sources', (t) => {
-  const root = mkdtempSync(join(tmpdir(), 'kosmo-license-sources-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const sources = [
-    'pnpm-lock.yaml',
-    'apps/app/licenses/supplemental-families.json',
-    'apps/app/licenses/supplemental-other.json',
-    'apps/app/licenses/pending-notices.json',
-    'apps/app/public/reaction-emoji/NOTICE.md',
-  ];
-  for (const path of sources) {
-    const filePath = join(root, path);
-    mkdirSync(dirname(filePath), { recursive: true });
-    writeFileSync(filePath, `${path}\n`);
-  }
+  writeLicenseArtifact(data, outputPath);
 
-  const initial = sourceSha256(root);
-  writeFileSync(
-    join(root, 'apps/app/licenses/supplemental-other.json'),
-    'changed supplemental content\n',
-  );
-  const changedSupplement = sourceSha256(root);
-  assert.notEqual(changedSupplement, initial);
-  writeFileSync(join(root, 'apps/app/licenses/pending-notices.json'), 'changed pending content\n');
-  assert.notEqual(sourceSha256(root), changedSupplement);
+  assert.deepEqual(JSON.parse(readFileSync(outputPath, 'utf8')), data);
+  assert.ok(data.notices.some((entry) => entry.name === 'pkg'));
 });
 
 test('NOTICE-only packages require a full license supplement', (t) => {
@@ -432,86 +366,34 @@ test('NOTICE-only packages require a full license supplement', (t) => {
   );
 });
 
-test('adds forced-installed optional variants and their dependency closure', (t) => {
+test('includes every production report package and deduplicates duplicate rows', (t) => {
   const { root, notice, supplemental } = fixture(t);
-  const parent = addPackage(root, 'parent', '1.0.0', 'owner/parent', {
-    LICENSE: 'Parent license\n',
+  const runtime = addPackage(root, 'runtime', '1.0.0', 'owner/runtime', {
+    LICENSE: 'Runtime license\n',
   });
-  const variant = addPackage(
-    root,
-    '@vendor/platform',
-    '1.0.0',
-    'git+https://github.com/vendor/platform.git',
-    { LICENSE: 'Platform license\n' },
-  );
-  const transitive = addPackage(root, 'transitive', '2.0.0', 'owner/transitive', {
-    COPYING: 'Transitive license\n',
+  const reportOnly = addPackage(root, 'report-only', '2.0.0', 'owner/report-only', {
+    LICENSE: 'Report-only license\n',
   });
-  updateManifest(parent, {
-    optionalDependencies: { '@vendor/platform': '1.0.0' },
-  });
-  updateManifest(variant, {
-    dependencies: { transitive: '^2.0.0', 'missing-optional': '1.0.0' },
-    optionalDependencies: { 'missing-optional': '1.0.0' },
-  });
-  linkInstalledPackage(root, '@vendor/platform', variant);
-  linkInstalledPackage(root, 'transitive', transitive);
 
   const entries = buildLicenseEntries(
-    { MIT: [reportRow('parent', ['1.0.0'], [parent])] },
+    {
+      MIT: [
+        reportRow('runtime', ['1.0.0'], [runtime]),
+        reportRow('runtime', ['1.0.0'], [runtime]),
+        reportRow('report-only', ['2.0.0'], [reportOnly]),
+      ],
+    },
     {
       root,
       notice,
       supplementalFiles: [supplemental],
-      strictOptionalDependencies: false,
     },
   );
   assert.deepEqual(
-    entries.map(({ name }) => name),
-    ['@vendor/platform', 'parent', 'transitive', '반응 이모지'],
+    entries.map(({ name, version }) => `${name}@${version}`),
+    ['Hope:RE@', 'report-only@2.0.0', 'runtime@1.0.0', '반응 이모지@'],
   );
-  assert.equal(
-    entries.find((entry) => entry.name === '@vendor/platform').sourceUrl,
-    'https://github.com/vendor/platform',
-  );
-
-  const missingRoot = mkdtempSync(join(tmpdir(), 'kosmo-license-optional-'));
-  t.after(() => rmSync(missingRoot, { recursive: true, force: true }));
-  const missingNotice = join(missingRoot, 'NOTICE.md');
-  const missingSupplemental = join(missingRoot, 'supplemental.json');
-  const missingPending = join(missingRoot, 'apps/app/licenses/pending-notices.json');
-  writeFileSync(missingNotice, 'Notice\n');
-  writeFileSync(missingSupplemental, '[]\n');
-  mkdirSync(dirname(missingPending), { recursive: true });
-  writeFileSync(missingPending, '[]\n');
-  const missingParent = addPackage(missingRoot, 'missing-parent', '1.0.0', 'owner/missing-parent', {
-    LICENSE: 'Parent license\n',
-  });
-  updateManifest(missingParent, {
-    optionalDependencies: { '@vendor/missing': '1.0.0' },
-  });
-  const missingReport = {
-    MIT: [reportRow('missing-parent', ['1.0.0'], [missingParent])],
-  };
-  assert.doesNotThrow(() =>
-    buildLicenseEntries(missingReport, {
-      root: missingRoot,
-      notice: missingNotice,
-      supplementalFiles: [missingSupplemental],
-      pendingFile: missingPending,
-      strictOptionalDependencies: false,
-    }),
-  );
-  assert.throws(
-    () =>
-      buildLicenseEntries(missingReport, {
-        root: missingRoot,
-        notice: missingNotice,
-        supplementalFiles: [missingSupplemental],
-        pendingFile: missingPending,
-      }),
-    /missing-parent@1\.0\.0 -> @vendor\/missing \(optional\)/,
-  );
+  assert.equal(entries.filter(({ name }) => name === 'runtime').length, 1);
 });
 
 test('normalizes repository links and falls back to the npm version page', () => {

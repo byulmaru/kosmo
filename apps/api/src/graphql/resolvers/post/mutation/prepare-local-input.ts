@@ -2,6 +2,7 @@ import { db, Instances, Profiles } from '@kosmo/core/db';
 import { InstanceKind } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { MediaUsePermission } from '@kosmo/core/media-metadata';
 import { normalizePostContentPlainText } from '@kosmo/core/post-content';
 import { postBodyMaxLength } from '@kosmo/core/validation';
 import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
@@ -15,11 +16,13 @@ import { Media } from '../../media/ref';
 import { Profile } from '../../profile/ref';
 import { extractPostMentionCandidates } from './mention-candidates';
 import type { PostVisibility } from '@kosmo/core/enums';
+import type { MediaPublicationRights } from '@kosmo/core/media-metadata';
 import type { PostContentMentionReference } from '@kosmo/core/post-content/server';
 import type { LocalPostInput } from '@kosmo/core/services';
 import type { SessionContext } from '@/context';
 
 export type LocalPostMutationInput = {
+  admissionId?: string | null;
   actorProfileId?: { readonly id: string } | null;
   bodyText: string;
   contentWarning?: string | null;
@@ -28,6 +31,7 @@ export type LocalPostMutationInput = {
         readonly altText?: string | null;
         readonly applyAiProhibitFilter?: boolean | null;
         readonly mediaId: { readonly id: string };
+        readonly rights?: MediaPublicationRights | null;
       }[]
     | null;
   mentions?:
@@ -43,11 +47,20 @@ export type LocalPostMutationInput = {
   visibility: PostVisibility;
 };
 
+export const CreatePostMediaRightsInput = builder.inputType('CreatePostMediaRightsInput', {
+  fields: (t) => ({
+    commercial: t.field({ type: MediaUsePermission }),
+    noncommercial: t.field({ type: MediaUsePermission }),
+    personal: t.field({ type: MediaUsePermission }),
+  }),
+});
+
 export const CreatePostMediaInput = builder.inputType('CreatePostMediaInput', {
   fields: (t) => ({
     altText: t.string({ required: false }),
     applyAiProhibitFilter: t.boolean({ required: false, defaultValue: false }),
     mediaId: t.globalID({ for: Media }),
+    rights: t.field({ type: CreatePostMediaRightsInput, required: false }),
   }),
 });
 
@@ -65,6 +78,7 @@ export const localPostMediaArraySchema = z.array(z.unknown()).max(4, {
 
 const localPostInputBaseSchema = z
   .object({
+    admissionId: z.string().nullish(),
     bodyText: z.string(),
     contentWarning: z.string().nullish(),
     media: z.array(z.unknown()).nullish(),
@@ -284,6 +298,7 @@ export async function prepareLocalPostInput(
 
   return {
     accountId: ctx.session.accountId,
+    ...(input.admissionId == null ? {} : { admissionId: input.admissionId }),
     bodyText,
     contentWarning: contentWarning || null,
     media: media.map(({ altText, mediaId }) => ({

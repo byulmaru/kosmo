@@ -3,6 +3,7 @@ import { temporalClient } from '@kosmo/core/temporal/client';
 import {
   POST_REQUEST_SEARCH_ATTRIBUTES,
   POST_REQUEST_WORKFLOW_TYPE,
+  postQuoteRequestWorkflowId,
   PostRequestStatus,
   postRequestWorkflowId,
 } from '@kosmo/core/temporal/post-request';
@@ -25,7 +26,9 @@ builder.objectField(Profile, 'postRequests', (t) =>
       const requests: PostRequestState[] = [];
 
       for await (const execution of temporalClient.workflow.list({ query })) {
-        const workflowIdPrefix = postRequestWorkflowId(accountId, '');
+        const workflowIdPrefix = execution.workflowId.startsWith(postQuoteRequestWorkflowId(''))
+          ? postQuoteRequestWorkflowId('')
+          : postRequestWorkflowId(accountId, '');
         if (!execution.workflowId.startsWith(workflowIdPrefix)) {
           continue;
         }

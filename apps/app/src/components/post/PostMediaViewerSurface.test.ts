@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, forwardRef, useImperativeHandle, useRef } from 'react';
+import { cloneElement, createElement, forwardRef, useImperativeHandle, useRef } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactElement, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
@@ -28,6 +28,17 @@ const MockImage = Object.assign((props: Record<string, unknown>) => createElemen
   getSize: (_url: string, onSuccess: (width: number, height: number) => void) =>
     onSuccess(1600, 900),
 });
+const Link = ({
+  children,
+  href,
+  rel,
+  target,
+}: {
+  children: ReactElement<Record<string, unknown>>;
+  href: string;
+  rel?: string;
+  target?: string;
+}) => cloneElement(children, { href, rel, target });
 const MockScrollView = forwardRef<
   {
     scrollTo: (options: { animated?: boolean; x?: number; y?: number }) => void;
@@ -102,6 +113,15 @@ mock.module('@/components/ui/IconButton', {
   exports: {
     IconButton: (props: Record<string, unknown>) => createElement('IconButton', props),
   },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module('./MediaProtectionBadge', {
+  exports: {
+    MediaProtectionBadge: () => createElement('View', { testID: 'media-protection-badge' }),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+
+mock.module('expo-router', {
+  exports: { Link },
 } as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('@/theme/ThemeProvider', {
@@ -225,6 +245,7 @@ mock.module(require.resolve('lucide-react-native'), {
   exports: {
     ChevronLeftIcon: icon('ChevronLeftIcon'),
     ChevronRightIcon: icon('ChevronRightIcon'),
+    CopyrightIcon: icon('CopyrightIcon'),
     XIcon: icon('XIcon'),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -1582,11 +1603,29 @@ describe('PostMediaViewerSurface', () => {
   });
 
   it('Ready image는 contain, trimmed alt name 또는 document fallback을 사용한다', async () => {
-    await render({ currentIndex: 0, media: [media(1, '  Trimmed alt  ')] });
+    await render({
+      currentIndex: 0,
+      media: [{ ...media(1, '  Trimmed alt  '), aiProhibitFilterApplied: true }],
+    });
     assert.equal(image().props.accessible, true);
-    assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
+    assert.equal(image().props.accessibilityLabel, 'Trimmed alt, 학습방지 필터 적용됨');
     assert.equal(image().props.accessibilityRole, 'image');
     assert.equal(image().props.resizeMode, 'contain');
+    assert.equal(renderer?.root.findAllByProps({ testID: 'media-protection-badge' }).length, 1);
+
+    await render({
+      currentIndex: 0,
+      media: [{ ...media(1, '  Trimmed alt  '), aiProhibitFilterApplied: false }],
+    });
+    assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
+    assert.equal(renderer?.root.findAllByProps({ testID: 'media-protection-badge' }).length, 0);
+
+    await render({
+      currentIndex: 0,
+      media: [{ ...media(1, '  Trimmed alt  '), aiProhibitFilterApplied: null }],
+    });
+    assert.equal(image().props.accessibilityLabel, 'Trimmed alt');
+    assert.equal(renderer?.root.findAllByProps({ testID: 'media-protection-badge' }).length, 0);
 
     await render({ currentIndex: 2, media: [media(1, null), media(2, null), media(3, null)] });
     assert.equal(image().props.accessibilityLabel, '3번째 첨부 이미지');

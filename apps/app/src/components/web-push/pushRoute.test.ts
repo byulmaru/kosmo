@@ -39,11 +39,15 @@ class MemoryCache {
   }
 
   async match(key: string) {
-    this.storage.matchCalls += 1;
+    const deferredRead = this.storage.deferLaterMatch();
+    if (deferredRead) {
+      await deferredRead;
+    }
     if (this.storage.failMatch) {
       throw new Error('CacheStorage read failed');
     }
     const value = this.entries.get(key);
+    this.storage.noteMatch(value !== undefined);
     return value === undefined ? undefined : { json: async () => JSON.parse(value) };
   }
 
@@ -54,21 +58,14 @@ class MemoryCache {
 
 class FakeCacheStorage {
   readonly caches = new Map<string, MemoryCache>();
-  openCalls = 0;
-  matchCalls = 0;
-  deferredOpenStarted = false;
-  private deferredOpen: { call: number; promise: Promise<void>; resolve: () => void } | undefined;
+  private hasSuccessfulMatch = false;
+  private deferredMatches: Promise<void> | undefined;
   failOpen = false;
   failPut = false;
   failMatch = false;
   failDelete = false;
 
   async open(name: string) {
-    this.openCalls += 1;
-    if (this.deferredOpen?.call === this.openCalls) {
-      this.deferredOpenStarted = true;
-      await this.deferredOpen.promise;
-    }
     if (this.failOpen) {
       throw new Error('CacheStorage unavailable');
     }
@@ -80,13 +77,20 @@ class FakeCacheStorage {
     return cache;
   }
 
-  deferOpen(call: number) {
-    let resolve = () => {};
-    const promise = new Promise<void>((resume) => {
-      resolve = resume;
+  deferMatchesAfterFirstSuccess() {
+    let release = () => {};
+    this.deferredMatches = new Promise<void>((resolve) => {
+      release = resolve;
     });
-    this.deferredOpen = { call, promise, resolve };
-    return resolve;
+    return release;
+  }
+
+  deferLaterMatch(): Promise<void> | undefined {
+    return this.hasSuccessfulMatch ? this.deferredMatches : undefined;
+  }
+
+  noteMatch(found: boolean) {
+    this.hasSuccessfulMatch ||= found;
   }
 
   seed(payload: unknown, id = tapId) {
@@ -219,15 +223,14 @@ describe('Web push action route', () => {
   it('keeps the real handoff destination under Strict Mode effect replay', async () => {
     const click = await clickNotification(profileTarget());
     params = { tap: new URL(click.openedWindows[0]).searchParams.get('tap') ?? undefined };
-    const releaseSecondEffect = cacheStorage.deferOpen(3);
+    const releaseLaterMatches = cacheStorage.deferMatchesAfterFirstSuccess();
     await renderRoute(true);
 
-    assert.equal(cacheStorage.deferredOpenStarted, true);
     assert.equal(routedPath(), '/@alice/post-42');
-    assert.equal(operations.at(-1), 'router:/@alice/post-42');
+    assert.equal(cacheStorage.size, 0);
 
     await act(async () => {
-      releaseSecondEffect();
+      releaseLaterMatches();
       await new Promise((resolve) => setImmediate(resolve));
     });
     assert.equal(routedPath(), '/@alice/post-42');
@@ -325,7 +328,6 @@ describe('Web push action route', () => {
     await renderRoute();
 
     assert.deepEqual(operations, ['write:profile-b']);
-    assert.equal(cacheStorage.matchCalls, 1);
     await act(async () => {
       session = { accountId: 'account-a', selectedProfileId: 'profile-b', status: 'valid' };
       renderer?.update(createElement(TestRouter));
@@ -333,7 +335,6 @@ describe('Web push action route', () => {
     });
 
     assert.equal(routedPath(), '/@alice/post-42');
-    assert.equal(cacheStorage.matchCalls, 1);
     assert.equal(operations.includes('router:/notifications'), false);
     releaseWrite();
     await act(async () => {

@@ -1,40 +1,32 @@
 import '@kosmo/core/polyfill';
 
+import { createHash } from 'node:crypto';
 import {
-  AccountProfiles,
-  Accounts,
   ActivityPubPosts,
   db,
   first,
   firstOrThrow,
-  Instances,
   PostContents,
   Posts,
-  Profiles,
+  uuidv7,
 } from '@kosmo/core/db';
-import {
-  AccountProfileRole,
-  AccountProfileRoleOrder,
-  AccountState,
-  PostState,
-} from '@kosmo/core/enums';
-import {
-  ConflictError,
-  KosmoError,
-  NotFoundError,
-  PermissionDeniedError,
-  ValidationError,
-} from '@kosmo/core/error';
+import { PostState } from '@kosmo/core/enums';
+import { ConflictError, KosmoError, NotFoundError, ValidationError } from '@kosmo/core/error';
 import {
   createPostInTransaction,
   isActivityPubPostUriConflict,
   ProfilePairBlockedError,
+  resolveActivityPubPostCreatedAt,
 } from '@kosmo/core/services';
-import { visibleProfileWhere } from '@kosmo/core/visibility';
-import { and, eq, sql } from 'drizzle-orm';
-import type { Transaction } from '@kosmo/core/db';
+import { runWorkflow } from '@kosmo/core/temporal/client';
+import { postCreateInputKey } from '@kosmo/core/temporal/post';
+import { postCreateIdentities, quotePostCreateInput } from '@kosmo/core/temporal/post-admission';
+import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
+import { eq, sql } from 'drizzle-orm';
+import { assertLocalPostRequestAuthorization } from './post-create-authorization';
 import type { ActivityPubPostInput, PostCreateInput } from '@kosmo/core/services';
 import type {
+  ActivityPubPostCreateInput,
   PostCreateActivityInput,
   PostCreateActivityResult,
 } from '@kosmo/core/temporal/post-create';
@@ -81,44 +73,6 @@ const toErrorResult = (
       ...(kind === undefined ? {} : { kind }),
     },
   };
-};
-
-const assertLocalPostRequestAuthorization = async (
-  tx: Transaction,
-  input: PostCreateInput,
-): Promise<void> => {
-  if (input.origin !== 'LOCAL' || input.accountId === undefined) {
-    throw new PermissionDeniedError('Active Account membership is required to create this Post');
-  }
-
-  const account = await tx
-    .select({ state: Accounts.state })
-    .from(Accounts)
-    .where(eq(Accounts.id, input.accountId))
-    .limit(1)
-    .then(first);
-  if (!account || account.state !== AccountState.ACTIVE) {
-    throw new PermissionDeniedError('Active Account membership is required to create this Post');
-  }
-
-  const membership = await tx
-    .select({ role: AccountProfiles.role })
-    .from(AccountProfiles)
-    .innerJoin(Profiles, eq(Profiles.id, AccountProfiles.profileId))
-    .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
-    .where(
-      and(
-        eq(AccountProfiles.accountId, input.accountId),
-        eq(AccountProfiles.profileId, input.profileId),
-        visibleProfileWhere({ profile: Profiles, instance: Instances }),
-      ),
-    )
-    .limit(1)
-    .then(first);
-  const roleIndex = membership ? AccountProfileRoleOrder.indexOf(membership.role) : -1;
-  if (roleIndex < AccountProfileRoleOrder.indexOf(AccountProfileRole.MEMBER)) {
-    throw new PermissionDeniedError('Active Account membership is required to create this Post');
-  }
 };
 
 const createPostTransaction = async (
@@ -246,21 +200,82 @@ const createPostAttempt = async (
   }
 };
 
-export const generatePostIdActivity = async (): Promise<string> =>
-  db
-    .select({ id: sql<string>`uuidv7()` })
+export const generatePostIdActivity = async (
+  input?:
+    | Pick<ActivityPubPostCreateInput, 'publishedAt' | 'receivedAt'>
+    | PostCreateActivityInput['input'],
+): Promise<string> => {
+  if (
+    input &&
+    'origin' in input &&
+    input.origin === 'LOCAL' &&
+    input.repostSourceId !== undefined
+  ) {
+    return postCreateIdentities(quotePostCreateInput(input)).postId;
+  }
+  const createdAt =
+    input === undefined || !('publishedAt' in input)
+      ? undefined
+      : resolveActivityPubPostCreatedAt({
+          publishedAt: input.publishedAt === null ? null : Temporal.Instant.from(input.publishedAt),
+          receivedAt: Temporal.Instant.from(input.receivedAt),
+        });
+
+  return db
+    .select({ id: uuidv7(createdAt?.toString()) })
     .from(sql`(VALUES (1)) AS id_source(value)`)
     .limit(1)
     .then(firstOrThrow)
     .then(({ id }) => id);
+};
 
 export const createPostActivity = async ({
   input,
   postId,
+  requestId,
   revalidateAuthorization = false,
 }: PostCreateActivityInput): Promise<PostCreateActivityResult> => {
   const postInput = toPostInput(input);
   try {
+    if (postInput.origin === 'LOCAL' && postInput.repostSourceId !== undefined) {
+      const command = quotePostCreateInput(postInput);
+      const identities = postCreateIdentities(command);
+      if (postId !== identities.postId || requestId !== identities.contentId) {
+        throw new ValidationError(
+          'Quote admission payload does not match its original submission',
+          {
+            field: 'admissionId',
+          },
+        );
+      }
+      // The Quote owner owns its Source lock, current-Run fence and shared persistence transaction.
+      const { admissionId, ...localInput } = postInput;
+      const commandId = `${admissionId}:${createHash('sha256').update(postCreateInputKey(command)).digest('hex')}`;
+      const outcome = await runWorkflow(postQuoteOwnerWorkflow, {
+        args: [{ postId, initialSourcePostId: postInput.repostSourceId }],
+        mode: 'update-with-start',
+        updateId: commandId,
+        updateArgs: [
+          {
+            kind: 'INITIALIZE',
+            revalidateAuthorization,
+            postId,
+            commandId,
+            input: localInput,
+            initialContentId: identities.contentId,
+          },
+        ],
+        workflowIdConflictPolicy: 'USE_EXISTING',
+        workflowIdReusePolicy: 'ALLOW_DUPLICATE',
+      });
+      if (outcome.error) {
+        return { ok: false, error: outcome.error };
+      }
+      return {
+        ok: true,
+        result: { authorProfileId: postInput.profileId, postId, status: 'created' },
+      };
+    }
     return await createPostAttempt(postInput, postId, false, revalidateAuthorization);
   } catch (error) {
     if (input.origin === 'ACTIVITYPUB' && error instanceof ProfilePairBlockedError) {

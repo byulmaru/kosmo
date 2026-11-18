@@ -11,6 +11,7 @@ import { HashtagMuteScope } from '../enums';
 import { profileBlockPairWhere } from '../visibility/profile-block';
 import type { DatabaseHandle } from '../db';
 import type { NotificationKind } from '../enums';
+import type { NotificationEventCollector } from '../notification/events';
 
 type MaterializeNotificationInput = {
   readonly actorAccountId: string | null;
@@ -39,6 +40,7 @@ export const materializeNotification = async (
     relatedProfileId,
     sourceId,
   }: MaterializeNotificationInput,
+  eventCollector?: NotificationEventCollector,
 ): Promise<string[]> => {
   if (await isNotificationSuppressed(database, recipientProfileId, relatedProfileId)) {
     return [];
@@ -60,7 +62,7 @@ export const materializeNotification = async (
     return [];
   }
 
-  await database
+  const inserted = await database
     .insert(Notifications)
     .values(
       recipientAccountIds.map((recipientAccountId) => ({
@@ -71,7 +73,14 @@ export const materializeNotification = async (
         sourceId,
       })),
     )
-    .onConflictDoNothing();
+    .onConflictDoNothing()
+    .returning({
+      notificationId: Notifications.id,
+      recipientAccountId: Notifications.recipientAccountId,
+      recipientProfileId: Notifications.recipientProfileId,
+    });
+
+  eventCollector?.push(...inserted);
 
   return database
     .select({ id: Notifications.id })

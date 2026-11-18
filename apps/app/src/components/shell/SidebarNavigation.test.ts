@@ -77,7 +77,8 @@ mockModule('@/auth/webLogin', {
 });
 mockModule(new URL('./shellLayout.ts', import.meta.url), {
   isSettingsRoute: () => false,
-  isTimelineRoute: () => true,
+  isTimelineRoute: (route: string) =>
+    route === '/home' || route === '/local' || route === '/federated',
 });
 let SidebarNavigation: typeof SidebarNavigationExport;
 

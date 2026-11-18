@@ -127,7 +127,7 @@ async function createRoutes(): Promise<RouteCase[]> {
     {
       path: '/settings/theme',
       verify: async (page) => {
-        await expect(page.getByRole('heading', { name: '테마', exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: '화면', exact: true })).toBeVisible();
       },
     },
     {

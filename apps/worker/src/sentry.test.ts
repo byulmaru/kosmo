@@ -1,0 +1,131 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const cwd = fileURLToPath(new URL('..', import.meta.url));
+const metadataKeys = ['ENVIRONMENT', 'EXPO_PUBLIC_SENTRY_DSN', 'SENTRY_RELEASE'] as const;
+
+test('does not initialize Sentry without complete Worker metadata', () => {
+  for (const omittedKey of metadataKeys) {
+    const env = {
+      ...process.env,
+      ENVIRONMENT: 'dev',
+      EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
+      SENTRY_RELEASE: 'worker-test-release',
+    };
+    delete env[omittedKey];
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--import',
+        'tsx',
+        '--import',
+        './src/sentry.ts',
+        '--input-type=module',
+        '-e',
+        `
+          import * as Sentry from '@sentry/node';
+          console.log(Boolean(Sentry.getClient()));
+        `,
+      ],
+      {
+        cwd,
+        env,
+        encoding: 'utf8',
+      },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), 'false', `Sentry initialized without ${omittedKey}`);
+  }
+});
+
+test('exports manual spans and errors with Worker runtime metadata', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      '--import',
+      './src/sentry.ts',
+      '--input-type=module',
+      '-e',
+      `
+        import * as Sentry from '@sentry/node';
+        const client = Sentry.getClient();
+        const transport = client?.getTransport();
+        if (!transport) throw new Error('Worker Sentry client was not initialized');
+
+        const events = [];
+        const spans = [];
+        transport.send = async (envelope) => {
+          for (const [headers, payload] of envelope[1]) {
+            if (headers.type === 'event') {
+              events.push(payload);
+            } else if (headers.type === 'transaction') {
+              spans.push({
+                name: payload.transaction,
+                environment: payload.environment,
+                release: payload.release,
+              });
+            } else if (headers.type === 'span') {
+              spans.push(
+                ...payload.items.map(({ name, attributes }) => ({
+                  name,
+                  environment: attributes?.['sentry.environment']?.value,
+                  release: attributes?.['sentry.release']?.value,
+                })),
+              );
+            }
+          }
+          return { statusCode: 200 };
+        };
+
+        Sentry.startInactiveSpan({
+          name: 'smart-filter.decision',
+          op: 'decision.provider',
+          forceTransaction: true,
+        }).end();
+        Sentry.startInactiveSpan({
+          name: 'activitypub.outbox',
+          op: 'activitypub.outbox',
+          forceTransaction: true,
+        }).end();
+        Sentry.captureException(new Error('worker Sentry runtime test'));
+        if (!(await Sentry.flush(1_000))) throw new Error('Worker Sentry did not flush');
+
+        const event = events[0];
+        const span = spans.find(({ name }) => name === 'smart-filter.decision');
+        const hasOutboxSpan = spans.some(({ name }) => name === 'activitypub.outbox');
+        await Sentry.close(0);
+        console.log(JSON.stringify({ event, span, hasOutboxSpan }));
+      `,
+    ],
+    {
+      cwd,
+      env: {
+        ...process.env,
+        ENVIRONMENT: 'dev',
+        EXPO_PUBLIC_SENTRY_DSN: 'https://public@example.invalid/1',
+        SENTRY_RELEASE: 'worker-test-release',
+      },
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  const { event, span, hasOutboxSpan } = JSON.parse(result.stdout.trim()) as {
+    event?: { environment?: string; release?: string; tags?: Record<string, string> };
+    span?: { name?: string; environment?: string; release?: string };
+    hasOutboxSpan?: boolean;
+  };
+  assert.equal(event?.environment, 'dev');
+  assert.equal(event?.release, 'worker-test-release');
+  assert.equal(event?.tags?.runtime, 'worker');
+  assert.equal(span?.name, 'smart-filter.decision');
+  assert.equal(span?.environment, 'dev');
+  assert.equal(span?.release, 'worker-test-release');
+  assert.equal(hasOutboxSpan, false);
+});

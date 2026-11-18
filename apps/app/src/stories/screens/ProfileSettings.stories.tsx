@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
+import { graphql, useLazyLoadQuery } from 'react-relay';
 import { useArgs } from 'storybook/preview-api';
 import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/test';
 import { ProfilePostingSettings } from '@/components/settings/ProfilePostingSettings';
 import { ProfileSettingsScreen } from '@/components/settings/ProfileSettingsScreen';
+import { RelayStoryProvider } from '../../../.storybook/mocks/react-relay';
+import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { ProfilePostingSettingsValue } from '@/components/settings/ProfilePostingSettings';
+import type { ProfileSettingsStoriesQuery as ProfileSettingsStoriesQueryType } from './__generated__/ProfileSettingsStoriesQuery.graphql';
 
 type Phase = 'entry' | 'idle' | 'pending' | 'error';
 type Outcome = 'error' | 'pending';
@@ -24,7 +28,42 @@ type Args = {
   onPhaseChange?: (phase: Phase) => void;
 };
 
-function ProfileSettingsExample({ onPhaseChange, ...args }: Args) {
+const query = graphql`
+  query ProfileSettingsStoriesQuery {
+    node(id: "profile-settings-story") {
+      __typename
+      ... on Profile {
+        ...ProfileSettingsScreen_profile @alias(as: "settings")
+      }
+    }
+  }
+`;
+
+function ProfileSettingsExample(args: Args) {
+  return (
+    <RelayStoryProvider
+      key={[args.displayName, args.relativeHandle].join(':')}
+      queryData={{
+        node: profile({
+          avatar: null,
+          displayName: args.displayName,
+          id: 'profile-settings-story',
+          relativeHandle: args.relativeHandle,
+        }),
+      }}
+    >
+      <Suspense fallback={null}>
+        <ProfileSettingsExampleContents {...args} />
+      </Suspense>
+    </RelayStoryProvider>
+  );
+}
+
+function ProfileSettingsExampleContents({ onPhaseChange, ...args }: Args) {
+  const data = useLazyLoadQuery<ProfileSettingsStoriesQueryType>(query, {});
+  if (data.node?.__typename !== 'Profile' || !data.node.settings) {
+    throw new globalThis.Error('ProfileSettingsStoriesQuery must return the Profile fixture.');
+  }
   const { height } = useWindowDimensions();
   const [postingSettings, setPostingSettings] = useState<ProfilePostingSettingsValue>({
     defaultPostVisibility: 'PUBLIC',
@@ -52,11 +91,7 @@ function ProfileSettingsExample({ onPhaseChange, ...args }: Args) {
     <View style={{ alignSelf: 'center', maxWidth: 640, minHeight: height, width: '100%' }}>
       <ProfileSettingsScreen
         embedded={args.embedded}
-        profile={{
-          id: 'profile-settings-story',
-          displayName: args.displayName,
-          relativeHandle: args.relativeHandle,
-        }}
+        profile={data.node.settings}
         deletion={
           args.deletionEnabled
             ? {

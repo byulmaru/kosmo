@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
+import { after, mock, test } from 'node:test';
 import { eq, inArray } from 'drizzle-orm';
 import {
   Accounts,
@@ -20,12 +20,39 @@ import {
   SessionState,
 } from '../enums';
 import { NotFoundError } from '../error';
-import { disableProfile } from './profile';
 import { followProfile } from './profile-follow.test-helpers';
+import type { RedisClientType } from '@redis/client';
+
+const publishedEvents: Array<{ readonly channel: string; readonly message: string }> = [];
+const redisCommandOptions: Array<{ readonly waitForReady?: boolean } | undefined> = [];
+let redisUnavailable = false;
+const redisClient = {
+  publish: async (channel: string, message: string) => {
+    publishedEvents.push({ channel, message });
+    return 1;
+  },
+} as unknown as RedisClientType;
+
+mock.module(new URL('../redis/client.ts', import.meta.url), {
+  namedExports: {
+    runRedisCommand: async <T>(
+      command: (client: RedisClientType) => Promise<T>,
+      options?: { readonly waitForReady?: boolean },
+    ) => {
+      redisCommandOptions.push(options);
+      if (redisUnavailable) {
+        return null;
+      }
+      return { value: await command(redisClient) };
+    },
+  },
+});
+
+const { disableProfile } = await import('./profile.ts');
 
 after(async () => pg.end());
 
-test('disableProfile은 profile lifecycle과 active session 정리를 소유한다', async () => {
+test('disableProfile은 profile lifecycle과 active session 정리를 소유한다', async (t) => {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const instance = await db
     .insert(Instances)
@@ -49,6 +76,7 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
   const followee = await createProfile(`${suffix}-followee`);
   const follower = await createProfile(`${suffix}-follower`);
   const suspended = await createProfile(`${suffix}-suspended`);
+  const redisUnavailableProfile = await createProfile(`${suffix}-redis-unavailable`);
   const account = await db
     .insert(Accounts)
     .values({ displayName: suffix, oidcSubject: suffix, state: AccountState.ACTIVE })
@@ -82,6 +110,13 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
 
     await Promise.all([disableProfile(profile.id), disableProfile(profile.id)]);
 
+    assert.deepEqual(
+      publishedEvents.filter(({ channel }) => channel === `profileDisabled:${profile.id}`),
+      [
+        { channel: `profileDisabled:${profile.id}`, message: '{"detail":true}' },
+        { channel: `profileDisabled:${profile.id}`, message: '{"detail":true}' },
+      ],
+    );
     const disabled = await db
       .select()
       .from(Profiles)
@@ -130,6 +165,10 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
     });
     await disableProfile(profile.id);
     assert.equal(
+      publishedEvents.filter(({ channel }) => channel === `profileDisabled:${profile.id}`).length,
+      3,
+    );
+    assert.equal(
       await db
         .select()
         .from(Profiles)
@@ -152,8 +191,30 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
       .update(Profiles)
       .set({ state: ProfileState.SUSPENDED })
       .where(eq(Profiles.id, suspended.id));
+    const publishedBeforeFailures = publishedEvents.length;
     await assert.rejects(disableProfile(suspended.id), NotFoundError);
     await assert.rejects(disableProfile(crypto.randomUUID()), NotFoundError);
+    assert.equal(publishedEvents.length, publishedBeforeFailures);
+
+    t.mock.method(console, 'error', () => undefined);
+    const publishedBeforeRedisFailure = publishedEvents.length;
+    redisUnavailable = true;
+    try {
+      await disableProfile(redisUnavailableProfile.id);
+    } finally {
+      redisUnavailable = false;
+    }
+    assert.equal(publishedEvents.length, publishedBeforeRedisFailure);
+    assert.equal(
+      await db
+        .select({ state: Profiles.state })
+        .from(Profiles)
+        .where(eq(Profiles.id, redisUnavailableProfile.id))
+        .then(firstOrThrow)
+        .then(({ state }) => state),
+      ProfileState.DISABLED,
+    );
+    assert.ok(redisCommandOptions.every((options) => options?.waitForReady === true));
     await pg`create sequence profile_disable_attempts`;
     await pg`
       create function delay_profile_disable() returns trigger
@@ -216,7 +277,15 @@ test('disableProfile은 profile lifecycle과 active session 정리를 소유한�
     await db.delete(Accounts).where(eq(Accounts.id, account.id));
     await db
       .delete(Profiles)
-      .where(inArray(Profiles.id, [profile.id, followee.id, follower.id, suspended.id]));
+      .where(
+        inArray(Profiles.id, [
+          profile.id,
+          followee.id,
+          follower.id,
+          suspended.id,
+          redisUnavailableProfile.id,
+        ]),
+      );
     await db.delete(Instances).where(eq(Instances.id, instance.id));
   }
 });

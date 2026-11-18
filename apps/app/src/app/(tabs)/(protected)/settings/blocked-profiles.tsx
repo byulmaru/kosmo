@@ -1,18 +1,23 @@
-import { useRouter } from 'expo-router';
+import { useIsFocused, useRouter } from 'expo-router';
 import { ChevronLeftIcon } from 'lucide-react-native';
+import { useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import { PageHeader } from '@/components/PageHeader';
 import { PaginationScrollView } from '@/components/pagination/PaginationScrollView';
 import { SettingsBlockedProfiles } from '@/components/settings/SettingsBlockedProfiles';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
+import type { Text } from 'react-native';
 
 export default function SettingsBlockedProfilesRoute() {
+  const active = useIsFocused();
   const router = useRouter();
   const theme = useTheme();
   const detailHeaderMode = useSettingsDetailHeaderMode();
+  const headingRef = useRef<Text>(null);
   const backButton =
     detailHeaderMode === 'back' ? (
       <IconButton
@@ -33,10 +38,13 @@ export default function SettingsBlockedProfilesRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? (
-        <PageHeader leading={backButton} title="차단한 프로필" />
-      ) : null}
-      <SettingsBlockedProfiles />
+      <MobileWebRouteChrome>
+        <PageHeader leading={backButton} title="차단한 프로필" titleRef={headingRef} />
+      </MobileWebRouteChrome>
+      <SettingsBlockedProfiles
+        active={active}
+        onUnblockSuccess={() => headingRef.current?.focus()}
+      />
     </PaginationScrollView>
   );
 }

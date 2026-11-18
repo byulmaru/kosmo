@@ -59,6 +59,9 @@ Post와 Media의 Instance는 각각 Author Profile과 Media Profile에서 파생
 
 Configured Local Instance는 Profile과 독립적인 ActivityPub server actor와 서명 키를 소유한다. 이 actor는 공용 inbox
 처리에 필요한 인증된 공개키 조회의 서명 주체다. 서명 키는 공개 Instance 조회 결과나 GraphQL 응답에 포함하지 않는다.
+인증된 조회 시작 URL의 origin이 정확히 `https://threads.net`이고 조회 주체가 이 Local Instance server actor일 때는,
+공식 handle `@kosmo`를 가진 Active Local Profile이 조회를 인증할 수 있다. Profile이 없거나 Active 상태가 아니면 server
+actor가 계속 조회를 인증한다. 이 예외는 해당 조회에만 적용되며 다른 identity와 POST 요청의 서명 주체는 바꾸지 않는다.
 
 ## 행동
 
