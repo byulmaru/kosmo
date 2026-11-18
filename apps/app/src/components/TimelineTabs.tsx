@@ -49,7 +49,13 @@ export function TimelineTabs({
         .filter((option) => option.value !== 'federated' || federatedTimelineEnabled)
         .map((option) => (
           <Tab
-            anchorRef={option.value === 'home' ? homeAnchorRef : localAnchorRef}
+            anchorRef={
+              option.value === 'home'
+                ? homeAnchorRef
+                : option.value === 'local'
+                  ? localAnchorRef
+                  : undefined
+            }
             key={option.value}
             option={option}
           />

@@ -1,5 +1,4 @@
 import { usePathname, useRouter, useSegments } from 'expo-router';
-import { ChevronLeftIcon, Menu } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -12,23 +11,16 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { identifyAnalytics } from '@/analytics/client';
-import { TimelineHelpButton } from '@/components/coachmark/TimelineCoachmark';
 import { ContentReportProvider } from '@/components/content-report/ContentReportContext';
 import { FeedbackOverlay } from '@/components/feedback/FeedbackOverlay';
-import {
-  NotificationReadAllAction,
-  NotificationReadAllProvider,
-} from '@/components/notification/NotificationReadAllContext';
+import { NotificationReadAllProvider } from '@/components/notification/NotificationReadAllContext';
 import { NotificationStreamUpdates } from '@/components/notification/NotificationStreamUpdates';
-import { PageHeader } from '@/components/PageHeader';
 import { PostMediaViewerScreenFallbackProvider } from '@/components/post/PostMediaViewerHost';
-import { IconButton } from '@/components/ui/IconButton';
 import { getBottomTabBarContentHeight } from '@/components/ui/navigationChrome';
 import { RelayActorBoundary } from '@/relay/RelayActorProvider';
 import { useSession } from '@/session/SessionProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { breakpoints, spacing } from '@/theme/tokens';
-import { returnToSettingsParent } from '../settings/settingsNavigation';
 import { BottomTabBar } from './BottomTabBar';
 import { NavigationGuardProvider } from './NavigationGuardContext';
 import {
@@ -39,15 +31,7 @@ import { PublicContentInvitation } from './PublicContentInvitation';
 import { getPublicContentInvitationPlacement } from './publicContentInvitationLayout';
 import { RightRail, RightRailFooter } from './RightRail';
 import { ShellChromeProvider } from './ShellChromeContext';
-import {
-  getShellRoutePresentation,
-  getWebMobileShellHeader,
-  isNativeDrawerSwipeEnabled,
-  isSettingsRoute,
-  isTimelineRoute,
-  isWebMobileRouteOwnedHeader,
-  webMobileShellHeaderHeight,
-} from './shellLayout';
+import { getShellRoutePresentation, isNativeDrawerSwipeEnabled } from './shellLayout';
 import { NativeNavigationDrawer, WebNavigationDrawer } from './ShellNavigationDrawer';
 import { SidebarNavigation } from './SidebarNavigation';
 import { createTabReselectionRegistry } from './tabReselection';
@@ -94,13 +78,6 @@ function getWebStickyRailStyle(insets: { bottom: number; top: number }) {
 const webRightRailOverflow = {
   overflowX: 'hidden',
   overflowY: 'auto',
-} as unknown as ViewStyle;
-
-const webStickyHeader = {
-  minHeight: webMobileShellHeaderHeight,
-  position: 'sticky',
-  top: 0,
-  zIndex: 20,
 } as unknown as ViewStyle;
 
 const webFixedBottomBar = {
@@ -234,15 +211,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const compact = layout === 'compact';
   const full = layout === 'full';
   const mobile = layout === 'mobile';
-  const timeline = isTimelineRoute(pathname);
-  const mobileShellHeader = getWebMobileShellHeader(
-    web,
-    width,
-    pathname,
-    routeSegments,
-    guestPublicContent,
-  );
-  const routeOwnsMobileHeader = isWebMobileRouteOwnedHeader(web, width, pathname);
   const rootSafeAreaStyle = { paddingLeft: insets.left, paddingRight: insets.right };
   const centerSafeAreaStyle = !mobile
     ? { paddingBottom: insets.bottom, paddingTop: insets.top }
@@ -382,33 +350,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
     setSwitcherOpen(false);
     setFeedbackOpen(true);
   };
-  const menuButton = (
-    <IconButton
-      aria-controls={drawerOpen ? 'mobile-sidebar' : undefined}
-      accessibilityLabel="메뉴 열기"
-      accessibilityState={{ expanded: drawerOpen }}
-      controlRef={menuButtonRef}
-      onPress={openNavigationDrawer}
-      style={styles.menuButton}
-      targetSize={44}
-      visualSize={44}
-    >
-      <Menu color={theme.foregroundPrimary} size={24} strokeWidth={2} />
-    </IconButton>
-  );
-  const backButton = (
-    <IconButton
-      accessibilityLabel="뒤로 가기"
-      onPress={() =>
-        isSettingsRoute(pathname) ? returnToSettingsParent(pathname, router) : router.back()
-      }
-      style={styles.menuButton}
-      targetSize={44}
-      visualSize={44}
-    >
-      <ChevronLeftIcon color={theme.foregroundPrimary} size={20} />
-    </IconButton>
-  );
   const shellContent = (
     <View
       ref={screenFallbackRef}
@@ -463,50 +404,6 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
           { borderColor: theme.borderSubtle },
         ]}
       >
-        {mobile && web && !routeOwnsMobileHeader ? (
-          <View
-            style={[
-              styles.mobileChrome,
-              web && webStickyHeader,
-              {
-                backgroundColor: theme.backgroundCanvas,
-                paddingTop: insets.top,
-              },
-            ]}
-          >
-            {timeline ? (
-              <PageHeader
-                accessibilityLabel={pathname === '/local' ? '로컬' : '홈'}
-                leading={menuButton}
-                trailing={
-                  timelineHelp ? (
-                    <TimelineHelpButton
-                      controlRef={timelineHelpTriggerRef}
-                      onPress={timelineHelp}
-                    />
-                  ) : undefined
-                }
-                variant="brand"
-              />
-            ) : mobileShellHeader ? (
-              <PageHeader
-                leading={mobileShellHeader.leading === 'back' ? backButton : menuButton}
-                title={mobileShellHeader.title}
-                trailing={
-                  mobileShellHeader.title === '알림' ? (
-                    <RelayActorBoundary>
-                      <NotificationReadAllAction />
-                    </RelayActorBoundary>
-                  ) : undefined
-                }
-              />
-            ) : (
-              <View style={[styles.mobileHeader, { borderColor: theme.borderSubtle }]}>
-                {menuButton}
-              </View>
-            )}
-          </View>
-        ) : null}
         <View
           style={[
             styles.route,
@@ -514,7 +411,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
             web ? { paddingBottom: invitationReservedHeight } : null,
             mobile && web
               ? {
-                  ...(routeOwnsMobileHeader ? { paddingTop: insets.top } : {}),
+                  paddingTop: insets.top,
                   paddingBottom:
                     invitationReservedHeight +
                     (guestMobileRoot
@@ -685,20 +582,5 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     position: 'absolute',
     width: 0,
-  },
-  mobileChrome: { width: '100%' },
-  mobileHeader: {
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    minHeight: 64,
-    paddingHorizontal: spacing.lg,
-  },
-  menuButton: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    minHeight: 44,
-    width: 44,
   },
 });

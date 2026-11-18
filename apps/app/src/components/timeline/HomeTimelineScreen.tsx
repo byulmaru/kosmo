@@ -24,12 +24,10 @@ import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { PostRequestListSummary } from '@/components/post/PostRequestList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
+import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import {
-  getShellLayout,
-  getTimelineGuideViewportWidth,
-  getWebMobileShellHeaderStickyOffset,
-} from '@/components/shell/shellLayout';
+import { getShellLayout, getTimelineGuideViewportWidth } from '@/components/shell/shellLayout';
 import { HomePushPermissionBanner } from '@/components/timeline/HomePushPermissionBanner';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
@@ -124,14 +122,9 @@ export default function HomeScreen() {
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const homeRefreshRef = useRef<HomeRefresh | null>(null);
-  const registerHomeRefresh = useCallback((refresh: HomeRefresh | null) => {
   const homeTabAnchorRef = useRef<View>(null);
   const localTabAnchorRef = useRef<View>(null);
-  const [revalidateCachedHome] = useState(
-    () =>
-      environment.check(createOperationDescriptor(getRequest(HomeQuery), {})).status ===
-      'available',
-  );
+  const registerHomeRefresh = useCallback((refresh: HomeRefresh | null) => {
     homeRefreshRef.current = refresh;
   }, []);
   const handleHomeReselection = useCallback(() => {
@@ -179,7 +172,6 @@ export default function HomeScreen() {
           onAutomaticRefresh={requestAutomaticRefresh}
           onRefresh={handleHomeReselection}
           registerHomeRefresh={registerHomeRefresh}
-          revalidateCachedHome={revalidateCachedHome}
           homeTabAnchorRef={homeTabAnchorRef}
           localTabAnchorRef={localTabAnchorRef}
         />
@@ -199,33 +191,33 @@ function HomeFrame({
   onBrandCurrentNavigate?: () => void;
 }>) {
   const { width } = useWindowDimensions();
-  const routeOwnsHeader =
-    Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
+  const mobileWeb = Platform.OS === 'web' && getShellLayout(true, width) === 'mobile';
 
   return (
     <View style={styles.root}>
-      {routeOwnsHeader ? (
+      <MobileWebRouteChrome>
         <PageHeader
           accessibilityLabel="홈"
-          brandHref={Platform.OS === 'web' ? '/home' : undefined}
-          onBrandCurrentNavigate={Platform.OS === 'web' ? onBrandCurrentNavigate : undefined}
+          brandHref={Platform.OS === 'web' && !mobileWeb ? '/home' : undefined}
+          leading={mobileWeb ? <NavigationDrawerTrigger /> : undefined}
+          onBrandCurrentNavigate={
+            Platform.OS === 'web' && !mobileWeb ? onBrandCurrentNavigate : undefined
+          }
           trailing={<TimelineHelpButton />}
           variant="brand"
         />
-      ) : null}
-      <View
-        style={
-          Platform.OS === 'web'
-            ? [styles.webTimelineTabs, { top: getWebMobileShellHeaderStickyOffset(width) }]
-            : undefined
-        }
-      >
-        <TimelineTabs
-          homeAnchorRef={homeTabAnchorRef}
-          localAnchorRef={localTabAnchorRef}
-          value="home"
-        />
-      </View>
+        <View
+          style={
+            Platform.OS === 'web' && !mobileWeb ? [styles.webTimelineTabs, { top: 0 }] : undefined
+          }
+        >
+          <TimelineTabs
+            homeAnchorRef={homeTabAnchorRef}
+            localAnchorRef={localTabAnchorRef}
+            value="home"
+          />
+        </View>
+      </MobileWebRouteChrome>
       <View style={styles.body}>{children}</View>
     </View>
   );
@@ -238,7 +230,6 @@ function HomeRouteContent({
   registerHomeRefresh,
   homeTabAnchorRef,
   localTabAnchorRef,
-  revalidateCachedHome,
 }: {
   active: boolean;
   onAutomaticRefresh: HomeAutomaticRefresh;
@@ -246,7 +237,6 @@ function HomeRouteContent({
   registerHomeRefresh: (refresh: HomeRefresh | null) => void;
   homeTabAnchorRef: RefObject<View | null>;
   localTabAnchorRef: RefObject<View | null>;
-  revalidateCachedHome: boolean;
 }) {
   const { fetchKey } = useRouteBoundary();
 
@@ -257,7 +247,6 @@ function HomeRouteContent({
       onAutomaticRefresh={onAutomaticRefresh}
       onRefresh={onRefresh}
       registerHomeRefresh={registerHomeRefresh}
-      revalidateCachedHome={revalidateCachedHome}
       homeTabAnchorRef={homeTabAnchorRef}
       localTabAnchorRef={localTabAnchorRef}
     />
@@ -272,7 +261,6 @@ function HomeContent({
   registerHomeRefresh,
   homeTabAnchorRef,
   localTabAnchorRef,
-  revalidateCachedHome,
 }: {
   active: boolean;
   fetchKey: string;
@@ -281,7 +269,6 @@ function HomeContent({
   registerHomeRefresh: (refresh: HomeRefresh | null) => void;
   homeTabAnchorRef: RefObject<View | null>;
   localTabAnchorRef: RefObject<View | null>;
-  revalidateCachedHome: boolean;
 }) {
   const environment = useRelayEnvironment();
   const { showToast } = useToast();
@@ -426,14 +413,11 @@ function HomeContent({
 
   useEffect(() => {
     registerHomeRefresh(refreshResource.refresh);
-    if (revalidateCachedHome) {
-      refreshResource.refresh('automatic');
-    }
     return () => {
       registerHomeRefresh(null);
       refreshResource.dispose();
     };
-  }, [refreshResource, registerHomeRefresh, revalidateCachedHome]);
+  }, [refreshResource, registerHomeRefresh]);
 
   useEffect(() => {
     if (!hasSelectedProfile || !timelineState.atTop || !timelineState.revalidationPending) {

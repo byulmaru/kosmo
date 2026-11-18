@@ -250,9 +250,6 @@ mockModule('./shellLayout', {
     showRightRail,
   }),
   isNativeDrawerSwipeEnabled,
-  isSettingsRoute: (route: string) => route.startsWith('/settings/'),
-  isTimelineRoute: (route: string) =>
-    route === '/home' || route === '/local' || route === '/federated',
 });
 
 let UniversalShell: typeof UniversalShellComponent;

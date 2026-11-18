@@ -12,11 +12,7 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import {
-  getShellLayout,
-  getTimelineGuideViewportWidth,
-  getWebMobileShellHeaderStickyOffset,
-} from '@/components/shell/shellLayout';
+import { getShellLayout, getTimelineGuideViewportWidth } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
@@ -170,27 +166,25 @@ function LocalHeader({
   localTabAnchorRef: RefObject<View | null>;
 }) {
   const shellChrome = useShellChrome();
-  const routeOwnsHeader =
-    Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
+  const mobileWeb = Platform.OS === 'web' && getShellLayout(true, width) === 'mobile';
 
   return (
-    <>
-      {routeOwnsHeader ? (
-        <PageHeader
-          accessibilityLabel="로컬"
-          brandAccessibilityLabel="홈"
-          brandCurrent
-          brandHref={Platform.OS === 'web' ? '/home' : undefined}
-          onBrandCurrentNavigate={Platform.OS === 'web' ? shellChrome?.reselectHome : undefined}
-          trailing={<TimelineHelpButton />}
-          variant="brand"
-        />
-      ) : null}
+    <MobileWebRouteChrome>
+      <PageHeader
+        accessibilityLabel="로컬"
+        brandAccessibilityLabel="홈"
+        brandCurrent
+        brandHref={Platform.OS === 'web' && !mobileWeb ? '/home' : undefined}
+        leading={mobileWeb ? <NavigationDrawerTrigger /> : undefined}
+        onBrandCurrentNavigate={
+          Platform.OS === 'web' && !mobileWeb ? shellChrome?.reselectHome : undefined
+        }
+        trailing={<TimelineHelpButton />}
+        variant="brand"
+      />
       <View
         style={
-          Platform.OS === 'web'
-            ? [styles.webTimelineTabs, { top: getWebMobileShellHeaderStickyOffset(width) }]
-            : undefined
+          Platform.OS === 'web' && !mobileWeb ? [styles.webTimelineTabs, { top: 0 }] : undefined
         }
       >
         <TimelineTabs
@@ -199,7 +193,7 @@ function LocalHeader({
           value="local"
         />
       </View>
-    </>
+    </MobileWebRouteChrome>
   );
 }
 

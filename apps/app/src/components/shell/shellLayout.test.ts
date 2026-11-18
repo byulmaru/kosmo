@@ -6,8 +6,6 @@ import {
   getShellLayout,
   getShellRoutePresentation,
   getTimelineGuideViewportWidth,
-  getWebMobileShellHeader,
-  getWebMobileShellHeaderStickyOffset,
   isNativeDrawerSwipeEnabled,
   isSettingsRoute,
   isTimelineRoute,
