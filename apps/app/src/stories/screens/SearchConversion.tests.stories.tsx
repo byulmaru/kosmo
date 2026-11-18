@@ -6,7 +6,7 @@ import ProfileScreen from '@/components/profile/ProfileScreen';
 import { PrimaryNavigationScrollProvider } from '@/components/shell/PrimaryNavigationScrollContext';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
-import { SessionProvider } from '@/session/SessionProvider';
+import { SessionProvider, useSession } from '@/session/SessionProvider';
 import { RouterMockProvider, usePathname, useRouter } from '../../../.storybook/mocks/expo-router';
 import { profile, profileWithPosts } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -80,6 +80,12 @@ const followResponse = (request = false) => ({
 function Routes() {
   const pathname = usePathname();
   const router = useRouter();
+  const { selectedProfileId } = useSession();
+
+  if (!selectedProfileId) {
+    return null;
+  }
+
   return (
     <>
       <AnalyticsSessionBridge />
