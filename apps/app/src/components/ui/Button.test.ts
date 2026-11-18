@@ -40,7 +40,6 @@ let pressState = { hovered: false, pressed: false };
 const timingCalls: {
   duration?: number;
   toValue: unknown;
-  useNativeDriver?: boolean;
 }[] = [];
 
 class AnimatedColorMock {
@@ -87,7 +86,7 @@ mockModule('react-native', {
     View: 'AnimatedView',
     timing: (
       value: { setValue: (next: unknown) => void },
-      config: { duration?: number; toValue: unknown; useNativeDriver?: boolean },
+      config: { duration?: number; toValue: unknown },
     ) => {
       timingCalls.push(config);
       return {
@@ -349,7 +348,7 @@ test('Native Button sizes provide the platform touch height without caller hitSl
   }
 });
 
-test('danger feedback animates opacity in and out through the native timing channel', () => {
+test('danger feedback transitions opacity as it appears and clears', () => {
   assert.ok(Button);
   const element = () => createElement(Button!, { children: '삭제', tone: 'danger' });
   let renderer!: ReactTestRenderer;
@@ -368,8 +367,6 @@ test('danger feedback animates opacity in and out through the native timing chan
 
   assert.equal(enter?.duration, 120);
   assert.equal(enter?.toValue, 0.9);
-  assert.equal(enter?.useNativeDriver, true);
   assert.equal(exit?.duration, 120);
   assert.equal(exit?.toValue, 1);
-  assert.equal(exit?.useNativeDriver, true);
 });

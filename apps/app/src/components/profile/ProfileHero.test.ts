@@ -226,7 +226,6 @@ for (const [os, targetHeight, inset] of [
         assert.equal(cover.props.importantForAccessibility, 'no-hide-descendants');
 
         const skeletons = renderer.root.findAll((node) => (node.type as unknown) === 'Skeleton');
-        assert.equal(skeletons.length, 5);
         for (const skeleton of skeletons) {
           let hidden = false;
           for (

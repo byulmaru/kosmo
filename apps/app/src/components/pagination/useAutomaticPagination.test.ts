@@ -427,9 +427,27 @@ describe('useAutomaticPagination', () => {
 
     await act(async () => {
       currentResult().nativeScrollProps.onLayout({
+        nativeEvent: { layout: { height: 0 } },
+      });
+      currentResult().nativeScrollProps.onContentSizeChange(0, 1601);
+    });
+    assert.equal(loadRequests.length, 0, 'a zero-height viewport does not trigger pagination');
+
+    await act(async () => {
+      currentResult().nativeScrollProps.onLayout({
         nativeEvent: { layout: { height: 800 } },
       });
-      currentResult().nativeScrollProps.onContentSizeChange(0, 1200);
+    });
+    assert.equal(loadRequests.length, 0, 'a page beyond one viewport does not load early');
+
+    await act(async () => {
+      currentResult().nativeScrollProps.onScroll({
+        nativeEvent: {
+          contentOffset: { y: 1 },
+          contentSize: { height: 1601 },
+          layoutMeasurement: { height: 800 },
+        },
+      });
     });
     assert.equal(loadRequests.length, 1);
 
@@ -437,7 +455,7 @@ describe('useAutomaticPagination', () => {
       currentResult().nativeScrollProps.onScroll({
         nativeEvent: {
           contentOffset: { y: 400 },
-          contentSize: { height: 1200 },
+          contentSize: { height: 1601 },
           layoutMeasurement: { height: 800 },
         },
       });

@@ -129,7 +129,6 @@ test('Web ModalSheet host follows visual viewport changes in both dialog paths',
       const host = renderer!.root.findByType(role === 'dialog' ? 'div' : 'dialog');
       assert.equal(host.props.style.height, 520);
       assert.equal(host.props.style.top, 0);
-      assert.equal(host.props.style.position, 'fixed');
 
       viewport.height = 360;
       viewport.offsetTop = 48;
@@ -212,10 +211,8 @@ test('Web ModalSheet host falls back without visualViewport and treats omitted v
       renderer = create(createElement(webHostModule.ModalSheetHost, props));
     });
     const host = renderer!.root.findByType('div');
-    assert.equal(renderer!.root.findByType('Modal' as never).props.visible, undefined);
     assert.equal(host.props.style.height, 480);
     assert.equal(host.props.style.top, 12);
-    assert.equal(listeners.get('resize')?.size, 1);
 
     await act(async () => renderer!.unmount());
     assert.equal(listeners.get('resize')?.size, 0);

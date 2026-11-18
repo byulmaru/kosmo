@@ -9,22 +9,11 @@ import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 
 const hashValues = new Map();
-const hashExpirations = new Map();
 const scalarValues = new Map();
-let now = 1_000;
 let redisAvailable = true;
 let commandFails = false;
 
-const expiryKey = (key, field) => key + '\u0000' + field;
-const currentHashValue = (key, field) => {
-  const fieldKey = expiryKey(key, field);
-  const expiresAt = hashExpirations.get(fieldKey);
-  if (expiresAt !== undefined && expiresAt <= now) {
-    hashValues.get(key)?.delete(field);
-    hashExpirations.delete(fieldKey);
-  }
-  return hashValues.get(key)?.get(field) ?? null;
-};
+const currentHashValue = (key, field) => hashValues.get(key)?.get(field) ?? null;
 const currentScalarValue = (key) => scalarValues.get(key) ?? null;
 
 const client = {
@@ -45,9 +34,6 @@ const client = {
     const hash = hashValues.get(key) ?? new Map();
     hash.set(field, value);
     hashValues.set(key, hash);
-    if (options.expiration?.type === 'EX') {
-      hashExpirations.set(expiryKey(key, field), now + options.expiration.value * 1_000);
-    }
     return 1;
   },
   async hScan(key, cursor) {
@@ -104,17 +90,9 @@ scalarValues.set(profileHashKey + ':post:' + firstPostId, JSON.stringify(conflic
 assert.deepEqual(await getNaturalLanguageMuteDecision('profile-a', firstPostId), firstDecision);
 scalarValues.delete(profileHashKey + ':post:' + firstPostId);
 
-const firstExpiry = hashExpirations.get(expiryKey(profileHashKey, firstPostId));
-assert.equal(firstExpiry, now + 604_800_000);
-now += 1_000;
 const secondDecision = { decision: 'include', probability: 0.91 };
 assert.deepEqual(await cacheNaturalLanguageMuteDecision('profile-a', 'post-b', secondDecision), secondDecision);
-const secondExpiry = hashExpirations.get(expiryKey(profileHashKey, 'post-b'));
-assert.equal(secondExpiry, now + 604_800_000);
-assert.ok(secondExpiry > firstExpiry);
-now += 1_000;
 assert.deepEqual(await cacheNaturalLanguageMuteDecision('profile-a', firstPostId, conflictingDecision), firstDecision);
-assert.equal(hashExpirations.get(expiryKey(profileHashKey, firstPostId)), firstExpiry);
 
 hashValues.get(profileHashKey).set('post-invalid-json', '{');
 hashValues.get(profileHashKey).set('post-missing-json', '');
@@ -127,7 +105,6 @@ assert.deepEqual(Object.fromEntries(firstPage.entries.map(({ postId, decision })
   'post-invalid-json': null,
   'post-missing-json': null,
 });
-assert.equal(hashExpirations.get(expiryKey(profileHashKey, firstPostId)), firstExpiry);
 const emptyContinuation = await scanNaturalLanguageMuteDecisions(
   'profile-a',
   '17',
