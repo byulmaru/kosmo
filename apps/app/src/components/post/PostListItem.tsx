@@ -139,7 +139,7 @@ export function PostListItem({
     showDivider && { borderColor: theme.borderSubtle },
   ];
   const pinnedAttribution = pinned ? (
-    <View style={styles.pinnedAttribution}>
+    <View pointerEvents="box-none" style={styles.pinnedAttribution}>
       <PostAttributionRow
         icon={
           <View
@@ -151,7 +151,6 @@ export function PostListItem({
             <Pin color={theme.textSecondary} size={16} />
           </View>
         }
-        onBackgroundPress={openDetail}
       >
         <Text
           style={[styles.attributionLabel, { color: theme.textSecondary, pointerEvents: 'none' }]}
@@ -174,7 +173,6 @@ export function PostListItem({
             <MessageCircle color={theme.textSecondary} size={16} />
           </View>
         }
-        onBackgroundPress={openDetail}
       >
         <Text
           numberOfLines={1}
@@ -228,7 +226,7 @@ export function PostListItem({
           actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : undefined}
           attribution={{
             content: (
-              <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
+              <NavigationLink resetScroll href={profileHref}>
                 <Pressable
                   accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle} 프로필 보기`}
                   accessibilityRole="link"
@@ -261,7 +259,7 @@ export function PostListItem({
         onBackgroundPress={openDetail}
         style={[styles.quoteRow, { marginTop: -authorTopInset }]}
       >
-        <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
+        <NavigationLink resetScroll href={profileHref}>
           <Pressable
             aria-hidden
             accessibilityElementsHidden
@@ -278,7 +276,7 @@ export function PostListItem({
             />
           </Pressable>
         </NavigationLink>
-        <View style={styles.sourcePresentation}>
+        <View pointerEvents="box-none" style={styles.sourcePresentation}>
           <PostSourcePresentationView
             authorTopInset={authorTopInset}
             onBackgroundPress={openDetail}
@@ -359,20 +357,12 @@ function PostListItemCard({
   );
 }
 
-function PostAttributionRow({
-  children,
-  icon,
-  onBackgroundPress,
-}: {
-  children: ReactNode;
-  icon: ReactNode;
-  onBackgroundPress: () => void;
-}) {
+function PostAttributionRow({ children, icon }: { children: ReactNode; icon: ReactNode }) {
   return (
-    <PostDetailBackground onBackgroundPress={onBackgroundPress} style={styles.attributionRow}>
+    <View pointerEvents="box-none" style={styles.attributionRow}>
       <View style={[styles.attributionIconColumn, { pointerEvents: 'none' }]}>{icon}</View>
       <View style={[styles.attributionContent, { pointerEvents: 'box-none' }]}>{children}</View>
-    </PostDetailBackground>
+    </View>
   );
 }
 
@@ -413,69 +403,50 @@ function PostListRow({
     },
     [openViewer, post.id, surfacePostId],
   );
-  const avatarLink = (
-    <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
-      <Pressable
-        aria-hidden
-        accessibilityElementsHidden
-        accessible={false}
-        focusable={false}
-        importantForAccessibility="no-hide-descendants"
-        style={[styles.avatar, { paddingTop: authorTopInset }]}
-        tabIndex={-1}
-      >
-        <Avatar
-          imageUri={post.profile.avatar?.url}
-          label={post.profile.displayName || post.profile.relativeHandle}
-          size={48}
-        />
-      </Pressable>
-    </NavigationLink>
-  );
   return (
     <PostDetailBackground
       onBackgroundPress={openDetail}
       style={[styles.standardRow, { marginTop: -authorTopInset }]}
       testID="post-list-standard-row"
     >
-      {attribution ? (
-        <PostDetailBackground onBackgroundPress={openDetail}>
-          <PostDetailBackground onBackgroundPress={openDetail} style={styles.attributionIconColumn}>
-            <View style={{ pointerEvents: 'none' }}>{attribution.icon}</View>
-          </PostDetailBackground>
-          {avatarLink}
-        </PostDetailBackground>
-      ) : (
-        avatarLink
-      )}
-      <PostDetailBackground onBackgroundPress={openDetail} style={styles.content}>
-        <PostDetailBackground onBackgroundPress={openDetail} style={styles.header}>
-          {attribution ? (
-            <PostDetailBackground onBackgroundPress={openDetail} style={styles.attributedAuthor}>
-              <PostDetailBackground
-                onBackgroundPress={openDetail}
-                style={styles.repostAttributionContent}
-              >
-                {attribution.content}
-              </PostDetailBackground>
-              <ProfileNameBlock
-                href={profileHref}
-                profile={post.profile}
-                style={[
-                  styles.authorText,
-                  styles.attributedAuthorName,
-                  { paddingTop: authorTopInset },
-                ]}
-              />
-            </PostDetailBackground>
-          ) : (
+      <View pointerEvents="box-none">
+        {attribution ? (
+          <View pointerEvents="none" style={styles.attributionIconColumn}>
+            {attribution.icon}
+          </View>
+        ) : null}
+        <NavigationLink resetScroll href={profileHref}>
+          <Pressable
+            aria-hidden
+            accessibilityElementsHidden
+            accessible={false}
+            focusable={false}
+            importantForAccessibility="no-hide-descendants"
+            style={[styles.avatar, { paddingTop: authorTopInset }]}
+            tabIndex={-1}
+          >
+            <Avatar
+              imageUri={post.profile.avatar?.url}
+              label={post.profile.displayName || post.profile.relativeHandle}
+              size={48}
+            />
+          </Pressable>
+        </NavigationLink>
+      </View>
+      <View pointerEvents="box-none" style={styles.content}>
+        <View pointerEvents="box-none" style={styles.header}>
+          <View pointerEvents="box-none" style={styles.authorColumn}>
+            {attribution?.content}
             <ProfileNameBlock
               href={profileHref}
               profile={post.profile}
               style={[styles.authorText, { paddingTop: authorTopInset }]}
             />
-          )}
-          <View style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
+          </View>
+          <View
+            pointerEvents="box-none"
+            style={[styles.timeMetadata, { paddingTop: authorTopInset }]}
+          >
             <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
               <Pressable accessibilityRole="link" style={styles.timeLink}>
                 <TimestampText testID="post-timestamp">
@@ -483,15 +454,13 @@ function PostListRow({
                 </TimestampText>
               </Pressable>
             </Link>
-            <View style={styles.visibilityIconAlignment}>
+            <View pointerEvents="none" style={styles.visibilityIconAlignment}>
               <PostVisibilityIcon visibility={post.visibility} />
             </View>
           </View>
-        </PostDetailBackground>
+        </View>
         {post.content ? (
-          <PostDetailBackground onBackgroundPress={openDetail} style={styles.bodyLink}>
-            <PostBody onBodyPress={openDetail} onMediaOpen={handleMediaOpen} post={post} />
-          </PostDetailBackground>
+          <PostBody onBodyPress={openDetail} onMediaOpen={handleMediaOpen} post={post} />
         ) : null}
         {post.content && post.repostSource ? (
           <PostSourcePreview source={post.repostSource} style={styles.quoteSourcePreview} />
@@ -504,7 +473,7 @@ function PostListRow({
           reply={reply}
           socialActionTarget={post.actionSurface!}
         />
-      </PostDetailBackground>
+      </View>
     </PostDetailBackground>
   );
 }
@@ -546,10 +515,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: 'space-between',
   },
-  attributedAuthor: { flex: 1, minWidth: 0 },
-  attributedAuthorName: { alignSelf: 'flex-start', maxWidth: '100%' },
-  repostAttributionContent: { minWidth: 0, pointerEvents: 'box-none' },
-  authorText: { flex: -1 },
+  authorColumn: { flex: 1, minWidth: 0 },
+  authorText: { alignSelf: 'flex-start', flex: -1, maxWidth: '100%' },
   timeLink: {
     alignItems: 'flex-end',
     borderRadius: radii.sm,
@@ -565,7 +532,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     gap: spacing.xs,
   },
-  bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   sourcePresentation: { flex: 1, minWidth: 0 },
   pinnedAttribution: { paddingTop: spacing.xs },
   attributionRow: {

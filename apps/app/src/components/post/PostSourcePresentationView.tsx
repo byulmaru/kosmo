@@ -176,7 +176,7 @@ export function PostSourcePresentationView({
   }
   const postHeader = (
     <PostDetailBackground onBackgroundPress={openPost} style={styles.authorHeader}>
-      <PostDetailBackground onBackgroundPress={openPost} style={styles.authorSlot}>
+      <View pointerEvents="box-none" style={styles.authorSlot}>
         <PresentationLink
           accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle} 프로필 보기`}
           href={postProfileHref}
@@ -185,8 +185,8 @@ export function PostSourcePresentationView({
         >
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
-      </PostDetailBackground>
-      <View style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
+      </View>
+      <View pointerEvents="box-none" style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
         <PresentationLink
           accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle}의 게시글 보기`}
           href={postDetailHref}
@@ -196,7 +196,7 @@ export function PostSourcePresentationView({
             {formatTimelineTimestamp(post.createdAt)}
           </TimestampText>
         </PresentationLink>
-        <View style={styles.visibilityIconAlignment}>
+        <View pointerEvents="none" style={styles.visibilityIconAlignment}>
           <PostVisibilityIcon visibility={post.visibility} />
         </View>
       </View>
@@ -274,10 +274,7 @@ export function PostSourcePreview({
         onBackgroundPress={interactive ? openSource : undefined}
         style={[styles.authorHeader, { marginTop: -authorTopInset }]}
       >
-        <PostDetailBackground
-          onBackgroundPress={interactive ? openSource : undefined}
-          style={styles.authorSlot}
-        >
+        <View pointerEvents="box-none" style={styles.authorSlot}>
           {interactive ? (
             <PresentationLink
               accessibilityLabel={`${source.profile.displayName ?? source.profile.relativeHandle} 프로필 보기`}
@@ -290,9 +287,9 @@ export function PostSourcePreview({
           ) : (
             <Author profile={source.profile} showAvatar />
           )}
-        </PostDetailBackground>
+        </View>
         {interactive ? (
-          <View style={{ paddingTop: authorTopInset }}>
+          <View pointerEvents="box-none" style={{ paddingTop: authorTopInset }}>
             <PresentationLink
               accessibilityLabel="원문 게시글 보기"
               href={sourcePostHref}
@@ -395,7 +392,7 @@ function PresentationLink({
   );
 
   return resetScroll ? (
-    <NavigationLink resetScroll href={href} push={Platform.OS !== 'web'}>
+    <NavigationLink resetScroll href={href}>
       {trigger}
     </NavigationLink>
   ) : (
