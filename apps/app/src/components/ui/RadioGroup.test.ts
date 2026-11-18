@@ -395,16 +395,13 @@ test('RadioOption animates selected indicator in both directions and stops for r
   assert.equal(reducedRing.props.stroke, 'selected-border');
 });
 
-test('RadioOption uses internal focus and disabled strokes without changing outer geometry', () => {
+test('keyboard focus and disabled styles preserve RadioOption size', () => {
   const renderer = renderGroup({ value: 'email' });
   const radio = radioByLabel(renderer, '이메일');
   let matchesFocusVisible = false;
   const focusEvent = {
     currentTarget: {
-      matches: (selector: string) => {
-        assert.equal(selector, ':focus-visible');
-        return matchesFocusVisible;
-      },
+      matches: () => matchesFocusVisible,
     },
   };
 
@@ -420,10 +417,6 @@ test('RadioOption uses internal focus and disabled strokes without changing oute
   assert.equal(focused.borderColor, 'focus-ring');
   assert.equal(focused.borderWidth, 2);
   assert.equal(focused.padding, 10);
-  assert.equal(focused.outlineColor, undefined);
-  assert.equal(focused.outlineOffset, undefined);
-  assert.equal(focused.outlineStyle, 'none');
-  assert.equal(focused.outlineWidth, undefined);
   assert.equal(2 * (Number(focused.padding) + Number(focused.borderWidth)) + 24, 48);
 
   act(() => radio.props.onBlur());

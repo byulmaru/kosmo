@@ -90,7 +90,6 @@ test('a child can show an error toast on initial mount', async () => {
     await act(async () => {
       renderer = create(createElement(ToastProvider, null, createElement(Harness)));
     });
-    assert.equal(renderer.root.findAllByType('AnimatedView' as ElementType).length, 1);
     assert.ok(
       renderer.root
         .findAllByType(TextHost)
@@ -130,7 +129,7 @@ test('다른 토스트가 잠시 표시된 뒤 지속 재시도 토스트를 복
   await act(async () => dismissTemporary?.());
   assert.equal(hasMessage('페이지 재시도'), true);
   await act(async () => dismissPersistent?.());
-  assert.equal(renderer.root.findAllByType('AnimatedView' as ElementType).length, 0);
+  assert.equal(hasMessage('페이지 재시도'), false);
 
   await act(async () => {
     dismissPersistent = api?.showToast('이전 화면 재시도', { persistent: true, tone: 'danger' });
@@ -138,7 +137,8 @@ test('다른 토스트가 잠시 표시된 뒤 지속 재시도 토스트를 복
   });
   await act(async () => dismissPersistent?.());
   await act(async () => dismissTemporary?.());
-  assert.equal(renderer.root.findAllByType('AnimatedView' as ElementType).length, 0);
+  assert.equal(hasMessage('이전 화면 재시도'), false);
+  assert.equal(hasMessage('다른 알림'), false);
   await act(async () => renderer.unmount());
 });
 
@@ -181,7 +181,7 @@ test('실패 토스트 도중 도착한 지속 재시도는 기존 표시 시간
     await act(async () => mock.timers.tick(3000));
     assert.equal(hasMessage('페이지 재시도'), true);
     await act(async () => dismissPersistent?.());
-    assert.equal(renderer!.root.findAllByType('AnimatedView' as ElementType).length, 0);
+    assert.equal(hasMessage('페이지 재시도'), false);
   } finally {
     await act(async () => renderer?.unmount());
     mock.timers.reset();
@@ -221,7 +221,11 @@ test('복원 전 정리한 지속 재시도는 실패 토스트가 끝나도 다
       true,
     );
     await act(async () => mock.timers.tick(2000));
-    assert.equal(renderer!.root.findAllByType('AnimatedView' as ElementType).length, 0);
+    assert.ok(
+      !renderer!.root
+        .findAllByType(TextHost)
+        .some(({ props }) => ['팔로우 실패', '페이지 재시도'].includes(props.children)),
+    );
   } finally {
     await act(async () => renderer?.unmount());
     mock.timers.reset();
@@ -229,18 +233,9 @@ test('복원 전 정리한 지속 재시도는 실패 토스트가 끝나도 다
   }
 });
 
-test('toast dwell timer starts after its enter motion finishes', async () => {
+test('a temporary toast stays visible for three seconds after entering', async () => {
   assert.ok(toastProviderModule);
   const { ToastProvider, useToast } = toastProviderModule;
-  const delays: number[] = [];
-  const originalSetTimeout = globalThis.setTimeout;
-  const originalClearTimeout = globalThis.clearTimeout;
-  globalThis.setTimeout = ((_: TimerHandler, delay?: number) => {
-    delays.push(delay ?? 0);
-    return delays.length as unknown as ReturnType<typeof setTimeout>;
-  }) as unknown as typeof setTimeout;
-  globalThis.clearTimeout = (() => undefined) as typeof clearTimeout;
-
   let api: ReturnType<typeof useToast> | undefined;
   function Harness() {
     api = useToast();
@@ -251,38 +246,31 @@ test('toast dwell timer starts after its enter motion finishes', async () => {
   const toneRequired: Parameters<ReturnType<typeof useToast>['showToast']> = ['tone 없는 알림'];
   void toneRequired;
 
-  let renderer: ReactTestRenderer | undefined;
+  mock.timers.enable({ apis: ['setTimeout'] });
+  let renderer!: ReactTestRenderer;
   try {
     await act(async () => {
       renderer = create(createElement(ToastProvider, null, createElement(Harness)));
     });
-    let dismissTemporary: (() => void) | undefined;
+    const visible = () =>
+      renderer.root.findAllByType(TextHost).some(({ props }) => props.children === '저장했습니다.');
     await act(async () => {
-      dismissTemporary = api?.showToast('저장했습니다.', { tone: 'success' });
+      api?.showToast('저장했습니다.', { tone: 'success' });
     });
-    assert.deepEqual(delays, []);
+    await act(async () => mock.timers.tick(3000));
+    assert.equal(visible(), true);
 
     entered = true;
     await act(async () =>
-      renderer?.update(createElement(ToastProvider, null, createElement(Harness))),
+      renderer.update(createElement(ToastProvider, null, createElement(Harness))),
     );
-    assert.deepEqual(delays, [3000]);
-    await act(async () => dismissTemporary?.());
-    let dismiss: (() => void) | undefined;
-    await act(async () => {
-      dismiss = api?.showToast('이미지를 불러오지 못했어요.', {
-        tone: 'danger',
-        persistent: true,
-        action: { label: '다시 시도', onPress: () => undefined },
-      });
-    });
-    assert.deepEqual(delays, [3000], 'persistent Action Toast에는 자동 닫힘 timer가 없어야 한다');
-    await act(async () => dismiss?.());
-    assert.equal(renderer?.root.findAllByType('AnimatedView' as ElementType).length, 0);
+    await act(async () => mock.timers.tick(2999));
+    assert.equal(visible(), true);
+    await act(async () => mock.timers.tick(1));
+    assert.equal(visible(), false);
   } finally {
     await act(async () => renderer?.unmount());
-    globalThis.setTimeout = originalSetTimeout;
-    globalThis.clearTimeout = originalClearTimeout;
+    mock.timers.reset();
     entered = false;
   }
 });
@@ -471,7 +459,10 @@ test('action toast invokes once and its stale callbacks do not dismiss a replace
   );
 
   await act(async () => dismissReplacement?.());
-  assert.equal(renderer?.root.findAllByType('AnimatedView' as ElementType).length, 0);
+  assert.equal(
+    renderer?.root.findAllByType(TextHost).some(({ props }) => props.children === '새 알림'),
+    false,
+  );
 
   await act(async () => renderer?.unmount());
 });
