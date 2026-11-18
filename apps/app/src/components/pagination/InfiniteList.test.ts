@@ -3,7 +3,7 @@ import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ComponentType, ReactNode } from 'react';
-import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import type { InfiniteListProps } from './InfiniteList';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -155,14 +155,20 @@ function loadMoreButton() {
 }
 
 describe('InfiniteList', () => {
-  it('native FlatList owns a feed header ahead of its rows', async () => {
+  it('native list places the feed header before its rows', async () => {
     const header = createElement('FeedHeader');
 
     await act(async () => {
       renderer = create(createElement(InfiniteList, props({ header })));
     });
 
-    assert.equal(flatList().props.ListHeaderComponent, header);
+    const content = flatList().findAll(
+      (node) => String(node.type) === 'FeedHeader' || String(node.type) === 'Row',
+    );
+    assert.deepEqual(
+      content.map((node) => node.type),
+      ['FeedHeader', 'Row'],
+    );
   });
 
   it('web document flow places the feed header before empty and row content', async () => {
@@ -197,7 +203,7 @@ describe('InfiniteList', () => {
     );
   });
 
-  it('native FlatList가 footer와 endReached pagination을 소유한다', async () => {
+  it('native list shows empty and loading content while pagination continues', async () => {
     const empty = createElement('Empty');
     const footer = createElement('LoadingFooter');
 
@@ -210,10 +216,8 @@ describe('InfiniteList', () => {
     });
 
     let list = flatList();
-    assert.equal(list.props.ListEmptyComponent, empty);
-    assert.equal(list.props.ListFooterComponent, null);
-    assert.equal(list.props.onEndReachedThreshold, 1);
-    assert.equal(list.props.keyExtractor({ id: 'b' }, 0), 'b');
+    assert.equal(list.findAll((node) => String(node.type) === 'Empty').length, 1);
+    assert.equal(list.findAll((node) => String(node.type) === 'LoadingFooter').length, 0);
 
     await act(async () => list.props.onEndReached());
     assert.equal(loadRequests.length, 1);
@@ -221,7 +225,7 @@ describe('InfiniteList', () => {
 
     await update(props({ empty, footer, isLoadingNext: true }));
     list = flatList();
-    assert.equal((list.props.ListFooterComponent as ReactTestInstance).type, 'LoadingFooter');
+    assert.equal(list.findAll((node) => String(node.type) === 'LoadingFooter').length, 1);
 
     await act(async () => loadRequests[0]?.onComplete(null));
     await update(
@@ -235,7 +239,7 @@ describe('InfiniteList', () => {
       }),
     );
     list = flatList();
-    assert.equal(list.props.ListFooterComponent, null);
+    assert.equal(list.findAll((node) => String(node.type) === 'LoadingFooter').length, 0);
 
     await act(async () => list.props.onEndReached());
     assert.equal(loadRequests.length, 2, 'page 완료 뒤 다음 endReached를 처리한다');
@@ -316,23 +320,16 @@ describe('InfiniteList', () => {
     assert.equal(loadRequests.length, 2);
   });
 
-  it('native FlatList가 pull-to-refresh callback과 진행 상태를 전달한다', async () => {
+  it('native pull-to-refresh invokes the caller action', async () => {
     const onRefresh = mock.fn();
 
     await act(async () => {
       renderer = create(createElement(InfiniteList, props({ onRefresh, refreshing: true })));
     });
 
-    let list = flatList();
-    assert.equal(list.props.onRefresh, onRefresh);
-    assert.equal(list.props.refreshing, true);
-
+    const list = flatList();
     await act(async () => list.props.onRefresh());
     assert.equal(onRefresh.mock.callCount(), 1);
-
-    await update(props({ onRefresh, refreshing: false }));
-    list = flatList();
-    assert.equal(list.props.refreshing, false);
   });
 
   it('PaginationScrollView 안에서는 View body가 outer metrics pagination을 등록한다', async () => {

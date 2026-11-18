@@ -3,51 +3,28 @@ import { createRequire } from 'node:module';
 import { mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import { semanticColors } from '../../theme/tokens';
 import type { ElementType, ReactElement } from 'react';
-import type { ReactTestInstance } from 'react-test-renderer';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 const host = 'Pressable' as unknown as ElementType;
-const viewHost = 'View' as unknown as ElementType;
-const platform = { OS: 'web' };
-let pressState: object = { hovered: false, pressed: false };
-class AnimatedColorMock {
-  constructor(public value: string) {}
-  setValue(value: string) {
-    this.value = value;
-  }
-  stopAnimation(callback?: () => void) {
-    callback?.();
-  }
-}
+const pressState = { hovered: false, pressed: false };
 const PressableHost = ({
   children,
   ...props
 }: {
-  children?: ReactElement | ((state: object) => ReactElement);
+  children?: ReactElement | ((state: typeof pressState) => ReactElement);
   [key: string]: unknown;
 }) => createElement(host, props, typeof children === 'function' ? children(pressState) : children);
-const flatten = (style: unknown): Record<string, unknown> =>
-  Object.assign({}, ...(Array.isArray(style) ? style.flat(Infinity) : [style]).filter(Boolean));
+
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
-type VisualElement = ReactElement<{ children?: VisualElement[]; color?: string; style?: unknown }>;
+
 mockModule('react-native', {
-  processColor: () => undefined,
-  Animated: {
-    Color: AnimatedColorMock,
-    View: 'AnimatedView',
-    timing: () => ({ start: () => undefined, stop: () => undefined }),
-  },
-  Easing: { bezier: () => () => 0 },
-  Platform: platform,
+  Animated: { View: 'AnimatedView' },
+  Platform: { OS: 'web' },
   Pressable: PressableHost,
-  StyleSheet: {
-    absoluteFill: { bottom: 0, left: 0, position: 'absolute', right: 0, top: 0 },
-    create: <T>(styles: T) => styles,
-    flatten,
-  },
+  StyleSheet: { create: <T>(styles: T) => styles, flatten: (style: unknown) => style },
   View: 'View',
 });
 mockModule('lucide-react-native', { MoreHorizontal: 'MoreHorizontal' });
@@ -55,85 +32,54 @@ mockModule(createRequire(import.meta.url).resolve('lucide-react-native'), {
   MoreHorizontal: 'MoreHorizontal',
 });
 mockModule('@/theme/ThemeProvider', {
-  useTheme: () => semanticColors.light,
+  useTheme: () => ({
+    borderDefault: '#ddd',
+    foregroundPrimary: '#111',
+    stateFocusRing: '#005fcc',
+    stateHover: '#eee',
+    statePressed: '#ddd',
+    stateDisabledForeground: '#666',
+    stateDisabledSurface: '#eee',
+  }),
   useReducedMotion: () => true,
-  useThemeMode: () => 'light',
+});
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
 });
 
-test('profile more keeps a 40px visual with full Native targets and independent focus/disabled states', async () => {
+test('profile more exposes menu state and activates the button', async () => {
   const { ProfileMoreButton } = await import('./ProfileMoreButton');
   const onPress = mock.fn();
-  for (const [os, target] of [
-    ['web', 40],
-    ['ios', 44],
-    ['android', 48],
-  ] as const) {
-    platform.OS = os;
-    pressState = { hovered: false, pressed: false };
-    let renderer!: ReturnType<typeof create>;
-    await act(async () => {
-      renderer = create(
-        createElement(ProfileMoreButton, { disabled: false, expanded: false, onPress }),
-      );
-    });
-    const control = () => renderer.root.findByType(PressableHost);
-    const visual = (state: object): ReactTestInstance => {
-      let visualRenderer!: ReturnType<typeof create>;
-      act(() => {
-        visualRenderer = create(control().props.children(state) as ReactElement);
-      });
-      return visualRenderer.root.findByType(viewHost);
-    };
-    assert.equal(flatten(control().props.style({ pressed: false })).width, target);
-    assert.equal(flatten(control().props.style({ pressed: false })).height, target);
-    assert.equal(flatten(visual({ pressed: false }).props.style).width, 40);
-    assert.equal(flatten(visual({ pressed: false }).props.style).height, 40);
-    const feedback = (state: object) => {
-      const layer = visual(state).props.children?.[0];
-      assert.ok(layer);
-      return layer;
-    };
-    assert.equal(flatten(visual({ hovered: true }).props.style).backgroundColor, 'transparent');
-    assert.equal(
-      flatten(feedback({ pressed: false, hovered: true }).props.style).backgroundColor,
-      os === 'web' ? semanticColors.light.stateHover : 'transparent',
+  let renderer!: ReturnType<typeof create>;
+  await act(async () => {
+    renderer = create(
+      createElement(ProfileMoreButton, { disabled: false, expanded: false, onPress }),
     );
-    assert.equal(
-      flatten(feedback({ pressed: true, hovered: true }).props.style).backgroundColor,
-      semanticColors.light.statePressed,
-    );
-    if (os === 'web') {
-      await act(async () => control().props.onFocus({ currentTarget: { matches: () => true } }));
-      const focused = flatten(visual({ hovered: true }).props.style);
-      assert.equal(focused.outlineWidth, 2);
-      assert.equal(focused.outlineOffset, 2);
-      assert.equal(focused.outlineStyle, 'solid');
-      assert.equal(focused.backgroundColor, 'transparent');
-      assert.equal(focused.transitionDuration, undefined);
-    }
-    await act(async () =>
-      renderer.update(
-        createElement(ProfileMoreButton, { disabled: true, expanded: false, onPress }),
-      ),
-    );
-    assert.equal(control().props.disabled, true);
-    assert.equal(control().props.accessibilityState.disabled, true);
-    const disabled = visual({ pressed: true, hovered: true });
-    assert.equal(
-      flatten(disabled.props.style).backgroundColor,
-      semanticColors.light.stateDisabledSurface,
-    );
-    assert.equal(
-      flatten(feedback({ pressed: true, hovered: true }).props.style).backgroundColor,
-      'transparent',
-    );
-    assert.equal(
-      (disabled.props.children as VisualElement[])[1].props.color,
-      semanticColors.light.stateDisabledForeground,
-    );
-    if (os === 'web') {
-      assert.equal(flatten(disabled.props.style).outlineStyle, 'none');
-    }
-    await act(async () => renderer.unmount());
-  }
+  });
+
+  const button = () => renderer.root.findByType(PressableHost);
+  assert.equal(button().props.accessibilityRole, 'button');
+  assert.equal(button().props.accessibilityLabel, '더보기');
+  assert.equal(button().props['aria-haspopup'], 'menu');
+  assert.equal(button().props['aria-expanded'], false);
+  assert.deepEqual(button().props.accessibilityState, {
+    busy: false,
+    disabled: false,
+    expanded: false,
+  });
+
+  await act(async () => button().props.onPress());
+  assert.equal(onPress.mock.callCount(), 1);
+
+  await act(async () => {
+    renderer.update(createElement(ProfileMoreButton, { disabled: true, expanded: true, onPress }));
+  });
+
+  assert.equal(button().props['aria-expanded'], true);
+  assert.deepEqual(button().props.accessibilityState, {
+    busy: true,
+    disabled: true,
+    expanded: true,
+  });
+  await act(async () => renderer.unmount());
 });

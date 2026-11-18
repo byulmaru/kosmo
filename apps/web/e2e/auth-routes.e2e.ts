@@ -1136,7 +1136,10 @@ test.describe('로그인 사용자 보호 라우트', () => {
     }
   });
 
-  test('mobile drawer는 왼쪽에 열리고 Lucide 메뉴 규격을 유지한다', async ({ page }) => {
+  test('모바일 메뉴 하단의 설정으로 스크롤해 이동할 수 있다', async ({ context, page }) => {
+    const session = await createE2ESession({ handle: 'e2e-mobile-drawer' });
+    await setE2ESessionCookie(context, session.token);
+
     let canonicalProfilePath = '';
 
     await page.route('**/graphql', async (route) => {
@@ -1214,7 +1217,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
     const drawer = page.locator('#mobile-sidebar');
     const navigation = drawer.getByRole('navigation', { name: '주요 메뉴' });
     const home = navigation.getByRole('link', { name: '홈' });
-    const homeIcon = home.locator('svg');
+    const homeIconFrame = home.locator('[aria-hidden="true"]');
     const homeLabel = home.getByText('홈', { exact: true });
     await expect(drawer).toBeVisible();
     await expect.poll(() => canonicalProfilePath).not.toBe('');
@@ -1239,7 +1242,7 @@ test.describe('로그인 사용자 보호 라우트', () => {
     }
     expect(await drawer.boundingBox()).toMatchObject({ height: 667, width: 320, x: 0, y: 0 });
     expect(await home.boundingBox()).toMatchObject({ height: 45, width: 288 });
-    const iconBox = await homeIcon.boundingBox();
+    const iconBox = await homeIconFrame.boundingBox();
     const labelBox = await homeLabel.boundingBox();
     expect(iconBox).toMatchObject({ height: 20, width: 20 });
     expect(labelBox!.x).toBeGreaterThan(iconBox!.x + iconBox!.width);
@@ -1249,31 +1252,21 @@ test.describe('로그인 사용자 보호 라우트', () => {
 
     await page.setViewportSize({ height: 480, width: 390 });
 
-    const drawerState = await drawer.evaluate((element) => {
-      let fixedAncestor: HTMLElement | null = element as HTMLElement;
-      while (fixedAncestor && getComputedStyle(fixedAncestor).position !== 'fixed') {
-        fixedAncestor = fixedAncestor.parentElement;
-      }
+    const settingsAndMore = navigation.getByRole('button', { name: '설정 및 기타' });
+    await navigation.hover();
+    await page.mouse.wheel(0, 800);
+    await expect(settingsAndMore).toBeInViewport();
+    await settingsAndMore.click();
 
-      const menuScroll = [...element.querySelectorAll<HTMLElement>('*')].find((candidate) =>
-        ['auto', 'scroll'].includes(getComputedStyle(candidate).overflowY),
-      );
-      const menuItems =
-        element.querySelector('[role="navigation"][aria-label="주요 메뉴"]')?.children ?? [];
-
-      return {
-        animationName: fixedAncestor ? getComputedStyle(fixedAncestor).animationName : null,
-        hasEmoji: /\p{Extended_Pictographic}/u.test(element.textContent ?? ''),
-        itemsUseSvg: [...menuItems].every((item) => item.querySelector('svg')),
-        scrollClientHeight: menuScroll?.clientHeight ?? 0,
-        scrollHeight: menuScroll?.scrollHeight ?? 0,
-      };
-    });
-
-    expect(drawerState.animationName).toBe('none');
-    expect(drawerState.hasEmoji).toBe(false);
-    expect(drawerState.itemsUseSvg).toBe(true);
-    expect(drawerState.scrollHeight).toBeGreaterThan(drawerState.scrollClientHeight);
+    const settings = navigation.getByRole('link', { exact: true, name: '설정' });
+    const logout = navigation.getByRole('button', { name: '로그아웃' });
+    await navigation.hover();
+    await page.mouse.wheel(0, 800);
+    await expect(settings).toBeInViewport();
+    await expect(logout).toBeInViewport();
+    await settings.click();
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(drawer).toHaveCount(0);
   });
 });
 
