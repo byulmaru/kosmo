@@ -112,7 +112,7 @@ export function BottomTabBar({ onComposeOpen, profile: profileKey }: Props) {
         profile
           ? {
               imageUri: profile.avatar?.url,
-              label: profile.displayName,
+              label: profile.displayName ?? profile.relativeHandle,
             }
           : null
       }

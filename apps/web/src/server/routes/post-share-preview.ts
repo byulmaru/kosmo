@@ -1,15 +1,21 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { db, Instances, Media, PostContents, PostMentions, Posts, Profiles } from '@kosmo/core/db';
+import { db, Instances, Media, PostContents, Posts, Profiles } from '@kosmo/core/db';
 import { MediaState } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { postContentDocumentToText } from '@kosmo/core/post-content/server';
+import { isValidMediaPublicationRights, mediaUseTermsUrl } from '@kosmo/core/media-metadata';
+import {
+  getPostContentMentionProfileIds,
+  postContentDocumentToText,
+} from '@kosmo/core/post-content/server';
 import { visiblePostWhere, visibleProfileWhere } from '@kosmo/core/visibility';
+import { resolveActivityPubPostUri } from '@kosmo/fedify';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { html } from 'hono/html';
+import { html, raw } from 'hono/html';
 import { captureUnexpectedError } from '../sentry';
+import type { MediaPublicationMetadata } from '@kosmo/core/media-metadata';
 
 const STATIC_ROOT = process.env.EXPO_WEB_ROOT ?? '../app/dist';
 const SHARE_METADATA_START = '<!-- kosmo-share-metadata:start -->';
@@ -21,11 +27,13 @@ type ShareImage = {
   readonly altText?: string;
   readonly height?: number;
   readonly mediaType?: string;
+  readonly publicationMetadata?: MediaPublicationMetadata;
   readonly url: string;
   readonly width?: number;
 };
 
 type ShareMetadata = {
+  readonly activityPubUri?: string;
   readonly canonicalUrl: string;
   readonly description: string;
   readonly images: readonly ShareImage[];
@@ -180,11 +188,7 @@ async function createPostMetadata(
   const relativeHandle = formatRelativeHandle(target, configuredLocalInstanceId);
   let mentionHandles: ReadonlyMap<string, string> = new Map();
   try {
-    mentionHandles = await findVisibleMentionHandles(
-      document,
-      target.currentContentId!,
-      configuredLocalInstanceId,
-    );
+    mentionHandles = await findVisibleMentionHandles(document, configuredLocalInstanceId);
   } catch (cause) {
     captureUnexpectedError(cause);
   }
@@ -211,8 +215,15 @@ async function createPostMetadata(
   const title = `${target.authorDisplayName.trim() || relativeHandle}(${relativeHandle}) on KOSMO`;
   const canonicalHandle = encodeURIComponent(relativeHandle).replace(/%40/gi, '@');
   const canonicalId = encodeURIComponent(encodeGlobalId('Post', target.postId));
+  let activityPubUri: string | undefined;
+  try {
+    activityPubUri = (await resolveActivityPubPostUri(target.postId))?.href;
+  } catch (cause) {
+    captureUnexpectedError(cause);
+  }
 
   return {
+    activityPubUri,
     canonicalUrl: new URL(`${canonicalHandle}/${canonicalId}`, `${origin}/`).toString(),
     description,
     images,
@@ -223,19 +234,10 @@ async function createPostMetadata(
 
 async function findVisibleMentionHandles(
   document: (typeof PostContents.$inferSelect)['document'],
-  contentId: string,
   configuredLocalInstanceId: string,
 ): Promise<ReadonlyMap<string, string>> {
-  const mentionIds = new Set(
-    document.body.content.flatMap((block) =>
-      block.type === 'paragraph'
-        ? (block.content ?? [])
-            .filter((node) => node.type === 'mention')
-            .map((node) => node.attrs.profileId)
-        : [],
-    ),
-  );
-  if (mentionIds.size === 0) {
+  const mentionIds = getPostContentMentionProfileIds(document);
+  if (mentionIds.length === 0) {
     return new Map();
   }
 
@@ -247,13 +249,11 @@ async function findVisibleMentionHandles(
       handle: Profiles.handle,
       joinedInstanceId: Instances.id,
     })
-    .from(PostMentions)
-    .innerJoin(Profiles, eq(Profiles.id, PostMentions.profileId))
+    .from(Profiles)
     .innerJoin(Instances, eq(Instances.id, Profiles.instanceId))
     .where(
       and(
-        eq(PostMentions.postContentId, contentId),
-        inArray(PostMentions.profileId, [...mentionIds]),
+        inArray(Profiles.id, mentionIds),
         visibleProfileWhere({ profile: Profiles, instance: Instances }),
       ),
     );
@@ -288,6 +288,7 @@ async function findVisibleImages(
       altText: Media.altText,
       id: Media.id,
       mediaType: Media.mediaType,
+      publicationMetadata: Media.publicationMetadata,
       state: Media.state,
       url: Media.url,
     })
@@ -307,6 +308,7 @@ async function findVisibleImages(
     images.push({
       ...(media.altText !== null ? { altText: media.altText } : {}),
       ...(mediaType ? { mediaType } : {}),
+      ...(media.publicationMetadata ? { publicationMetadata: media.publicationMetadata } : {}),
       url,
     });
   }
@@ -358,6 +360,18 @@ function parsePublicImageUrl(value: string): string | null {
   }
 }
 
+function parsePublicLinkUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function parseImageMediaType(value: string | null): string | null {
   if (!value) {
     return null;
@@ -388,6 +402,10 @@ function defaultImage(origin: string): ShareImage {
 
 function renderMetadata(metadata: ShareMetadata) {
   const firstImage = metadata.images[0] ?? defaultImage('https://kos.moe');
+  const structuredData = serializeJsonLd({
+    '@context': 'https://schema.org',
+    '@graph': metadata.images.map(createImageObject),
+  });
   const imageTags = metadata.images.map(
     (image) => html`
       <meta property="og:image" content="${image.url}" />
@@ -408,15 +426,62 @@ function renderMetadata(metadata: ShareMetadata) {
     <meta property="og:site_name" content="KOSMO" />
     <meta property="og:title" content="${metadata.title}" />
     <meta property="og:description" content="${metadata.description}" />
-    ${imageTags}
+    ${
+      imageTags /* nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag -- Hono html escapes these generated metadata tags. */
+    }
+    <script type="application/ld+json">
+      ${raw(
+        structuredData /* nosemgrep: javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag -- serializeJsonLd escapes script delimiters before raw insertion. */,
+      )}
+    </script>
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${metadata.title}" />
     <meta name="twitter:description" content="${metadata.description}" />
     <meta name="twitter:image" content="${firstImage.url}" />
+    ${metadata.activityPubUri
+      ? html`<link
+          rel="alternate"
+          type="application/activity+json"
+          href="${metadata.activityPubUri}"
+        />`
+      : ''}
     ${firstImage.altText !== undefined
       ? html`<meta name="twitter:image:alt" content="${firstImage.altText}" />`
       : ''}
   `;
+}
+
+function createImageObject(image: ShareImage) {
+  const imageObject = { '@type': 'ImageObject', contentUrl: image.url };
+  const publication = image.publicationMetadata;
+  if (!publication) {
+    return imageObject;
+  }
+
+  const attributionUrl = parsePublicLinkUrl(publication.attributionUrl);
+  const attributionName = publication.attributionName.trim();
+  const rights = publication.rights;
+  const license =
+    attributionUrl && rights && isValidMediaPublicationRights(rights)
+      ? mediaUseTermsUrl(rights, new URL(attributionUrl).origin)
+      : undefined;
+
+  return {
+    ...imageObject,
+    ...(attributionUrl && attributionName
+      ? { creditText: `${attributionName} (${attributionUrl})` }
+      : {}),
+    ...(license ? { license } : {}),
+  };
+}
+
+function serializeJsonLd(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
 
 function replaceShareMetadata(html: string, metadata: string): string | null {

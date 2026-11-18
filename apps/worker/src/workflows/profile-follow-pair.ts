@@ -19,6 +19,7 @@ import type {
   ProfileFollowPairEffect,
   ProfileFollowPairLifecycleState,
   ProfileFollowPairTransitionOutcome,
+  ProfileFollowPairTransitionResult,
 } from '@kosmo/core/services';
 import type * as activities from '../activities';
 
@@ -123,8 +124,11 @@ const {
   createFollowRequestNotificationActivity,
   deleteFollowNotificationActivity,
   deleteFollowRequestNotificationActivity,
+  admitHomeTimelineFollowReconciliationActivity,
   executeProfileFollowPairTransitionActivity,
+  invalidateHomeTimelinesActivity,
   loadPendingFollowRequestIdActivity,
+  reconcileHomeTimelineFollowActivity,
   sendProfileFollowAcceptActivity,
   sendProfileFollowActivity,
   sendProfileUnfollowActivity,
@@ -176,6 +180,30 @@ type EffectFailure = {
   readonly message: string;
 };
 
+type PendingProfileFollowEffect =
+  | ProfileFollowPairEffect
+  | { readonly kind: 'INVALIDATE_HOME_TIMELINE'; readonly profileId: string }
+  | { readonly kind: 'RECONCILE_HOME_TIMELINE'; readonly profileId: string }
+  | {
+      readonly kind: 'ADMIT_HOME_TIMELINE_RECONCILIATION';
+      readonly profileId: string;
+      readonly followeeProfileId: string;
+    };
+
+const shouldInvalidateHomeTimeline = (
+  command: ProfileFollowPairCommand,
+  result: ProfileFollowPairTransitionResult,
+): boolean => {
+  if (command.kind === 'FOLLOW') {
+    return result.commandKind === 'FOLLOW' && result.created && result.kind === 'ESTABLISHED';
+  }
+  return (
+    (command.kind === 'APPROVE' || command.kind === 'ACCEPT') &&
+    result.commandKind === command.kind &&
+    result.kind === 'ACCEPTED'
+  );
+};
+
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -185,6 +213,13 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
     throw ApplicationFailure.nonRetryable('Profile Follow pair requires non-empty profile IDs');
   }
   const pair = parsedPair.data;
+  const homeTimelineInvalidationEnabled = patched('profile-follow-pair-home-invalidation-v1');
+  const homeTimelineReconciliationEnabled = patched(
+    'profile-follow-pair-home-timeline-reconcile-v1',
+  );
+  const homeTimelineReconciliationCoalescingEnabled = patched(
+    'profile-follow-pair-home-timeline-coalesce-v1',
+  );
   let lifecycleState: ProfileFollowPairLifecycleState = 'INITIAL';
   let updateReceived = false;
   let inFlight = false;
@@ -193,7 +228,7 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
   let inboundFollowForPendingRequest:
     | { readonly requestId: string; readonly inboundFollow?: ProfileFollowInboundFollow }
     | undefined;
-  const effectQueue: ProfileFollowPairEffect[] = [];
+  const effectQueue: PendingProfileFollowEffect[] = [];
   const effectFailures: EffectFailure[] = [];
 
   setHandler(
@@ -283,6 +318,31 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
             }
           }
           effectQueue.push(
+            ...(shouldInvalidateHomeTimeline(parsedCommand, execution.result)
+              ? homeTimelineReconciliationEnabled
+                ? homeTimelineReconciliationCoalescingEnabled
+                  ? [
+                      {
+                        kind: 'ADMIT_HOME_TIMELINE_RECONCILIATION' as const,
+                        profileId: pair.followerProfileId,
+                        followeeProfileId: pair.followeeProfileId,
+                      },
+                    ]
+                  : [
+                      {
+                        kind: 'RECONCILE_HOME_TIMELINE' as const,
+                        profileId: pair.followerProfileId,
+                      },
+                    ]
+                : homeTimelineInvalidationEnabled
+                  ? [
+                      {
+                        kind: 'INVALIDATE_HOME_TIMELINE' as const,
+                        profileId: pair.followerProfileId,
+                      },
+                    ]
+                  : []
+              : []),
             ...execution.effectPlan.map((effect) => {
               if (effect.kind !== 'ACCEPT_INBOUND_FOLLOW') {
                 return effect;
@@ -370,6 +430,18 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
     try {
       await settleEffects(
         match(effect)
+          .with({ kind: 'INVALIDATE_HOME_TIMELINE' }, ({ profileId }) => [
+            invalidateHomeTimelinesActivity({ profileIds: [profileId] }),
+          ])
+          .with({ kind: 'RECONCILE_HOME_TIMELINE' }, ({ profileId }) => [
+            reconcileHomeTimelineFollowActivity({ profileId }),
+          ])
+          .with(
+            { kind: 'ADMIT_HOME_TIMELINE_RECONCILIATION' },
+            ({ profileId, followeeProfileId }) => [
+              admitHomeTimelineFollowReconciliationActivity({ profileId, followeeProfileId }),
+            ],
+          )
           .with({ kind: 'ACCEPT_INBOUND_FOLLOW' }, ({ input }) => {
             return [sendProfileFollowAcceptActivity(input)];
           })
@@ -419,7 +491,13 @@ export async function profileFollowPairWorkflow(input: ProfileFollowPair): Promi
       const sourceId =
         effect.kind === 'ACCEPT_INBOUND_FOLLOW'
           ? effect.input.pendingRequestId
-          : effect.input.sourceId;
+          : effect.kind === 'INVALIDATE_HOME_TIMELINE' ||
+              effect.kind === 'RECONCILE_HOME_TIMELINE' ||
+              effect.kind === 'ADMIT_HOME_TIMELINE_RECONCILIATION'
+            ? effect.kind === 'ADMIT_HOME_TIMELINE_RECONCILIATION'
+              ? effect.followeeProfileId
+              : effect.profileId
+            : effect.input.sourceId;
       effectFailures.push({
         sourceId,
         message: errorMessage(error),

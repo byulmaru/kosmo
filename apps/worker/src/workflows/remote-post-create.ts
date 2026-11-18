@@ -86,7 +86,10 @@ export async function remotePostCreateWorkflow(
   const parsed = parseInput(input);
   const execution = await createPostActivity({
     input: parsed.input,
-    postId: await generatePostIdActivity(),
+    postId: await generatePostIdActivity({
+      publishedAt: parsed.input.publishedAt,
+      receivedAt: parsed.input.receivedAt,
+    }),
   });
   if (!execution.ok) {
     if (execution.error.kind === 'reply_profile_blocked') {

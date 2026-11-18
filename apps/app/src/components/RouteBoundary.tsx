@@ -10,6 +10,7 @@ import {
 import { ErrorBoundary } from 'react-error-boundary';
 import { StateView } from '@/components/ui/StateView';
 import { useUnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
+import { NativeResumeRetry } from './NativeResumeRetry';
 import type { ReactNode } from 'react';
 
 export type RouteBoundaryHandle = {
@@ -80,16 +81,21 @@ export const RouteBoundary = forwardRef<RouteBoundaryHandle, RouteBoundaryProps>
       <RouteBoundaryContext.Provider value={contextValue}>
         <ErrorBoundary
           fallbackRender={({ resetErrorBoundary }) => {
-            return renderError ? (
-              renderError(resetErrorBoundary)
-            ) : (
-              <StateView
-                actionLabel="다시 시도"
-                alert
-                description={description ?? '잠시 후 다시 시도해주세요.'}
-                onAction={resetErrorBoundary}
-                title={title}
-              />
+            return (
+              <>
+                <NativeResumeRetry onRetry={resetErrorBoundary} />
+                {renderError ? (
+                  renderError(resetErrorBoundary)
+                ) : (
+                  <StateView
+                    actionLabel="다시 시도"
+                    alert
+                    description={description ?? '잠시 후 다시 시도해주세요.'}
+                    onAction={resetErrorBoundary}
+                    title={title}
+                  />
+                )}
+              </>
             );
           }}
           onError={(error, info) => {

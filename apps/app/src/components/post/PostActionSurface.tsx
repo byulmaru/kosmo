@@ -2,7 +2,6 @@ import { ContentReportTargetType } from '@kosmo/core/enums';
 import { useRouter } from 'expo-router';
 import { Activity } from 'lucide-react-native';
 import { useContext } from 'react';
-import { View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import {
   getContentReportBlockProfile,
@@ -14,6 +13,7 @@ import { PostReactionSummary } from '@/components/reaction/PostReactionSummary';
 import { useSession } from '@/session/SessionProvider';
 import { usePostActionAuthentication } from './PostActionAuthentication';
 import { isRepostTargetEligible } from './postActionAvailability';
+import { PostActionBackground, PostActionBackgroundPressContext } from './PostActionBackground';
 import { PostActionBar } from './PostActionBar';
 import { useBookmarkFailureToast } from './PostBookmarkAction';
 import { usePostMoreMenuItem } from './PostMoreMenu';
@@ -28,6 +28,7 @@ import type { MoreActionConfig, PostActionBarProps } from './PostActionBar';
 
 type Props = Readonly<{
   actionBarStyle?: StyleProp<ViewStyle>;
+  onActionBarBackgroundPress?: () => void;
   onDeleted?: () => void;
   onReactionSummaryBackgroundPress?: () => void;
   reactionSummaryStyle?: StyleProp<ViewStyle>;
@@ -46,6 +47,7 @@ const postActionSurfaceFragment = graphql`
     ...ProfilePinAction_post @alias(as: "profilePin")
     profile {
       id
+      displayName
       relativeHandle
       ...ContentReportOverlay_blockProfile
       viewerState {
@@ -64,6 +66,7 @@ const postActionSurfaceFragment = graphql`
 
 export function PostActionSurface({
   actionBarStyle,
+  onActionBarBackgroundPress,
   onDeleted,
   onReactionSummaryBackgroundPress,
   reactionSummaryStyle,
@@ -122,27 +125,31 @@ export function PostActionSurface({
   ];
 
   const canMute =
-    authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id;
+    authentication.selectedProfileId &&
+    authentication.selectedProfileId !== target.profile.id &&
+    target.profile.displayName != null;
 
   const renderActions = (more?: MoreActionConfig) => (
-    <View style={actionBarStyle}>
-      <PostActionBar
-        execution={authentication.execution}
-        more={more}
-        moreItems={moreItems}
-        morePending={profilePinAction.pending || pinOrderMenu?.pending}
-        moreSheetIconSize={profilePinAction.item ? 24 : undefined}
-        onMoreTriggerReady={profilePinAction.onMoreTriggerReady}
-        onBookmarkError={onBookmarkError}
-        onDeleted={onDeleted}
-        onRepostError={onRepostError}
-        onResolutionRequired={authentication.resolve}
-        post={target.actionBar}
-        reactionController={reactionController}
-        reply={reply}
-        repostExecution={repostAuthentication.execution}
-      />
-    </View>
+    <PostActionBackgroundPressContext.Provider value={onActionBarBackgroundPress}>
+      <PostActionBackground style={actionBarStyle}>
+        <PostActionBar
+          execution={authentication.execution}
+          more={more}
+          moreItems={moreItems}
+          morePending={profilePinAction.pending || pinOrderMenu?.pending}
+          moreSheetIconSize={profilePinAction.item ? 24 : undefined}
+          onMoreTriggerReady={profilePinAction.onMoreTriggerReady}
+          onBookmarkError={onBookmarkError}
+          onDeleted={onDeleted}
+          onRepostError={onRepostError}
+          onResolutionRequired={authentication.resolve}
+          post={target.actionBar}
+          reactionController={reactionController}
+          reply={reply}
+          repostExecution={repostAuthentication.execution}
+        />
+      </PostActionBackground>
+    </PostActionBackgroundPressContext.Provider>
   );
 
   return (

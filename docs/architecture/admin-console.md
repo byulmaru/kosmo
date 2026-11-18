@@ -3,13 +3,15 @@
 ## 목적과 범위
 
 Admin Console은 신뢰된 Tailscale proxy 뒤에서 KOSMO의 Account, Profile, Account-Profile Membership과 Profile authored Post 운영 정보를 읽는 내부 Web
-surface다. v1은 Account, Profile, Account-Profile Membership과 Profile authored Post를 변경하지 않는다.
+surface다. v1은 기본적으로 읽기 전용이며, [PROD-1299](https://linear.app/byulmaru/issue/PROD-1299)가 Local
+Profile의 기본 게시 공개 범위 변경만 예외로 허용한다. 다른 Account, Profile, Account-Profile Membership,
+Post 변경은 허용하지 않는다.
 
-이 문서는 요청이 Tailscale 접근 경계를 통과해 read projection으로 변환되는 구조를 정의한다. 객체별 허용
-필드와 제외 필드는 [Admin Console Read Policy](../domain/policies/admin-console-read.md), Admin Console
-Viewer와 `Account.Operator`의 분리는
-[ADR 0026](../domain/decisions/0026-admin-console-tailscale-access-boundary.md)가 소유한다. 구체적인 route, GraphQL
-field, 저장 모델과 UI layout은 각 구현 slice에서 정한다.
+이 문서는 요청이 Tailscale 접근 경계를 통과해 read projection 또는 승인된 단일 Profile 설정 변경으로
+처리되는 구조를 정의한다. 객체별 허용 필드와 제외 필드는
+[Admin Console Read Policy](../domain/policies/admin-console-read.md), Admin Console Viewer와
+`Account.Operator`의 분리는 [ADR 0026](../domain/decisions/0026-admin-console-tailscale-access-boundary.md)가
+소유한다. 구체적인 route, GraphQL field, 저장 모델과 UI layout은 각 구현 slice에서 정한다.
 
 ## 신뢰 경계
 
@@ -18,7 +20,8 @@ Operator Ingress와 Admin Service의 네트워크 경계를 통해 runtime에 �
 Capabilities나 객체별 action을 추가로 계산하지 않는다.
 
 - Admin Console Viewer는 Kosmo Account가 아니며 `Account.Operator` 권한을 얻지 않는다.
-- 진입이 허용된 Viewer는 Account, Profile, Account-Profile Membership, Profile authored Post projection을 모두 읽을 수 있다.
+- 진입이 허용된 Viewer는 Account, Profile, Account-Profile Membership, Profile authored Post projection을 모두
+  읽고, 정책에 명시된 Local Profile 기본 게시 공개 범위만 변경할 수 있다.
 - proxy identity header의 login과 display name은 선택적 표시 metadata이며 인가, Account 매핑, 조회 filter
   또는 projection 계산에 사용하지 않는다.
 - client가 직접 주입한 identity header나 일반 workload가 신뢰된 proxy를 우회한 ClusterIP·Pod IP 요청은
@@ -38,8 +41,8 @@ Tailscale access policy
   -> trusted Operator Ingress
   -> network-restricted Admin Service
   -> Admin Console entry
-  -> viewer-scoped query / loader
-  -> policy projection
+  -> viewer-scoped query / loader or permitted action
+  -> policy projection or Local Profile default visibility update
   -> response
 ```
 
@@ -48,8 +51,17 @@ Tailscale access policy
 3. NetworkPolicy는 일반 workload에서 오는 Admin ingress를 해당 proxy 경계로 제한한다. node-origin probe와
    연결은 차단 대상으로 삼지 않는다. 실제 operator-generated proxy label은 배포 대상 버전과 live cluster에서
    확인한 뒤 selector로 고정한다.
-4. query 계층은 [Admin Console Read Policy](../domain/policies/admin-console-read.md)의 projection을 적용한다.
+4. query 계층은 [Admin Console Read Policy](../domain/policies/admin-console-read.md)의 projection을 적용하고,
+   변경 action은 같은 접근 경계 안에서 Local Profile 기본 게시 공개 범위만 갱신한다.
 5. response 조합은 Account, Profile, Membership, Profile authored Post projection을 구조적으로 분리한다.
+
+## 제한된 Profile 설정 변경
+
+[PROD-1299](https://linear.app/byulmaru/issue/PROD-1299)는 Tailscale 접근 경계를 통과한 Viewer가 Local
+Profile의 기본 게시 공개 범위만 변경하도록 허용한다. 값과 legacy `null` 표시, 기존 Post에 미치는 영향은
+[Admin Console Read Policy](../domain/policies/admin-console-read.md)가 정한다. 이 예외는 Account 인증,
+Profile Owner/Member 사실 또는 `Account.Operator` 권한을 추가하지 않으며, 그 밖의 Account, Profile,
+Membership, Post 변경은 허용하지 않는다.
 
 read-only query는 state-changing application action이 아니므로 불필요한 `packages/core/services`
 pass-through service를 만들지 않는다. 구현은 [Core 서비스 경계](./core-services.md)의 read query/loader 방향을

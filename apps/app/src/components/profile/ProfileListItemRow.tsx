@@ -24,7 +24,6 @@ const profileListItemRowFragment = graphql`
       url
     }
     displayName
-    handle
     relativeHandle
     bio @include(if: $showBio)
   }
@@ -33,14 +32,15 @@ const profileListItemRowFragment = graphql`
 /** Relay-owned Profile identity shared by rows with feature-owned actions. */
 export function ProfileListItemRow({ profile, showBio = false, ...props }: Props) {
   const data = useFragment(profileListItemRowFragment, profile);
+  const displayName = data.displayName ?? data.relativeHandle;
   return (
     <ProfileListItemContent
       {...props}
-      avatarLabel={data.displayName || data.handle}
+      avatarLabel={data.displayName || data.relativeHandle}
       avatarUri={data.avatar?.url}
       bio={showBio ? data.bio : undefined}
-      displayName={data.displayName}
-      relativeHandle={data.relativeHandle}
+      displayName={displayName}
+      relativeHandle={data.displayName != null ? data.relativeHandle : undefined}
     />
   );
 }

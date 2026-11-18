@@ -15,8 +15,8 @@ import type { ProfileFollowingNextPageQuery } from './__generated__/ProfileFollo
 type ConnectionKind = 'followers' | 'following';
 
 type ProfileConnectionListProps =
-  | { kind: 'followers'; profile: ProfileConnectionList_followersProfile$key }
-  | { kind: 'following'; profile: ProfileConnectionList_followingProfile$key };
+  | { active?: boolean; kind: 'followers'; profile: ProfileConnectionList_followersProfile$key }
+  | { active?: boolean; kind: 'following'; profile: ProfileConnectionList_followingProfile$key };
 
 const followersFragment = graphql`
   fragment ProfileConnectionList_followersProfile on Profile
@@ -77,9 +77,9 @@ const copy = {
 
 export function ProfileConnectionList(props: ProfileConnectionListProps) {
   return props.kind === 'followers' ? (
-    <FollowersList profile={props.profile} />
+    <FollowersList active={props.active ?? true} profile={props.profile} />
   ) : (
-    <FollowingList profile={props.profile} />
+    <FollowingList active={props.active ?? true} profile={props.profile} />
   );
 }
 
@@ -133,19 +133,28 @@ export function ProfileConnectionListState({
   );
 }
 
-function FollowersList({ profile }: { profile: ProfileConnectionList_followersProfile$key }) {
+function FollowersList({
+  active,
+  profile,
+}: {
+  active: boolean;
+  profile: ProfileConnectionList_followersProfile$key;
+}) {
   const pagination = usePaginationFragment<
     ProfileFollowersNextPageQuery,
     ProfileConnectionList_followersProfile$key
   >(followersFragment, profile);
-  const profiles = pagination.data.followers.edges.flatMap((edge) =>
-    edge.node.follower ? [{ cursor: edge.cursor, profile: edge.node.follower }] : [],
-  );
+  const followers = pagination.data.followers;
+  const profiles =
+    followers?.edges.flatMap((edge) =>
+      edge.node.follower ? [{ cursor: edge.cursor, profile: edge.node.follower }] : [],
+    ) ?? [];
 
   return (
     <ConnectionList
-      hasNext={pagination.hasNext}
-      isLoadingNext={pagination.isLoadingNext}
+      hasNext={followers != null && pagination.hasNext}
+      active={active}
+      isLoadingNext={followers != null && pagination.isLoadingNext}
       kind="followers"
       loadNext={pagination.loadNext}
       profiles={profiles}
@@ -153,19 +162,28 @@ function FollowersList({ profile }: { profile: ProfileConnectionList_followersPr
   );
 }
 
-function FollowingList({ profile }: { profile: ProfileConnectionList_followingProfile$key }) {
+function FollowingList({
+  active,
+  profile,
+}: {
+  active: boolean;
+  profile: ProfileConnectionList_followingProfile$key;
+}) {
   const pagination = usePaginationFragment<
     ProfileFollowingNextPageQuery,
     ProfileConnectionList_followingProfile$key
   >(followingFragment, profile);
-  const profiles = pagination.data.following.edges.flatMap((edge) =>
-    edge.node.followee ? [{ cursor: edge.cursor, profile: edge.node.followee }] : [],
-  );
+  const following = pagination.data.following;
+  const profiles =
+    following?.edges.flatMap((edge) =>
+      edge.node.followee ? [{ cursor: edge.cursor, profile: edge.node.followee }] : [],
+    ) ?? [];
 
   return (
     <ConnectionList
-      hasNext={pagination.hasNext}
-      isLoadingNext={pagination.isLoadingNext}
+      hasNext={following != null && pagination.hasNext}
+      active={active}
+      isLoadingNext={following != null && pagination.isLoadingNext}
       kind="following"
       loadNext={pagination.loadNext}
       profiles={profiles}
@@ -174,6 +192,7 @@ function FollowingList({ profile }: { profile: ProfileConnectionList_followingPr
 }
 
 type ConnectionListProps = {
+  active: boolean;
   hasNext: boolean;
   isLoadingNext: boolean;
   kind: keyof typeof copy;
@@ -184,7 +203,14 @@ type ConnectionListProps = {
   }>;
 };
 
-function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: ConnectionListProps) {
+function ConnectionList({
+  active,
+  hasNext,
+  isLoadingNext,
+  kind,
+  loadNext,
+  profiles,
+}: ConnectionListProps) {
   const theme = useTheme();
   const text = copy[kind];
   const { endRef, loadError, loadNextPage, nativeScrollProps } = useAutomaticPagination({
@@ -193,6 +219,7 @@ function ConnectionList({ hasNext, isLoadingNext, kind, loadNext, profiles }: Co
     itemCount: profiles.length,
     loadNext,
     pageSize: 20,
+    webDocumentActive: active,
   });
   usePaginationScrollRegistration(nativeScrollProps);
 

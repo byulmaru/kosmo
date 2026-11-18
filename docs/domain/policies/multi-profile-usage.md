@@ -29,12 +29,12 @@ Account만 포함하며, 나중에 로그인했다는 이유로 익명 관측을
 - 인증된 화면 조회
 - Profile 생성 성공
 - Profile 선택 성공
-- Post 생성 성공
+- Post 요청 접수 성공
 - Follow 실행 성공
 - 검색 제출, 결과 로드 또는 결과 선택
 
 자동 클릭 수집, Session Replay, pageleave, performance, feature flag와 SDK 진단 이벤트만 있는 Account는
-WAA로 세지 않는다. 실패한 요청만 있는 경우도 마찬가지다. 이 WAA는 이 정책의 지표에만 적용하며 다른
+WAA로 세지 않는다. 접수 ACK 없이 실패한 요청만 있는 경우도 마찬가지다. 이 WAA는 이 정책의 지표에만 적용하며 다른
 진단 지표나 북극성 지표의 공통 분모를 정하지 않는다.
 
 ### 사용 가능 Profile
@@ -49,7 +49,7 @@ Profile 수를 `available_profile_count` Person 속성으로 갱신한다. 목�
 `0`으로 대체하지 않는다. 앱은 자격 boolean이나 주간 중복 제거·집계를 만들지 않는다.
 PostHog/HogQL은 이벤트에 보존된 과거 Person 속성으로 같은 KST 주에 관측된
 `available_profile_count >= 2`를 대상 WAA 판정에 사용한다. 현재 Person 속성으로 과거 주차를 판정하지
-않는다. 인증된 화면 조회 당시 선택 Profile과 기존 선택·Post·Follow 성공 이벤트의 행동 Profile이 사용
+않는다. 인증된 화면 조회 당시 선택 Profile과 기존 선택·Post 접수·Follow 성공 이벤트의 행동 Profile이 사용
 근거다.
 
 멀티 Profile 대상 WAA는 해당 주 안의 한 시점 이상에서 서로 다른 사용 가능 Profile 2개 이상을 동시에 가진
@@ -66,9 +66,9 @@ Account별로 다음 관측 중 하나가 있는 Profile을 그 주에 사용한
 
 - 인증된 화면을 조회할 때 선택되어 있던 Profile
 - 선택을 성공적으로 마친 Profile
-- Post 생성 또는 Follow 실행에 성공한 행동 주체 Profile
+- Post 요청 접수 또는 Follow 실행에 성공한 행동 주체 Profile
 
-같은 Account와 Profile 조합은 그 주에 한 번만 센다. 생성 성공만으로는 사용으로 보지 않으며, 선택 성공,
+같은 Account와 Profile 조합은 그 주에 한 번만 센다. Profile 생성 성공만으로는 사용으로 보지 않으며, 선택 성공,
 화면 조회 또는 핵심 행동이 별도로 확인돼야 한다. 다른 Account의 Profile 사용을 가져와 사용 Profile 수를
 채우지 않는다.
 
@@ -139,8 +139,10 @@ Account 집단의 직접 전환 횟수 합계다. 활성 Account A와 B 중 A가
 
 ## 핵심 행동과 귀속
 
-초기 핵심 행동은 Post 생성과 Follow 실행 성공이다. Follow 결과는 즉시 Follow Relationship이 생긴 경우와
+초기 핵심 행동은 Post 요청 접수와 Follow 실행 성공이다. Follow 결과는 즉시 Follow Relationship이 생긴 경우와
 Follow Request가 생긴 경우로 나눠 표시한다.
+
+`post_created`는 새 클라이언트 릴리스부터 유효한 Post 접수 ACK를 확인한 시점의 관측이다. 접수 후 게시 처리가 실패하거나 요청이 취소되어도 이미 기록한 관측을 소급해 취소하지 않는다. 이전 서버 관측이 실제 Post 저장을 뜻했다면 기존 관측의 의미는 유지한다.
 
 행동은 원래 행동 주체 Profile과 인증 Account에 귀속한다. 처리 중 선택 Profile이나 로그인 Account가 바뀌어도
 다른 주체의 행동으로 옮기지 않는다. 원래 주체를 확정할 수 없는 관측은 임의로 귀속하지 않는다. 방문한

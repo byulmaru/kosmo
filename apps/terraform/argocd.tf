@@ -89,9 +89,11 @@ resource "argocd_application" "kosmo_prod" {
   lifecycle {
     # PROD-783 owns the release-time source revision and parameter overlay.
     # Terraform continues to own the base values and Application structure.
+    # The source hydrator consumes this request annotation; Terraform must preserve it.
     ignore_changes = [
       spec[0].source[0].target_revision,
       spec[0].source[0].helm[0].parameter,
+      metadata[0].annotations["argocd.argoproj.io/hydrate"],
     ]
   }
 

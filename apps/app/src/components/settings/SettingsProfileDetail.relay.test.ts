@@ -57,6 +57,9 @@ mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
     const name = parts.join('').match(/(?:query|fragment|mutation) (\w+)/)?.[1];
     assert.ok(name);
+    if (name === 'ProfileListItemRow_profile') {
+      return require('../profile/__generated__/ProfileListItemRow_profile.graphql.ts').default;
+    }
     if (name === 'SessionProviderQuery') {
       return require('../../session/__generated__/SessionProviderQuery.graphql.ts').default;
     }
@@ -118,14 +121,19 @@ mockModule('@/components/RouteBoundary', {
     createElement(Suspense, { fallback: loading }, children),
   useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
 });
+mockModule('@/components/shell/MobileWebRouteChrome', {
+  MobileWebRouteChrome: ({ children }: { children?: React.ReactNode }) => children,
+});
 mockModule('@/components/PageHeader', { PageHeader: () => createElement('PageHeader') });
 mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
   ProfileListItemContent: ({
+    avatarUri,
     children,
     displayName,
     identity,
     relativeHandle,
   }: {
+    avatarUri?: string | null;
     children?: ReactNode;
     displayName: string;
     identity?: ReactNode;
@@ -133,7 +141,7 @@ mockModule(new URL('../profile/ProfileListItemContent.tsx', import.meta.url), {
   }) =>
     createElement(
       'ProfileListItemContent',
-      null,
+      { avatarUri },
       identity ??
         createElement(
           Fragment,
@@ -296,7 +304,11 @@ function sessionData(selectedProfileId: string | null) {
   };
 }
 
-function detailData(profileId = 'profile:owner', displayName = 'Owner Profile') {
+function detailData(
+  profileId = 'profile:owner',
+  displayName = 'Owner Profile',
+  avatarUrl: string | null = null,
+) {
   return {
     currentSession: {
       id: 'session:owner',
@@ -304,6 +316,7 @@ function detailData(profileId = 'profile:owner', displayName = 'Owner Profile') 
         id: profileId,
         displayName,
         relativeHandle: '@owner',
+        avatar: avatarUrl ? { id: `avatar:${profileId}`, url: avatarUrl } : null,
         followPolicy: 'OPEN',
         instance: { kind: 'LOCAL' },
         private: { defaultPostVisibility: 'PUBLIC' },
@@ -345,13 +358,20 @@ describe('SettingsProfileDetail real Relay profile deletion flow', () => {
       latestRequest('profile:owner', 'SessionProviderQuery'),
       sessionData('profile:owner'),
     );
-    await respond(latestRequest('profile:owner', 'SettingsProfileDetailQuery'), detailData());
+    await respond(
+      latestRequest('profile:owner', 'SettingsProfileDetailQuery'),
+      detailData('profile:owner', 'Owner Profile', 'https://media.example/owner.png'),
+    );
     await respond(latestRequest('profile:owner', 'SettingsAccountDeletionQuery'), {
       me: { id: 'account:owner', profiles: [{ id: 'profile:owner' }] },
     });
 
     assert.deepEqual(accountState, { activeProfileCount: 1, phase: 'blocked' });
     assert.equal(storedProfileId, 'profile:owner');
+    assert.equal(
+      all('ProfileListItemContent')[0]?.props.avatarUri,
+      'https://media.example/owner.png',
+    );
     await act(async () => pressableForText('프로필 삭제').props.onPress());
     await act(async () => {
       const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');
@@ -418,6 +438,7 @@ describe('SettingsProfileDetail real Relay profile deletion flow', () => {
 
     assert.deepEqual(accountState, { activeProfileCount: 2, phase: 'blocked' });
     assert.equal(storedProfileId, 'profile:owner');
+    assert.equal(all('ProfileListItemContent')[0]?.props.avatarUri, undefined);
     await act(async () => pressableForText('프로필 삭제').props.onPress());
     await act(async () => {
       const checkbox = all('Pressable').find((node) => node.props.accessibilityRole === 'checkbox');

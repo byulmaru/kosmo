@@ -1,3 +1,4 @@
+import { useIsFocused } from 'expo-router';
 import { useEffect } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
@@ -5,6 +6,7 @@ import {
   FollowRequestListState,
 } from '@/components/follow-request/FollowRequestList';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteMenu } from '@/components/shell/MobileWebRouteMenu';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { FollowRequestsPageQuery } from './__generated__/FollowRequestsPageQuery.graphql';
 
@@ -21,17 +23,24 @@ const FollowRequestsQuery = graphql`
 `;
 
 export default function FollowRequestsScreen() {
-  return <FollowRequestsRoute />;
+  const active = useIsFocused();
+
+  return (
+    <>
+      <MobileWebRouteMenu />
+      <FollowRequestsRoute active={active} />
+    </>
+  );
 }
 
-function FollowRequestsRoute() {
+function FollowRequestsRoute({ active }: { active: boolean }) {
   return (
     <RouteBoundary
       error={(retry) => <FollowRequestInitialError onRetry={retry} />}
       loading={<FollowRequestListState state="loading" />}
       title="팔로워 요청을 불러오지 못했어요"
     >
-      <FollowRequestsContent />
+      <FollowRequestsContent active={active} />
     </RouteBoundary>
   );
 }
@@ -50,7 +59,7 @@ function FollowRequestInitialError({ onRetry }: { onRetry: () => void }) {
   return <FollowRequestListState loadingAnnouncement={false} state="loading" />;
 }
 
-function FollowRequestsContent() {
+function FollowRequestsContent({ active }: { active: boolean }) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<FollowRequestsPageQuery>(
     FollowRequestsQuery,
@@ -60,7 +69,7 @@ function FollowRequestsContent() {
   const profile = data.currentSession?.selectedProfile ?? null;
 
   return profile ? (
-    <FollowRequestList profile={profile} />
+    <FollowRequestList active={active} profile={profile} />
   ) : (
     <FollowRequestListState state="profileRequired" />
   );

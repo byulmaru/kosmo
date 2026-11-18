@@ -1,10 +1,21 @@
+import { usePathname, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { useAnalyticsIdentityAccountId, useSession } from '@/session/SessionProvider';
-import { clearAnalytics, identifyAnalytics, setAnalyticsSelectedProfile } from './client';
+import {
+  clearAnalytics,
+  identifyAnalytics,
+  setAnalyticsSelectedProfile,
+  trackAnalyticsScreen,
+} from './client';
 
 export function AnalyticsSessionBridge(): null {
+  const pathname = usePathname();
+  const segments = useSegments();
   const accountId = useAnalyticsIdentityAccountId();
   const { accountId: visibleAccountId, selectedProfileId, status } = useSession();
+  const screenName = `/${segments
+    .filter((segment) => !(segment.startsWith('(') && segment.endsWith(')')))
+    .join('/')}`;
 
   useEffect(() => {
     if (!accountId) {
@@ -18,6 +29,10 @@ export function AnalyticsSessionBridge(): null {
     );
     identifyAnalytics(accountId);
   }, [accountId, selectedProfileId, status, visibleAccountId]);
+
+  useEffect(() => {
+    trackAnalyticsScreen(screenName);
+  }, [pathname, screenName]);
 
   return null;
 }

@@ -31,7 +31,6 @@ const notificationFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id
@@ -149,16 +148,15 @@ export function MentionNotificationListItem({
 
 function actor(profile: {
   avatar?: { url: string | null | undefined } | null;
-  displayName: string;
-  handle: string;
+  displayName: string | null | undefined;
   id: string;
   relativeHandle: string;
 }) {
   return {
     avatarUrl: profile.avatar?.url,
     id: profile.id,
-    name: profile.displayName || profile.handle,
-    profileHref: `/${profile.relativeHandle}`,
+    name: profile.displayName || profile.relativeHandle,
+    profileHref: `/${profile.relativeHandle}` as const,
   };
 }
 
@@ -199,7 +197,6 @@ const followRequestNotificationFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id
@@ -247,7 +244,6 @@ const reactionNotificationFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id
@@ -266,6 +262,7 @@ const reactionNotificationFragment = graphql`
         media {
           id
           altText
+          aiProhibitFilterApplied
           url
         }
       }
@@ -391,7 +388,6 @@ const repostNotificationFragment = graphql`
     profile {
       id
       displayName
-      handle
       relativeHandle
       avatar {
         id
@@ -410,6 +406,7 @@ const repostNotificationFragment = graphql`
         media {
           id
           altText
+          aiProhibitFilterApplied
           url
         }
       }
@@ -476,6 +473,7 @@ function toPreview(post: {
         document: unknown;
         media:
           | ReadonlyArray<{
+              aiProhibitFilterApplied: boolean | null | undefined;
               altText: string | null | undefined;
               id: string;
               url: string | null | undefined;
@@ -497,8 +495,9 @@ function toPreview(post: {
     bodyText: content.bodyText,
     contentWarning: content.contentWarning ?? null,
     media:
-      content.media?.map<PostMediaItem>(({ altText, id, url }) => ({
+      content.media?.map<PostMediaItem>(({ aiProhibitFilterApplied, altText, id, url }) => ({
         altText: altText ?? null,
+        aiProhibitFilterApplied,
         id,
         url: url ?? null,
       })) ?? null,

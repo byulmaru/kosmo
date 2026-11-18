@@ -12,6 +12,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  MediaUsePermission,
   NotificationKind,
   OAuthTokenState,
   PostState,
@@ -21,7 +22,10 @@ import {
   PushInstallationPlatform,
   SessionState,
 } from '@kosmo/core/enums';
-import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentToText,
+} from '@kosmo/core/post-content/server';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import {
   ApplicationFailure,
@@ -29,8 +33,13 @@ import {
   WorkflowIdReusePolicy,
 } from '@temporalio/client';
 import { MockActivityEnvironment } from '@temporalio/testing';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
+import type {
+  NotificationAddedPayload,
+  notificationPubSub as NotificationPubSub,
+} from '@kosmo/core/notification/events';
+import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type {
   createPost as CreatePost,
   deletePost as DeletePost,
@@ -58,6 +67,7 @@ import type {
   finalizeMediaUploadActivity as FinalizeMediaUploadActivity,
   prepareMediaUploadActivity as PrepareMediaUploadActivity,
 } from './activities/media-upload';
+import type { reprocessLocalPostContentActivity as ReprocessLocalPostContentActivity } from './activities/post-content-reprocessing';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
@@ -69,14 +79,18 @@ let AccountProfiles: typeof CoreDb.AccountProfiles;
 let Accounts: typeof CoreDb.Accounts;
 let ApplicationAuthorizations: typeof CoreDb.ApplicationAuthorizations;
 let Applications: typeof CoreDb.Applications;
+let Hashtags: typeof CoreDb.Hashtags;
 let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
 let Notifications: typeof CoreDb.Notifications;
+let notificationPubSub: typeof NotificationPubSub;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
 let OAuthTokens: typeof CoreDb.OAuthTokens;
 let pg: typeof CoreDb.pg;
+let PostContentHashtags: typeof CoreDb.PostContentHashtags;
 let PostContents: typeof CoreDb.PostContents;
+let PostMentions: typeof CoreDb.PostMentions;
 let Posts: typeof CoreDb.Posts;
 let ProfileBlocks: typeof CoreDb.ProfileBlocks;
 let ProfileFollows: typeof CoreDb.ProfileFollows;
@@ -101,6 +115,7 @@ let captureOperationalNotificationAudienceActivity: typeof CaptureOperationalNot
 let deletePostRelatedNotificationsActivity: typeof DeletePostRelatedNotificationsActivity;
 let finalizeMediaUploadActivity: typeof FinalizeMediaUploadActivity;
 let prepareMediaUploadActivity: typeof PrepareMediaUploadActivity;
+let reprocessLocalPostContentActivity: typeof ReprocessLocalPostContentActivity;
 let temporalClient: typeof TemporalClient;
 let activityTestAccountId: string | undefined;
 let activityTestAccountPromise: Promise<string> | undefined;
@@ -113,6 +128,7 @@ before(async () => {
     Applications,
     db,
     firstOrThrow,
+    Hashtags,
     Instances,
     Media,
     NotificationQuoteJudgments,
@@ -120,7 +136,9 @@ before(async () => {
     OAuthAuthorizationCodes,
     OAuthTokens,
     pg,
+    PostContentHashtags,
     PostContents,
+    PostMentions,
     Posts,
     ProfileBlocks,
     ProfileFollows,
@@ -131,6 +149,7 @@ before(async () => {
     Reactions,
     Sessions,
   } = await import('@kosmo/core/db'));
+  ({ notificationPubSub } = await import('@kosmo/core/notification/events'));
   ({
     createNotificationActivity,
     createReactionNotificationActivity,
@@ -145,8 +164,16 @@ before(async () => {
   } = await import('./activities'));
   ({ finalizeMediaUploadActivity, prepareMediaUploadActivity } =
     await import('./activities/media-upload'));
+  ({ reprocessLocalPostContentActivity } = await import('./activities/post-content-reprocessing'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
-  ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
+  ({ repostPost } = await import('@kosmo/core/services'));
+  const { createPostPersisted, deletePostPersisted } =
+    await import('../../../packages/core/services/post');
+  createCorePost = createPostPersisted;
+  deletePost = async (input) => {
+    const { result } = await deletePostPersisted(input);
+    return { ...result, replyParentId: result.replyParentId ?? null };
+  };
 });
 
 beforeEach(async () => {
@@ -178,13 +205,29 @@ after(async () => {
   await pg.end();
 });
 
-test('Operational audience capture is stable across retries, payload mismatches, and later signups', async () => {
+test('Operational audience capture is stable across retries, payload mismatches, and later signups', async (t) => {
   const active = await createAccountDeletionFixture({ profileStates: [] });
   const anotherActive = await createAccountDeletionFixture({ profileStates: [] });
   const disabled = await createAccountDeletionFixture({ profileStates: [] });
   const sendId = crypto.randomUUID();
   const data = { href: '/maintenance', title: 'Scheduled maintenance' };
   let lateSignup: Awaited<ReturnType<typeof createAccountDeletionFixture>> | undefined;
+  const publishedNotifications: Array<{
+    readonly recipientAccountId: string;
+    readonly notificationId: string;
+    readonly recipientProfileId: string | null;
+  }> = [];
+  t.mock.method(
+    notificationPubSub,
+    'publish',
+    (
+      _topic: 'notificationAdded',
+      recipientAccountId: string,
+      payload: NotificationAddedPayload,
+    ) => {
+      publishedNotifications.push({ recipientAccountId, ...payload });
+    },
+  );
 
   try {
     await db
@@ -214,6 +257,12 @@ test('Operational audience capture is stable across retries, payload mismatches,
       assert.deepEqual(notification.data, data);
     }
     const notificationIds = notifications.map(({ id }) => id).sort();
+    assert.deepEqual(
+      publishedNotifications
+        .map(({ notificationId, recipientAccountId }) => `${recipientAccountId}:${notificationId}`)
+        .sort(),
+      notifications.map(({ id, recipientAccountId }) => `${recipientAccountId}:${id}`).sort(),
+    );
 
     const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
     const readNotificationId = notifications[0]!.id;
@@ -221,6 +270,7 @@ test('Operational audience capture is stable across retries, payload mismatches,
     lateSignup = await createAccountDeletionFixture({ profileStates: [] });
 
     assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), true);
+    assert.equal(publishedNotifications.length, 2);
     const retriedNotifications = await db
       .select({
         id: Notifications.id,
@@ -905,6 +955,7 @@ test('Quote Notification Activity는 source author에게 한 건만 생성한다
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: author.id,
@@ -932,6 +983,7 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Combined quote',
     origin: 'LOCAL',
     profileId: author.id,
@@ -964,6 +1016,7 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
   });
   const replyParent = await createPost(replyRecipient.id);
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Quote and reply',
     origin: 'LOCAL',
     profileId: author.id,
@@ -1054,6 +1107,63 @@ test('공통 Notification Activity는 저장된 ID로 Push Workflow를 시작하
   assert.equal(startOptions.workflowIdReusePolicy, WorkflowIdReusePolicy.REJECT_DUPLICATE);
 });
 
+test('Notification events publish only new rows while Push retries retain existing IDs', async (t) => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+  const published: Array<{
+    readonly recipientAccountId: string;
+    readonly notificationId: string;
+    readonly recipientProfileId: string | null;
+  }> = [];
+  const publish = t.mock.method(
+    notificationPubSub,
+    'publish',
+    (
+      _topic: 'notificationAdded',
+      recipientAccountId: string,
+      payload: NotificationAddedPayload,
+    ) => {
+      published.push({ recipientAccountId, ...payload });
+    },
+  );
+  const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+  const input = { kind: NotificationKind.REPLY, sourceId: reply.id } as const;
+
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+
+  const [notification] = await db.select().from(Notifications);
+  assert.ok(notification);
+  assert.deepEqual(published, [
+    {
+      notificationId: notification.id,
+      recipientAccountId: activityTestAccountId,
+      recipientProfileId: recipient.id,
+    },
+  ]);
+  assert.equal(publish.mock.calls.length, 1);
+  assert.equal(start.mock.calls.length, 2);
+});
+
+test('Notification event publish failure preserves the committed string ID result', async (t) => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+  t.mock.method(notificationPubSub, 'publish', () => {
+    throw new Error('Redis event publish failed');
+  });
+
+  const notificationIds = await createReplyNotificationActivity(reply.id);
+
+  assert.equal(notificationIds.length, 1);
+  assert.deepEqual(await db.select({ id: Notifications.id }).from(Notifications), [
+    { id: notificationIds[0] },
+  ]);
+});
+
 test('공통 Notification Activity는 Notification이 materialize되지 않으면 Push를 시작하지 않는다', async (t) => {
   const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
@@ -1135,6 +1245,101 @@ test('공통 Notification Activity는 Push start 실패 뒤 저장된 알림을 
   assert.deepEqual(workflowIds, [
     `push-notification:${notifications[0]?.id}`,
     `push-notification:${notifications[0]?.id}`,
+  ]);
+});
+
+test('공통 Notification Activity는 Mention이 투영된 Quote를 안정적인 Push 하나로 연결한다', async (t) => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const mentionedProfile = await createProfile();
+  const { post: source } = await createCorePost({
+    document: postContentDocumentFromText('Quote source'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: quote, content } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
+    authoredBodyText: `Quote @${mentionedProfile.handle}`,
+    document: {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Quote ' },
+              { type: 'mention', attrs: { profileId: mentionedProfile.id } },
+            ],
+          },
+        ],
+      },
+    },
+    origin: 'LOCAL',
+    profileId: quoteAuthor.id,
+    repostSourceId: source.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const mentions = await db
+    .select()
+    .from(PostMentions)
+    .where(eq(PostMentions.postContentId, content.id));
+  assert.deepEqual(
+    mentions.map(({ profileId }) => profileId),
+    [mentionedProfile.id],
+  );
+
+  const duplicateStart = new Error('Push workflow already started');
+  duplicateStart.name = 'WorkflowExecutionAlreadyStartedError';
+  const dispatched = new Set<string>();
+  const start = t.mock.method(
+    temporalClient.workflow,
+    'start',
+    async (workflow: string | Workflow, options: WorkflowStartOptions) => {
+      assert.equal(workflow, 'pushNotificationDeliveryWorkflow');
+      if (dispatched.has(options.workflowId)) {
+        throw duplicateStart;
+      }
+      dispatched.add(options.workflowId);
+      return undefined as never;
+    },
+  );
+
+  // Creation returns before effects settle. Exercise both projections explicitly rather than
+  // assuming the separate production Worker's Mention Activity has already finished.
+  await new MockActivityEnvironment().run(createNotificationActivity, {
+    kind: NotificationKind.MENTION,
+    sourceId: quote.id,
+  });
+  const input = { kind: NotificationKind.QUOTE, sourceId: quote.id } as const;
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+
+  const notifications = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.sourceId, quote.id));
+  assert.equal(notifications.length, 2);
+  assert.deepEqual(
+    new Set(notifications.map(({ kind, recipientProfileId }) => `${kind}:${recipientProfileId}`)),
+    new Set([
+      `${NotificationKind.MENTION}:${mentionedProfile.id}`,
+      `${NotificationKind.QUOTE}:${sourceAuthor.id}`,
+    ]),
+  );
+  const quoteNotification = notifications.find(({ kind }) => kind === NotificationKind.QUOTE);
+  assert.ok(quoteNotification);
+  const mentionNotification = notifications.find(({ kind }) => kind === NotificationKind.MENTION);
+  assert.ok(mentionNotification);
+  assert.equal(start.mock.calls.length, 3);
+  assert.equal(dispatched.size, 2);
+  const workflowIds = start.mock.calls.map((call) => call.arguments[1]?.workflowId);
+  assert.deepEqual(workflowIds, [
+    `push-notification:${mentionNotification.id}`,
+    `push-notification:${quoteNotification.id}`,
+    `push-notification:${quoteNotification.id}`,
   ]);
 });
 
@@ -1246,6 +1451,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
@@ -1372,6 +1578,7 @@ test('Post deletion Notification Activity removes direct Reply, Quote, and Repos
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
@@ -1767,7 +1974,9 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       return 'projects/kosmo-push-test/messages/push-test';
     });
 
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    const nativeInstallationId = installationIds[0]!;
+    const webInstallationId = installationIds[1]!;
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     const payload = sent[0];
     assert.ok(payload);
     const { encodeGlobalId } = await import('@kosmo/core/global-id');
@@ -1780,10 +1989,40 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       recipientProfileId: encodeGlobalId('Profile', recipient.id),
       href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
     });
+    assert.ok('token' in payload);
+    assert.equal('fid' in payload, false);
+    assert.equal(
+      payload.token,
+      installationRows.find(({ id }) => id === nativeInstallationId)?.token,
+    );
     assert.equal(payload.android?.priority, undefined);
     assert.equal(payload.apns?.payload, undefined);
     assert.ok((payload.android?.ttl ?? 0) > 0);
     assert.ok((payload.android?.ttl ?? Number.POSITIVE_INFINITY) <= 24 * 60 * 60 * 1000);
+
+    await db
+      .update(PushInstallations)
+      .set({ platform: PushInstallationPlatform.WEB, token: 'web-fid-reaction' })
+      .where(eq(PushInstallations.id, webInstallationId));
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    const webPayload = sent[1];
+    assert.ok(webPayload);
+    assert.ok('fid' in webPayload);
+    assert.equal(webPayload.fid, 'web-fid-reaction');
+    assert.equal('token' in webPayload, false);
+    assert.equal(webPayload.notification, undefined);
+    assert.equal(webPayload.android, undefined);
+    assert.equal(webPayload.apns, undefined);
+    assert.deepEqual(webPayload.data, {
+      notificationId: encodeGlobalId('ReactionNotification', notificationId),
+      recipientProfileId: encodeGlobalId('Profile', recipient.id),
+      href: `/@yeeun/${encodeGlobalId('Post', post.id)}`,
+      title: '혜주',
+      body: '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. Read the article',
+    });
+    const webTtl = webPayload.webpush?.headers?.TTL;
+    assert.match(webTtl ?? '', /^\d+$/);
+    assert.ok(Number(webTtl) <= 24 * 60 * 60);
 
     const contentId = post.currentContentId;
     assert.ok(contentId);
@@ -1806,18 +2045,18 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
         },
       })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[1]?.notification?.body,
+      sent[2]?.notification?.body,
       `혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다. ${'😀'.repeat(159)}…`,
     );
     assert.ok(
       new TextEncoder().encode(
         JSON.stringify({
-          android: sent[1]?.android,
-          apns: sent[1]?.apns,
-          data: sent[1]?.data,
-          notification: sent[1]?.notification,
+          android: sent[2]?.android,
+          apns: sent[2]?.apns,
+          data: sent[2]?.data,
+          notification: sent[2]?.notification,
         }),
       ).byteLength < 4096,
     );
@@ -1826,12 +2065,15 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: warningDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[2]?.notification?.body,
+      sent[3]?.notification?.body,
       '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     );
-    assert.equal(sent[2]?.notification?.body.includes('Private warning text'), false);
+    assert.equal(sent[3]?.notification?.body.includes('Private warning text'), false);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent[4]?.data?.body, '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[4]?.data?.body.includes('Private warning text'), false);
 
     const sensitiveDocument = {
       ...document,
@@ -1841,16 +2083,20 @@ test('Push Notification Activity는 앱 payload의 plain-text preview, 경로, C
       .update(PostContents)
       .set({ document: sensitiveDocument })
       .where(eq(PostContents.id, contentId));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
     assert.equal(
-      sent[3]?.notification?.body,
+      sent[5]?.notification?.body,
       '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.',
     );
-    assert.equal(sent[3]?.notification?.body.includes('Read the article'), false);
+    assert.equal(sent[5]?.notification?.body.includes('Read the article'), false);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent[6]?.data?.body, '혜주(@hyeju) 님이 예은(@yeeun) 님에게 😂를 남겼습니다.');
+    assert.equal(sent[6]?.data?.body.includes('Read the article'), false);
 
     await db.delete(AccountProfiles).where(eq(AccountProfiles.profileId, recipient.id));
-    await sendPushNotificationActivity(notificationId, installationIds[0]!);
-    assert.equal(sent.length, 4);
+    await sendPushNotificationActivity(notificationId, nativeInstallationId);
+    await sendPushNotificationActivity(notificationId, webInstallationId);
+    assert.equal(sent.length, 7);
   } finally {
     if (postId) {
       await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, postId));
@@ -1900,6 +2146,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
     });
     postIds.push(reply.id);
     const { post: quote } = await createCorePost({
+      admissionId: `${Date.now()}:${crypto.randomUUID()}`,
       bodyText: 'quote',
       origin: 'LOCAL',
       profileId: actor.id,
@@ -1939,8 +2186,8 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
       [NotificationKind.QUOTE, quote.id],
     ] as const;
     const notifications = await Promise.all(
-      notificationSources.map(([kind, sourceId]) =>
-        db
+      notificationSources.map(async ([kind, sourceId]) => {
+        const [inserted] = await db
           .insert(Notifications)
           .values({
             kind,
@@ -1948,9 +2195,24 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
             recipientProfileId: recipient.id,
             sourceId,
           })
-          .returning({ id: Notifications.id })
-          .then(firstOrThrow),
-      ),
+          .onConflictDoNothing()
+          .returning({ id: Notifications.id });
+        if (inserted) {
+          return inserted;
+        }
+        return db
+          .select({ id: Notifications.id })
+          .from(Notifications)
+          .where(
+            and(
+              eq(Notifications.kind, kind),
+              eq(Notifications.recipientAccountId, fixture.account.id),
+              eq(Notifications.recipientProfileId, recipient.id),
+              eq(Notifications.sourceId, sourceId),
+            ),
+          )
+          .then(firstOrThrow);
+      }),
     );
 
     const installationIds = await listPushNotificationInstallationsActivity(notifications[0]!.id);
@@ -2095,8 +2357,32 @@ test('공통 Notification Activity는 저장된 Mention ID마다 Push를 시작�
     assert.ok(secondRecipient);
     const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
     const publishedAt = Temporal.Now.instant();
+    const document: PostContentDocumentV1 = {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Mention source preview ' },
+              {
+                type: 'mention',
+                attrs: { handle: `@${recipient.handle}`, profileId: recipient.id },
+              },
+              { type: 'text', text: ' ' },
+              {
+                type: 'mention',
+                attrs: { handle: `@${secondRecipient.handle}`, profileId: secondRecipient.id },
+              },
+            ],
+          },
+        ],
+      },
+    };
     const createdPost = await createCorePost({
-      document: postContentDocumentFromText('Mention source preview'),
+      document,
       mentionProfileIds: [recipient.id, secondRecipient.id],
       objectUri: `https://${author.handle}.example/posts/${crypto.randomUUID()}`,
       origin: 'ACTIVITYPUB',
@@ -2282,7 +2568,7 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     const publishedAt = Temporal.Now.instant();
     const createdPost = await createCorePost({
       document: postContentDocumentFromText('Mention source preview'),
-      mentionProfileIds: [recipient.id],
+      mentionProfileIds: [],
       objectUri: `https://${author.handle}.example/posts/${crypto.randomUUID()}`,
       origin: 'ACTIVITYPUB',
       profileId: author.id,
@@ -2295,6 +2581,12 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     }
     const { post } = createdPost;
     postId = post.id;
+    // Model a legacy stored Mention relation without asking the new Post writer to create it.
+    await db.insert(PostMentions).values({
+      postContentId: createdPost.content.id,
+      postId: post.id,
+      profileId: recipient.id,
+    });
     const authorInstance = await db
       .select({ domain: Instances.domain })
       .from(Instances)
@@ -2356,7 +2648,7 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
   }
 });
 
-test('Push Notification Activity는 등록되지 않은 token만 정확히 제거한다', async (t) => {
+test('Push Notification Activity는 등록되지 않은 FID만 제거하고 invalid-argument는 보존한다', async (t) => {
   const previousProjectId = process.env.FIREBASE_PROJECT_ID;
   process.env.FIREBASE_PROJECT_ID = 'kosmo-push-test';
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
@@ -2390,24 +2682,37 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
         projectId: process.env.FIREBASE_PROJECT_ID,
       });
     const messaging = getMessaging(app);
+    let providerCode = 'messaging/installation-id-not-registered';
     t.mock.method(messaging, 'send', async () => {
       throw new FirebaseError({
-        code: 'messaging/registration-token-not-registered',
-        message: 'Registration token is no longer registered',
+        code: providerCode,
+        message: 'Push target is no longer registered',
       });
     });
 
     const { listPushNotificationInstallationsActivity, sendPushNotificationActivity } =
       await import('./activities');
     const installationIds = await listPushNotificationInstallationsActivity(notificationId);
-    const invalidInstallationId = installationIds[0]!;
-    await sendPushNotificationActivity(notificationId, invalidInstallationId);
+    const webInstallationId = installationIds[0]!;
+    const nativeInstallationId = installationIds[1]!;
+    await db
+      .update(PushInstallations)
+      .set({ platform: PushInstallationPlatform.WEB, token: 'web-fid-stale' })
+      .where(eq(PushInstallations.id, webInstallationId));
+    await sendPushNotificationActivity(notificationId, webInstallationId);
     assert.equal(
-      await db.$count(PushInstallations, eq(PushInstallations.id, invalidInstallationId)),
+      await db.$count(PushInstallations, eq(PushInstallations.id, webInstallationId)),
       0,
     );
     assert.equal(
       await db.$count(PushInstallations, eq(PushInstallations.accountId, fixture.account.id)),
+      1,
+    );
+
+    providerCode = 'messaging/invalid-argument';
+    await assert.rejects(() => sendPushNotificationActivity(notificationId, nativeInstallationId));
+    assert.equal(
+      await db.$count(PushInstallations, eq(PushInstallations.id, nativeInstallationId)),
       1,
     );
   } finally {
@@ -2425,11 +2730,13 @@ test('Push Notification Activity는 등록되지 않은 token만 정확히 제�
   }
 });
 
-test('Media Upload preparation은 소유자와 상태를 검증하고 staging source를 확인한다', async () => {
+test('Media Upload preparation은 출처를 고정하고 finalization receipt를 검증한다', async () => {
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
   const mediaIds: string[] = [];
   const requests: { authorization: string | undefined; method: string; url: string }[] = [];
   let headResponseStatus = 200;
+  let headResponseContentType = 'image/jpeg';
+  let thumbhashHeader: string | undefined = 'dGh1bWJoYXNo';
   const server = createServer((request, response) => {
     requests.push({
       authorization: request.headers.authorization,
@@ -2458,8 +2765,9 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
     response
       .writeHead(200, {
         'Content-Length': '128',
-        'Content-Type': 'image/jpeg',
+        'Content-Type': headResponseContentType,
         'Last-Modified': new Date().toUTCString(),
+        ...(thumbhashHeader === undefined ? {} : { 'X-Thumbhash': thumbhashHeader }),
       })
       .end();
   });
@@ -2496,10 +2804,12 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       .select({
         accountId: Media.accountId,
         mediaType: Media.mediaType,
+        publicationMetadata: Media.publicationMetadata,
         readyAt: Media.readyAt,
         source: Media.source,
         state: Media.state,
         storageReference: Media.storageReference,
+        thumbhash: Media.thumbhash,
         url: Media.url,
       })
       .from(Media)
@@ -2508,10 +2818,21 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       .then(firstOrThrow);
     return { ...media, readyAt: media.readyAt?.toString() ?? null };
   };
+  const readMediaRowVersion = async (mediaId: string) =>
+    db
+      .select({ rowVersion: sql<string>`xmin::text` })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
   const hasFailureType = (type: string) => (error: unknown) =>
     error instanceof ApplicationFailure && error.nonRetryable && error.type === type;
 
   try {
+    const publicationMetadata = {
+      attributionName: 'Creator',
+      attributionUrl: 'https://kosmo.example/@creator',
+    };
     const uploading = await createUploadingMedia();
     const uploadingState = await readMediaState(uploading.mediaId);
     const uuid = uploading.storageReference.slice('nexus:v1:'.length);
@@ -2528,13 +2849,218 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
         url: `/v1/uploads/${uploadId}?staging=true`,
       },
     ]);
-    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+    const preparedState = await readMediaState(uploading.mediaId);
+    assert.deepEqual(preparedState, { ...uploadingState, thumbhash: thumbhashHeader });
 
     await assert.rejects(
-      prepareMediaUploadActivity({ ...uploading, accountId: crypto.randomUUID() }),
+      prepareMediaUploadActivity({
+        ...uploading,
+        accountId: crypto.randomUUID(),
+        publicationMetadata,
+      }),
       hasFailureType('MediaUploadSessionInvalid'),
     );
-    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+    assert.deepEqual(await readMediaState(uploading.mediaId), preparedState);
+
+    const absentThumbhash = await createUploadingMedia();
+    const absentThumbhashState = await readMediaState(absentThumbhash.mediaId);
+    const absentThumbhashVersion = await readMediaRowVersion(absentThumbhash.mediaId);
+    thumbhashHeader = undefined;
+    const absentUuid = absentThumbhash.storageReference.slice('nexus:v1:'.length);
+    const absentUploadId = `u_${absentUuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(absentThumbhash), {
+      id: absentUploadId,
+      sourceKey: `uploads/${absentUploadId}/${absentUuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(absentThumbhash.mediaId), absentThumbhashState);
+    assert.deepEqual(await readMediaRowVersion(absentThumbhash.mediaId), absentThumbhashVersion);
+
+    const invalidThumbhash = await createUploadingMedia();
+    const invalidThumbhashState = await readMediaState(invalidThumbhash.mediaId);
+    thumbhashHeader = 'YWJjZGU===';
+    const invalidUuid = invalidThumbhash.storageReference.slice('nexus:v1:'.length);
+    const invalidUploadId = `u_${invalidUuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(invalidThumbhash), {
+      id: invalidUploadId,
+      sourceKey: `uploads/${invalidUploadId}/${invalidUuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(invalidThumbhash.mediaId), invalidThumbhashState);
+
+    const invalidMetadata = await createUploadingMedia();
+    const invalidMetadataState = await readMediaState(invalidMetadata.mediaId);
+    thumbhashHeader = 'dGh1bWJoYXNo';
+    headResponseContentType = 'image/gif';
+    await assert.rejects(
+      prepareMediaUploadActivity(invalidMetadata),
+      hasFailureType('NexusMediaUploadSourceError'),
+    );
+    assert.deepEqual(await readMediaState(invalidMetadata.mediaId), invalidMetadataState);
+    headResponseContentType = 'image/jpeg';
+
+    const metadataUpload = await createUploadingMedia();
+    const metadataInput = { ...metadataUpload, publicationMetadata };
+    const metadataUuid = metadataUpload.storageReference.slice('nexus:v1:'.length);
+    const metadataUploadId = `u_${metadataUuid}`;
+    const metadataPrepared = {
+      id: metadataUploadId,
+      sourceKey: `uploads/${metadataUploadId}/${metadataUuid}`,
+      contentType: 'image/jpeg',
+      publicationMetadata,
+    };
+    const metadataStateBeforePrepare = await readMediaState(metadataUpload.mediaId);
+    assert.deepEqual(await prepareMediaUploadActivity(metadataInput), metadataPrepared);
+    const frozenMetadataState = await readMediaState(metadataUpload.mediaId);
+    assert.deepEqual(frozenMetadataState, {
+      ...metadataStateBeforePrepare,
+      publicationMetadata,
+      thumbhash: thumbhashHeader,
+    });
+    assert.deepEqual(await prepareMediaUploadActivity(metadataInput), metadataPrepared);
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+
+    const checkedRights = {
+      personal: MediaUsePermission.EDIT,
+      noncommercial: MediaUsePermission.ORIGINAL,
+      commercial: MediaUsePermission.DENY,
+    } as const;
+    await assert.rejects(
+      prepareMediaUploadActivity({
+        ...metadataUpload,
+        publicationMetadata: { ...publicationMetadata, rights: checkedRights },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+
+    const rightsMetadata = {
+      ...publicationMetadata,
+      rights: checkedRights,
+    };
+    const rightsUpload = await createUploadingMedia();
+    const rightsInput = { ...rightsUpload, publicationMetadata: rightsMetadata };
+    const preparedRights = await prepareMediaUploadActivity(rightsInput);
+    assert.deepEqual(preparedRights.publicationMetadata, rightsMetadata);
+    const frozenRightsState = await readMediaState(rightsUpload.mediaId);
+    const changedRights = {
+      ...checkedRights,
+      noncommercial: MediaUsePermission.EDIT,
+    } as const;
+    await assert.rejects(
+      prepareMediaUploadActivity({
+        ...rightsInput,
+        publicationMetadata: { ...rightsMetadata, rights: changedRights },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(rightsUpload.mediaId), frozenRightsState);
+    await assert.rejects(
+      prepareMediaUploadActivity({
+        ...rightsUpload,
+        publicationMetadata,
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(rightsUpload.mediaId), frozenRightsState);
+
+    const expectedPublicationMetadata = {
+      credit: `${publicationMetadata.attributionName} (${publicationMetadata.attributionUrl})`,
+    };
+    const publicationResult = {
+      id: metadataUploadId,
+      url: 'https://media.example/metadata.webp',
+      mediaType: 'image/webp',
+      metadata: expectedPublicationMetadata,
+    };
+    const publicationFinalizeInput = {
+      ...metadataInput,
+      remoteUploadId: metadataUploadId,
+      expectedPublicationMetadata,
+      result: publicationResult,
+    };
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...publicationFinalizeInput,
+        result: {
+          id: metadataUploadId,
+          url: publicationResult.url,
+          mediaType: publicationResult.mediaType,
+        },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...publicationFinalizeInput,
+        result: {
+          ...publicationResult,
+          metadata: { ...expectedPublicationMetadata, credit: 'Different credit' },
+        },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+
+    const changedStoredMetadata = {
+      ...publicationMetadata,
+      attributionName: 'Changed Creator',
+    };
+    await db
+      .update(Media)
+      .set({ publicationMetadata: changedStoredMetadata })
+      .where(eq(Media.id, metadataUpload.mediaId));
+    await assert.rejects(
+      finalizeMediaUploadActivity(publicationFinalizeInput),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), {
+      ...frozenMetadataState,
+      publicationMetadata: changedStoredMetadata,
+    });
+    await db.update(Media).set({ publicationMetadata }).where(eq(Media.id, metadataUpload.mediaId));
+
+    assert.deepEqual(
+      await finalizeMediaUploadActivity(publicationFinalizeInput),
+      publicationResult,
+    );
+    const metadataReadyState = await readMediaState(metadataUpload.mediaId);
+    assert.equal(metadataReadyState.state, MediaState.READY);
+    assert.equal(metadataReadyState.url, publicationResult.url);
+    assert.deepEqual(metadataReadyState.publicationMetadata, publicationMetadata);
+    assert.ok(metadataReadyState.readyAt);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity(publicationFinalizeInput),
+      publicationResult,
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), metadataReadyState);
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...publicationFinalizeInput,
+        result: { ...publicationResult, url: 'https://media.example/different.webp' },
+      }),
+      hasFailureType('MediaUploadSessionInvalid'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), metadataReadyState);
+
+    const storedThumbhash = await createUploadingMedia();
+    const existingThumbhash = 'ZXhpc3Rpbmc=';
+    await db
+      .update(Media)
+      .set({ thumbhash: existingThumbhash })
+      .where(eq(Media.id, storedThumbhash.mediaId));
+    const storedThumbhashState = await readMediaState(storedThumbhash.mediaId);
+    const storedThumbhashVersion = await readMediaRowVersion(storedThumbhash.mediaId);
+    const storedUuid = storedThumbhash.storageReference.slice('nexus:v1:'.length);
+    const storedUploadId = `u_${storedUuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(storedThumbhash), {
+      id: storedUploadId,
+      sourceKey: `uploads/${storedUploadId}/${storedUuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(storedThumbhash.mediaId), storedThumbhashState);
+    assert.deepEqual(await readMediaRowVersion(storedThumbhash.mediaId), storedThumbhashVersion);
 
     const ready = await createUploadingMedia();
     await db
@@ -2548,22 +3074,24 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       .where(eq(Media.id, ready.mediaId));
     const readyState = await readMediaState(ready.mediaId);
     await assert.rejects(
-      prepareMediaUploadActivity(ready),
+      prepareMediaUploadActivity({ ...ready, publicationMetadata }),
       hasFailureType('MediaUploadSessionInvalid'),
     );
     assert.deepEqual(await readMediaState(ready.mediaId), readyState);
 
     const invalidSource = await createUploadingMedia('nexus:v1:invalid');
     const invalidSourceState = await readMediaState(invalidSource.mediaId);
+    const requestsBeforeInvalidSource = requests.length;
     await assert.rejects(
-      prepareMediaUploadActivity(invalidSource),
+      prepareMediaUploadActivity({ ...invalidSource, publicationMetadata }),
       hasFailureType('NexusMediaUploadSourceError'),
     );
     assert.deepEqual(await readMediaState(invalidSource.mediaId), invalidSourceState);
-    assert.equal(requests.length, 1);
+    assert.equal(requests.length, requestsBeforeInvalidSource);
 
     const transientFailure = await createUploadingMedia();
     const transientFailureState = await readMediaState(transientFailure.mediaId);
+    const transientRequestIndex = requests.length;
     headResponseStatus = 503;
     await assert.rejects(
       prepareMediaUploadActivity(transientFailure),
@@ -2573,7 +3101,7 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
         error.message === 'Media Storage Service rejected upload metadata (503)',
     );
     const transientUuid = transientFailure.storageReference.slice('nexus:v1:'.length);
-    assert.deepEqual(requests[1], {
+    assert.deepEqual(requests[transientRequestIndex], {
       authorization: 'Bearer test-api-key',
       method: 'HEAD',
       url: `/v1/uploads/u_${transientUuid}?staging=true`,
@@ -2632,6 +3160,7 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       readonly remoteUploadId: string;
       readonly result: MediaUploadWorkflowResult;
     } = {
+      applyAiProhibitFilter: true,
       mediaId,
       accountId: fixture.account.id,
       remoteUploadId,
@@ -2657,16 +3186,18 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     );
 
     const stillUploading = await db
-      .select({ state: Media.state })
+      .select({ aiProhibitFilterApplied: Media.aiProhibitFilterApplied, state: Media.state })
       .from(Media)
       .where(eq(Media.id, mediaId))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(stillUploading.state, MediaState.UPLOADING);
+    assert.equal(stillUploading.aiProhibitFilterApplied, null);
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const firstReady = await db
       .select({
+        aiProhibitFilterApplied: Media.aiProhibitFilterApplied,
         readyAt: Media.readyAt,
         state: Media.state,
       })
@@ -2676,10 +3207,16 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       .then(firstOrThrow);
     assert.equal(firstReady.state, MediaState.READY);
     assert.ok(firstReady.readyAt);
+    assert.equal(firstReady.aiProhibitFilterApplied, true);
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity({ ...input, applyAiProhibitFilter: false }),
+      result,
+    );
     const retriedReady = await db
       .select({
+        aiProhibitFilterApplied: Media.aiProhibitFilterApplied,
         readyAt: Media.readyAt,
         state: Media.state,
       })
@@ -2689,6 +3226,7 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       .then(firstOrThrow);
     assert.equal(retriedReady.state, MediaState.READY);
     assert.equal(retriedReady.readyAt?.toString(), firstReady.readyAt.toString());
+    assert.equal(retriedReady.aiProhibitFilterApplied, true);
     await assert.rejects(
       finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
       expectNonRetryableFailure,
@@ -2709,12 +3247,13 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     };
     assert.deepEqual(await finalizeMediaUploadActivity(nightshadeInput), nightshadeResult);
     const nightshadeReady = await db
-      .select({ state: Media.state })
+      .select({ aiProhibitFilterApplied: Media.aiProhibitFilterApplied, state: Media.state })
       .from(Media)
       .where(eq(Media.id, nightshade.mediaId))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(nightshadeReady.state, MediaState.READY);
+    assert.equal(nightshadeReady.aiProhibitFilterApplied, null);
     assert.deepEqual(
       await finalizeMediaUploadActivity({ ...nightshadeInput, applyNightshade: false }),
       nightshadeResult,
@@ -2740,7 +3279,12 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       [concurrentResult, concurrentResult],
     );
     const converged = await db
-      .select({ readyAt: Media.readyAt, state: Media.state, url: Media.url })
+      .select({
+        aiProhibitFilterApplied: Media.aiProhibitFilterApplied,
+        readyAt: Media.readyAt,
+        state: Media.state,
+        url: Media.url,
+      })
       .from(Media)
       .where(eq(Media.id, concurrent.mediaId))
       .limit(1)
@@ -2748,6 +3292,28 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     assert.equal(converged.state, MediaState.READY);
     assert.equal(converged.url, concurrentResult.url);
     assert.ok(converged.readyAt);
+    assert.equal(converged.aiProhibitFilterApplied, null);
+
+    const unfiltered = await createUploadingMedia();
+    const unfilteredResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: unfiltered.remoteUploadId,
+      url: 'https://media.example/unfiltered.webp',
+    };
+    await finalizeMediaUploadActivity({
+      ...unfiltered,
+      accountId: fixture.account.id,
+      applyAiProhibitFilter: false,
+      remoteUploadId: unfiltered.remoteUploadId,
+      result: unfilteredResult,
+    });
+    const unfilteredReady = await db
+      .select({ aiProhibitFilterApplied: Media.aiProhibitFilterApplied })
+      .from(Media)
+      .where(eq(Media.id, unfiltered.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(unfilteredReady.aiProhibitFilterApplied, false);
   } finally {
     if (mediaIds.length > 0) {
       await db.delete(Media).where(inArray(Media.id, mediaIds));
@@ -2755,3 +3321,619 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     await cleanupAccountDeletionFixture(fixture);
   }
 });
+
+test('Local PostContent hashtag processing dry-run plans changes without writing rows', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const hashtagName = `dryrun${suffix}`;
+  const fixture = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText(`#${hashtagName}`),
+  });
+
+  try {
+    const result = await reprocessLocalPostContentActivity({
+      postId: fixture.post.id,
+    });
+
+    assert.deepEqual(result, { status: 'wouldUpdate' });
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 1);
+    assert.equal(await db.$count(Hashtags, eq(Hashtags.name, hashtagName)), 0);
+    assert.equal(
+      await db.$count(
+        PostContentHashtags,
+        eq(PostContentHashtags.postContentId, fixture.content.id),
+      ),
+      0,
+    );
+    const current = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.equal(current.currentContentId, fixture.content.id);
+  } finally {
+    await cleanupPostContentReprocessingFixture(fixture);
+  }
+});
+
+test('Local PostContent hashtag processing preserves document state, repairs relations, and converges on retry', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const [existingHashtag, orphanHashtag, missingRelationHashtag] = await db
+    .insert(Hashtags)
+    .values([
+      { name: `old${suffix}`, displayName: `Old${suffix}` },
+      { name: `orphan${suffix}`, displayName: `Orphan${suffix}` },
+      { name: `missing${suffix}`, displayName: `Missing${suffix}` },
+    ])
+    .returning();
+  assert.ok(existingHashtag);
+  assert.ok(orphanHashtag);
+  assert.ok(missingRelationHashtag);
+  const document = (mentionProfileIds: readonly string[]): PostContentDocumentV1 => ({
+    version: 1,
+    summary: 'content warning',
+    body: {
+      type: 'doc',
+      attrs: { sensitiveMedia: true },
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'before ' },
+            {
+              type: 'mention',
+              attrs: { handle: '@mentioned', profileId: mentionProfileIds[0]! },
+            },
+            { type: 'text', text: `#adjacent #Ｆoo${suffix} #foo${suffix} and ` },
+            {
+              type: 'text',
+              text: 'https://example.com/path/#url',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/path/#url' } }],
+            },
+            { type: 'text', text: ' and ' },
+            {
+              type: 'text',
+              text: '#linked-label',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com/label' } }],
+            },
+            { type: 'text', text: ' ' },
+            {
+              type: 'hashtag',
+              attrs: { hashtagId: existingHashtag.id, token: `#old${suffix}` },
+            },
+            { type: 'text', text: ' ' },
+            {
+              type: 'hashtag',
+              attrs: { hashtagId: missingRelationHashtag.id, token: `#missing${suffix}` },
+            },
+          ],
+        },
+        { type: 'media', attrs: { mediaId: crypto.randomUUID() } },
+      ],
+    },
+  });
+  const fixture = await createPostContentReprocessingFixture({
+    document,
+    hashtagIds: [existingHashtag.id, orphanHashtag.id],
+    mentionCount: 2,
+    visibility: PostVisibility.DIRECT,
+  });
+
+  try {
+    const sourcePost = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    const sourceMentions = await db
+      .select({ profileId: PostMentions.profileId })
+      .from(PostMentions)
+      .where(eq(PostMentions.postContentId, fixture.content.id));
+    assert.equal(sourceMentions.length, 2);
+
+    const result = await reprocessLocalPostContentActivity({
+      dryRun: false,
+      postId: fixture.post.id,
+    });
+    assert.deepEqual(result, { status: 'updated' });
+
+    const updatedPost = await db
+      .select()
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.notEqual(updatedPost.currentContentId, fixture.content.id);
+    assert.deepEqual({ ...updatedPost, currentContentId: sourcePost.currentContentId }, sourcePost);
+    const updatedContent = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, updatedPost.currentContentId!))
+      .then(firstOrThrow);
+    assert.equal(updatedContent.postId, fixture.post.id);
+    assert.ok(Temporal.Instant.compare(updatedContent.createdAt, fixture.content.createdAt) > 0);
+    assert.equal(
+      postContentDocumentToText(updatedContent.document),
+      postContentDocumentToText(fixture.content.document),
+    );
+    assert.equal(updatedContent.document.summary, fixture.content.document.summary);
+    assert.deepEqual(updatedContent.document.body.attrs, fixture.content.document.body.attrs);
+    assert.deepEqual(
+      updatedContent.document.body.content.at(-1),
+      fixture.content.document.body.content.at(-1),
+    );
+
+    const hashtagNodes = updatedContent.document.body.content.flatMap((block) =>
+      block.type === 'paragraph'
+        ? (block.content ?? []).flatMap((node) =>
+            node.type === 'hashtag'
+              ? [{ hashtagId: node.attrs.hashtagId, token: node.attrs.token }]
+              : [],
+          )
+        : [],
+    );
+    const foo = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, `foo${suffix}`))
+      .then(firstOrThrow);
+    assert.equal(foo.displayName, `Foo${suffix}`);
+    assert.deepEqual(hashtagNodes, [
+      { hashtagId: foo.id, token: `#Ｆoo${suffix}` },
+      { hashtagId: foo.id, token: `#foo${suffix}` },
+      { hashtagId: existingHashtag.id, token: `#old${suffix}` },
+      { hashtagId: missingRelationHashtag.id, token: `#missing${suffix}` },
+    ]);
+    const updatedRelations = await db
+      .select({ hashtagId: PostContentHashtags.hashtagId })
+      .from(PostContentHashtags)
+      .where(eq(PostContentHashtags.postContentId, updatedContent.id));
+    assert.deepEqual(
+      updatedRelations.map(({ hashtagId }) => hashtagId).sort(),
+      [existingHashtag.id, missingRelationHashtag.id, foo.id].sort(),
+    );
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, fixture.content.id))
+        .then((rows) => rows.map(({ hashtagId }) => hashtagId).sort()),
+      [existingHashtag.id, orphanHashtag.id].sort(),
+    );
+    assert.deepEqual(
+      await db
+        .select({ profileId: PostMentions.profileId })
+        .from(PostMentions)
+        .where(eq(PostMentions.postContentId, updatedContent.id))
+        .then((rows) => rows.map(({ profileId }) => profileId).sort()),
+      sourceMentions.map(({ profileId }) => profileId).sort(),
+    );
+
+    const contentCount = await db.$count(PostContents, eq(PostContents.postId, fixture.post.id));
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: fixture.post.id,
+      }),
+      { status: 'unchanged' },
+    );
+    assert.equal(
+      await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)),
+      contentCount,
+    );
+  } finally {
+    await cleanupPostContentReprocessingFixture(fixture);
+    await db.delete(Hashtags).where(eq(Hashtags.id, missingRelationHashtag.id));
+  }
+});
+
+test('Local PostContent reprocessing reads the current revision when the Activity runs', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const staleHashtagName = `stale${suffix}`;
+  const currentHashtagName = `current${suffix}`;
+  const fixture = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText(`#${staleHashtagName}`),
+  });
+
+  try {
+    const currentContent = await db
+      .insert(PostContents)
+      .values({
+        document: postContentDocumentFromText(`#${currentHashtagName}`),
+        postId: fixture.post.id,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(Posts)
+      .set({ currentContentId: currentContent.id })
+      .where(eq(Posts.id, fixture.post.id));
+
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({ dryRun: false, postId: fixture.post.id }),
+      { status: 'updated' },
+    );
+    const updatedPost = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.notEqual(updatedPost.currentContentId, currentContent.id);
+    const updatedContent = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, updatedPost.currentContentId!))
+      .then(firstOrThrow);
+    const currentHashtag = await db
+      .select()
+      .from(Hashtags)
+      .where(eq(Hashtags.name, currentHashtagName))
+      .then(firstOrThrow);
+    assert.equal(
+      postContentDocumentToText(updatedContent.document),
+      postContentDocumentToText(currentContent.document),
+    );
+    assert.deepEqual(
+      updatedContent.document.body.content.flatMap((block) =>
+        block.type === 'paragraph'
+          ? (block.content ?? []).flatMap((node) =>
+              node.type === 'hashtag'
+                ? [{ hashtagId: node.attrs.hashtagId, token: node.attrs.token }]
+                : [],
+            )
+          : [],
+      ),
+      [{ hashtagId: currentHashtag.id, token: `#${currentHashtagName}` }],
+    );
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, updatedContent.id)),
+      [{ hashtagId: currentHashtag.id }],
+    );
+    assert.equal(await db.$count(Hashtags, eq(Hashtags.name, staleHashtagName)), 0);
+  } finally {
+    await cleanupPostContentReprocessingFixture(fixture);
+  }
+});
+
+test('Local PostContent hashtag processing repairs relations without changing the document', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const hashtag = await db
+    .insert(Hashtags)
+    .values({ name: `relationonly${suffix}`, displayName: `Relationonly${suffix}` })
+    .returning()
+    .then(firstOrThrow);
+  const document: PostContentDocumentV1 = {
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'hashtag', attrs: { hashtagId: hashtag.id, token: `#relationonly${suffix}` } },
+          ],
+        },
+      ],
+    },
+  };
+  const fixture = await createPostContentReprocessingFixture({ document: () => document });
+
+  try {
+    const sourceRelationRows = await db
+      .select({ hashtagId: PostContentHashtags.hashtagId })
+      .from(PostContentHashtags)
+      .where(eq(PostContentHashtags.postContentId, fixture.content.id));
+    assert.deepEqual(sourceRelationRows, []);
+
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        postId: fixture.post.id,
+      }),
+      { status: 'wouldUpdate' },
+    );
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 1);
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, fixture.content.id)),
+      sourceRelationRows,
+    );
+    const dryRunPost = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.equal(dryRunPost.currentContentId, fixture.content.id);
+
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: fixture.post.id,
+      }),
+      { status: 'updated' },
+    );
+    const updatedPost = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.notEqual(updatedPost.currentContentId, fixture.content.id);
+    const updatedContent = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, updatedPost.currentContentId!))
+      .then(firstOrThrow);
+    assert.deepEqual(updatedContent.document, fixture.content.document);
+    const oldContent = await db
+      .select()
+      .from(PostContents)
+      .where(eq(PostContents.id, fixture.content.id))
+      .then(firstOrThrow);
+    assert.deepEqual(oldContent.document, fixture.content.document);
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, updatedContent.id)),
+      [{ hashtagId: hashtag.id }],
+    );
+    assert.deepEqual(
+      await db
+        .select({ hashtagId: PostContentHashtags.hashtagId })
+        .from(PostContentHashtags)
+        .where(eq(PostContentHashtags.postContentId, fixture.content.id)),
+      sourceRelationRows,
+    );
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 2);
+
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: fixture.post.id,
+      }),
+      { status: 'unchanged' },
+    );
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 2);
+  } finally {
+    await cleanupPostContentReprocessingFixture(fixture);
+    await db.delete(Hashtags).where(eq(Hashtags.id, hashtag.id));
+  }
+});
+
+test('Local PostContent reprocessing accepts Local Posts and skips remote or deleted Posts', async () => {
+  const local = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText('local'),
+  });
+  const remote = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText('remote'),
+    kind: InstanceKind.ACTIVITYPUB,
+  });
+  const deleted = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText('deleted'),
+    postState: PostState.DELETED,
+  });
+
+  try {
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: local.post.id,
+      }),
+      { status: 'unchanged' },
+    );
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: remote.post.id,
+      }),
+      { status: 'skipped' },
+    );
+    assert.deepEqual(
+      await reprocessLocalPostContentActivity({
+        dryRun: false,
+        postId: deleted.post.id,
+      }),
+      { status: 'skipped' },
+    );
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, remote.post.id)), 1);
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, deleted.post.id)), 1);
+  } finally {
+    await cleanupPostContentReprocessingFixture(local);
+    await cleanupPostContentReprocessingFixture(remote);
+    await cleanupPostContentReprocessingFixture(deleted);
+  }
+});
+
+test('Local PostContent reprocessing rolls back all writes after losing the current-content CAS', async () => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const hashtagName = `race${suffix}`;
+  const fixture = await createPostContentReprocessingFixture({
+    document: () => postContentDocumentFromText(`#${hashtagName}`),
+  });
+  const competingContent = await db
+    .insert(PostContents)
+    .values({
+      document: postContentDocumentFromText('competing revision'),
+      postId: fixture.post.id,
+    })
+    .returning()
+    .then(firstOrThrow);
+  const concurrentUpdate = await pg.reserve();
+  let transactionHeld = false;
+  let activity: ReturnType<typeof reprocessLocalPostContentActivity> | undefined;
+
+  try {
+    await concurrentUpdate`BEGIN`;
+    transactionHeld = true;
+    const [{ pid }] = await concurrentUpdate<{ pid: number }[]>`
+      SELECT pg_backend_pid()::int AS pid
+    `;
+    await concurrentUpdate`
+      SELECT id FROM post WHERE id = ${fixture.post.id} FOR UPDATE
+    `;
+    activity = reprocessLocalPostContentActivity({
+      dryRun: false,
+      postId: fixture.post.id,
+    });
+
+    let blocked = false;
+    for (let attempt = 0; attempt < 250; attempt += 1) {
+      const [activityState] = await pg<{ blocked: boolean }[]>`
+        SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity
+          WHERE ${pid} = ANY(pg_blocking_pids(pid))
+        ) AS blocked
+      `;
+      if (activityState?.blocked) {
+        blocked = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.ok(blocked, 'PostContent reprocessing must reach the current-content compare-and-set');
+    await concurrentUpdate`
+      UPDATE post SET current_content_id = ${competingContent.id} WHERE id = ${fixture.post.id}
+    `;
+    await concurrentUpdate`COMMIT`;
+    transactionHeld = false;
+
+    assert.deepEqual(await activity, { status: 'skipped' });
+    const current = await db
+      .select({ currentContentId: Posts.currentContentId })
+      .from(Posts)
+      .where(eq(Posts.id, fixture.post.id))
+      .then(firstOrThrow);
+    assert.equal(current.currentContentId, competingContent.id);
+    assert.equal(await db.$count(PostContents, eq(PostContents.postId, fixture.post.id)), 2);
+    assert.equal(await db.$count(Hashtags, eq(Hashtags.name, hashtagName)), 0);
+    assert.equal(
+      await db.$count(
+        PostContentHashtags,
+        eq(PostContentHashtags.postContentId, competingContent.id),
+      ),
+      0,
+    );
+  } finally {
+    if (transactionHeld) {
+      await concurrentUpdate`ROLLBACK`;
+    }
+    if (activity) {
+      await Promise.allSettled([activity]);
+    }
+    concurrentUpdate.release();
+    await cleanupPostContentReprocessingFixture(fixture);
+  }
+});
+
+type PostContentReprocessingFixture = {
+  readonly content: typeof CoreDb.PostContents.$inferSelect;
+  readonly hashtagIds: readonly string[];
+  readonly instanceId: string;
+  readonly mentionProfileIds: readonly string[];
+  readonly post: typeof CoreDb.Posts.$inferSelect;
+  readonly profileId: string;
+};
+
+const createPostContentReprocessingFixture = async ({
+  document,
+  hashtagIds = [],
+  kind = InstanceKind.LOCAL,
+  mentionCount = 0,
+  postState = PostState.ACTIVE,
+  visibility = PostVisibility.DIRECT,
+}: {
+  readonly document: (mentionProfileIds: readonly string[]) => PostContentDocumentV1;
+  readonly hashtagIds?: readonly string[];
+  readonly kind?: InstanceKind;
+  readonly mentionCount?: number;
+  readonly postState?: PostState;
+  readonly visibility?: PostVisibility;
+}): Promise<PostContentReprocessingFixture> => {
+  const suffix = crypto.randomUUID().replaceAll('-', '');
+  const profile = await createProfile({ accountId: null, instanceKind: kind });
+  const createMentionProfile = (handleSuffix: string) =>
+    db
+      .insert(Profiles)
+      .values({
+        displayName: handleSuffix,
+        followPolicy: ProfileFollowPolicy.OPEN,
+        handle: handleSuffix,
+        normalizedHandle: handleSuffix,
+        instanceId: profile.instanceId,
+        state: ProfileState.ACTIVE,
+      })
+      .returning()
+      .then(firstOrThrow);
+  const mentionProfiles = await Promise.all(
+    Array.from({ length: mentionCount }, (_, index) =>
+      createMentionProfile(`${suffix}-mention-${index}`),
+    ),
+  );
+  const content = await db
+    .insert(PostContents)
+    .values({ document: document(mentionProfiles.map(({ id }) => id)), postId: null })
+    .returning()
+    .then(firstOrThrow);
+  const post = await db
+    .insert(Posts)
+    .values({
+      currentContentId: content.id,
+      profileId: profile.id,
+      state: postState,
+      visibility,
+    })
+    .returning()
+    .then(firstOrThrow);
+  await db.update(PostContents).set({ postId: post.id }).where(eq(PostContents.id, content.id));
+  if (mentionProfiles.length > 0) {
+    await db
+      .insert(PostMentions)
+      .values(mentionProfiles.map(({ id }) => ({ postContentId: content.id, profileId: id })));
+  }
+  if (hashtagIds.length > 0) {
+    await db
+      .insert(PostContentHashtags)
+      .values(hashtagIds.map((hashtagId) => ({ hashtagId, postContentId: content.id })));
+  }
+  return {
+    content,
+    hashtagIds,
+    instanceId: profile.instanceId,
+    mentionProfileIds: mentionProfiles.map(({ id }) => id),
+    post,
+    profileId: profile.id,
+  };
+};
+
+const cleanupPostContentReprocessingFixture = async (
+  fixture: PostContentReprocessingFixture,
+): Promise<void> => {
+  const contents = await db
+    .select({ id: PostContents.id })
+    .from(PostContents)
+    .where(eq(PostContents.postId, fixture.post.id));
+  const contentIds = [...new Set([fixture.content.id, ...contents.map(({ id }) => id)])];
+  const relatedHashtags =
+    contentIds.length === 0
+      ? []
+      : await db
+          .select({ hashtagId: PostContentHashtags.hashtagId })
+          .from(PostContentHashtags)
+          .where(inArray(PostContentHashtags.postContentId, contentIds))
+          .then((rows) => rows.map(({ hashtagId }) => hashtagId));
+  await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, fixture.post.id));
+  await db.update(PostContents).set({ postId: null }).where(inArray(PostContents.id, contentIds));
+  await db.delete(Posts).where(eq(Posts.id, fixture.post.id));
+  await db.delete(PostContents).where(inArray(PostContents.id, contentIds));
+  await db
+    .delete(Profiles)
+    .where(inArray(Profiles.id, [fixture.profileId, ...fixture.mentionProfileIds]));
+  await db.delete(Instances).where(eq(Instances.id, fixture.instanceId));
+  const hashtagIds = [...new Set([...fixture.hashtagIds, ...relatedHashtags])];
+  if (hashtagIds.length > 0) {
+    await db.delete(Hashtags).where(inArray(Hashtags.id, hashtagIds));
+  }
+};

@@ -22,13 +22,18 @@ test.beforeEach(async () => {
 });
 
 const gotoPostDetail = async (page: Page, path: string) => {
-  const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
-  await page.goto(path);
+  const detailResponse = page.waitForResponse(async (response) => {
+    if (
+      new URL(response.url()).pathname !== '/graphql' ||
+      !isGraphQLOperation(response.request().postData(), 'PostDetailQuery')
+    ) {
+      return false;
+    }
 
-  const response = await detailResponse;
-  const body = (await response.json()) as { errors?: unknown[] };
-  expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
-  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+    await expectGraphQLSuccess(response);
+    return true;
+  });
+  await Promise.all([page.goto(path), detailResponse]);
 };
 
 const expectGraphQLSuccess = async (response: Awaited<ReturnType<Page['waitForResponse']>>) => {
@@ -81,7 +86,10 @@ for (const viewport of [
       for (const index of [8, 7, 6]) {
         if (index !== 8) {
           const response = waitForGraphQLOperation(page, 'PostDetailQuery');
-          await page.locator(`a[href="${detailPath(index)}"]`).click();
+          await page
+            .locator(`a[href="${detailPath(index)}"] [data-testid="post-timestamp"]`)
+            .filter({ visible: true })
+            .click();
           await expectGraphQLSuccess(await response);
         }
         const current = page.getByTestId(`post-thread-current-${posts[index]!.globalId}`);
@@ -270,6 +278,7 @@ test('실제 GraphQL Home의 Local·Remote 콘텐츠 경고는 행 진입과 분
   ).toBeVisible();
 
   const postId = toGlobalId('Post', localPost.id);
+  const currentPost = page.getByTestId(`post-thread-current-${postId}`).filter({ visible: true });
   const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
   await localArticle.getByTestId('post-list-row-body').click();
   const response = await detailResponse;
@@ -280,16 +289,16 @@ test('실제 GraphQL Home의 Local·Remote 콘텐츠 경고는 행 진입과 분
     variables: { postId },
   });
   await expect(page).toHaveURL(`/@${viewer.profile!.handle}/${postId}`);
-  await expect(page.getByText(localBody, { exact: true })).toBeVisible();
+  await expect(currentPost.getByText(localBody, { exact: true })).toBeVisible();
   await expect(
-    page.getByTestId('post-content-warning').getByText('다시 가리기', { exact: true }),
+    currentPost.getByTestId('post-content-warning').getByText('다시 가리기', { exact: true }),
   ).toBeVisible();
 
-  await page.getByTestId('post-content-warning').click();
+  await currentPost.getByTestId('post-content-warning').click();
   await expect(page).toHaveURL(`/@${viewer.profile!.handle}/${postId}`);
-  await expect(page.getByText(localBody, { exact: true })).toHaveCount(0);
+  await expect(currentPost.getByText(localBody, { exact: true })).toHaveCount(0);
   await expect(
-    page.getByTestId('post-content-warning').getByText('보기', { exact: true }),
+    currentPost.getByTestId('post-content-warning').getByText('보기', { exact: true }),
   ).toBeVisible();
 
   await page.getByRole('button', { name: '뒤로 가기' }).click();
@@ -450,18 +459,19 @@ test('게시글 목록에서 상세로 이동하고 뒤로 가며 deep-link hand
   await expect(heading).toBeVisible();
   await expect.poll(async () => (await heading.locator('..').boundingBox())?.height).toBe(64);
   await expect(page.getByRole('button', { name: '메뉴 열기' })).toHaveCount(0);
-  await expect(page.getByText(body)).toBeVisible();
+  const visiblePostBody = page.getByText(body).filter({ visible: true });
+  await expect(visiblePostBody).toBeVisible();
   await expect(page.getByText(/전체 공개$/)).toBeVisible();
 
   await page.getByRole('button', { name: '뒤로 가기' }).click();
   await expect(page).toHaveURL(/\/home$/);
-  await expect(page.getByText(body)).toBeVisible();
+  await expect(visiblePostBody).toBeVisible();
 
   await page.goto(`/wrong-handle/${postId}`);
   await expect
     .poll(() => decodeURIComponent(new URL(page.url()).pathname))
     .toBe(`/@${viewer.profile!.handle}/${postId}`);
-  await expect(page.getByText(body)).toBeVisible();
+  await expect(visiblePostBody).toBeVisible();
 });
 
 test('순수 Repost 상세는 Quote Source로 replace되고 한 단계 C preview를 표시한다', async ({
@@ -573,7 +583,8 @@ test('Child Reply 상세의 Parent 답글은 좁은 Web에서 fullscreen Compose
   const detailResponse = waitForGraphQLOperation(page, 'PostDetailQuery');
   await page.goto(`/@${viewer.profile!.handle}/${childId}`);
   await detailResponse;
-  await expect(page.getByText(childBody)).toBeVisible();
+  const currentPost = page.getByTestId(`post-thread-current-${childId}`).filter({ visible: true });
+  await expect(currentPost.getByText(childBody)).toBeVisible();
 
   const parentRow = page.getByTestId(`post-thread-item-${parentId}`);
   await expect(parentRow).toBeVisible();
@@ -581,38 +592,60 @@ test('Child Reply 상세의 Parent 답글은 좁은 Web에서 fullscreen Compose
 
   const composer = page.getByRole('dialog', { name: '답글 쓰기' });
   await expect(composer).toBeVisible();
-  await expect(composer.getByText(parentBody)).toBeVisible();
-  const composerScroll = composer.getByTestId('mobile-fullscreen-composer-scroll');
+  const parentText = composer.getByText(parentBody, { exact: true });
   const parentPreview = composer.getByTestId('reply-parent');
+  const composerScroll = composer.getByTestId('mobile-fullscreen-composer-scroll');
   const visibility = composer.getByRole('button', { name: '공개 범위: 조용한 공개' });
-  await expect
-    .poll(async () => {
-      const [scrollBounds, parentBounds] = await Promise.all([
-        composerScroll.boundingBox(),
-        parentPreview.boundingBox(),
-      ]);
-      return scrollBounds && parentBounds
-        ? parentBounds.y + parentBounds.height - scrollBounds.y
-        : Infinity;
-    })
-    .toBeLessThanOrEqual(1);
-  await expect(composer.getByRole('textbox', { name: '답글 본문' })).toBeFocused();
+  const bodyTextbox = composer.getByRole('textbox', { name: '답글 본문' });
+  const parentIsAboveComposerScroll = async () => {
+    const [parentBox, scrollBox] = await Promise.all([
+      parentPreview.boundingBox(),
+      composerScroll.boundingBox(),
+    ]);
+    return (
+      parentBox !== null && scrollBox !== null && parentBox.y + parentBox.height <= scrollBox.y + 1
+    );
+  };
+  const parentIntersectsComposerScroll = async () => {
+    const [parentBox, scrollBox] = await Promise.all([
+      parentPreview.boundingBox(),
+      composerScroll.boundingBox(),
+    ]);
+    return (
+      parentBox !== null &&
+      scrollBox !== null &&
+      parentBox.y < scrollBox.y + scrollBox.height &&
+      parentBox.y + parentBox.height > scrollBox.y
+    );
+  };
+  await expect(composerScroll).toBeVisible();
+  await expect(bodyTextbox).toBeFocused();
+  await expect(bodyTextbox).toBeInViewport();
+  await expect(parentText).toBeVisible();
+  await expect(parentText).not.toBeInViewport();
+  await expect.poll(parentIsAboveComposerScroll).toBe(true);
+  await expect(visibility).toBeInViewport();
   await expect(composer.getByText(`@${viewer.profile!.handle}님에게 답글`)).toBeVisible();
-  await expect
-    .poll(async () => {
-      const [connectorBounds, visibilityBounds] = await Promise.all([
-        composer.getByTestId('reply-parent-thread-connector').boundingBox(),
-        visibility.boundingBox(),
-      ]);
-      return connectorBounds && visibilityBounds
-        ? Math.abs(connectorBounds.y + connectorBounds.height - visibilityBounds.y)
-        : Infinity;
-    })
-    .toBeLessThanOrEqual(1);
   await expect(parentRow.getByRole('textbox', { name: '답글 본문' })).toHaveCount(0);
+
+  await composerScroll.hover();
+  await page.mouse.wheel(0, -300);
+  await expect.poll(parentIntersectsComposerScroll).toBe(true);
+  await expect(parentText).toBeInViewport();
+  await expect(bodyTextbox).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(visibility).toBeFocused();
+  await expect(visibility).toBeInViewport();
+  await expect.poll(parentIntersectsComposerScroll).toBe(true);
+  await page.keyboard.press('Tab');
+  await expect(bodyTextbox).toBeFocused();
+  await expect(bodyTextbox).toBeInViewport();
+  await expect.poll(parentIsAboveComposerScroll).toBe(true);
 
   await page.setViewportSize({ height: 844, width: 320 });
   await expect(composer).toBeVisible();
+  await expect(bodyTextbox).toBeInViewport();
+  await expect(visibility).toBeInViewport();
   await composer.getByRole('button', { name: '글쓰기 닫기', exact: true }).click();
   await page
     .getByRole('alertdialog', { name: '답글 작성을 취소할까요?' })

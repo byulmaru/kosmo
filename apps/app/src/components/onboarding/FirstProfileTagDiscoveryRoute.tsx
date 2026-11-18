@@ -120,21 +120,34 @@ function SavedTagQuery({ empty, profileId }: Pick<Props, 'empty' | 'profileId'>)
       />
     );
   }
-  return <SavedTags empty={empty} profile={data.node.profile} />;
+  return <SavedTags empty={empty} onRetry={refetch} profile={data.node.profile} />;
 }
 
 function SavedTags({
   empty,
+  onRetry,
   profile,
 }: {
   empty: ReactNode;
+  onRetry: () => void;
   profile: FirstProfileTagDiscovery_profile$key;
 }) {
   const { tags } = useFragment(profileFragment, profile);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = tags.find((tag) => tag.id === selectedId) ?? tags[0];
   const theme = useTheme();
 
+  if (tags == null) {
+    return (
+      <DiscoveryState
+        actionLabel="다시 시도"
+        alert
+        onAction={onRetry}
+        title="저장한 태그를 확인할 수 없어요"
+      />
+    );
+  }
+
+  const selected = tags.find((tag) => tag.id === selectedId) ?? tags[0];
   if (!selected) {
     return empty;
   }

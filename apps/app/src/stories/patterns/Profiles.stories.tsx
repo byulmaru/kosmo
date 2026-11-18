@@ -349,6 +349,7 @@ export const UnfollowKeepsConnectionRowAfterSuccess: Story = {
     relay: {
       mutationResponse: {
         unfollowProfile: {
+          profileFollowId: followed.viewerState?.follow?.id,
           followeeProfile: {
             ...followed,
             followersCount: followed.followersCount - 1,

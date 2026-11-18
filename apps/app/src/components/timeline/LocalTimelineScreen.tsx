@@ -1,3 +1,4 @@
+import { useIsFocused } from 'expo-router';
 import { UserRoundPlus } from 'lucide-react-native';
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useErrorBoundary } from 'react-error-boundary';
@@ -7,11 +8,10 @@ import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { RelayFailOpenBoundary } from '@/components/RelayFailOpenBoundary';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
+import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import {
-  getShellLayout,
-  getWebMobileShellHeaderStickyOffset,
-} from '@/components/shell/shellLayout';
+import { getShellLayout } from '@/components/shell/shellLayout';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, StateView } from '@/components/ui/StateView';
@@ -57,6 +57,7 @@ const LocalFragment = graphql`
 `;
 
 export default function LocalTimelineScreen({ publicEntry = false }: { publicEntry?: boolean }) {
+  const active = useIsFocused();
   const { width } = useWindowDimensions();
   const shellChrome = useShellChrome();
   const registerHomeReselection = shellChrome?.registerHomeReselection;
@@ -98,9 +99,16 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
   return (
     <View style={styles.root}>
       {publicEntry ? (
-        getShellLayout(Platform.OS === 'web', width) !== 'mobile' ? (
-          <PageHeader title="타임라인 둘러보기" />
-        ) : null
+        <MobileWebRouteChrome>
+          <PageHeader
+            leading={
+              Platform.OS === 'web' && getShellLayout(true, width) === 'mobile' ? (
+                <NavigationDrawerTrigger />
+              ) : undefined
+            }
+            title="타임라인 둘러보기"
+          />
+        </MobileWebRouteChrome>
       ) : (
         <LocalHeader width={width} />
       )}
@@ -124,6 +132,7 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
           title="로컬 타임라인을 불러오지 못했어요"
         >
           <LocalContent
+            active={active}
             hasSuccessfulLocalRef={hasSuccessfulLocalRef}
             onRefresh={refresh}
             onRefreshComplete={completeRefresh}
@@ -138,44 +147,41 @@ export default function LocalTimelineScreen({ publicEntry = false }: { publicEnt
 
 function LocalHeader({ width }: { width: number }) {
   const shellChrome = useShellChrome();
-  const routeOwnsHeader =
-    Platform.OS !== 'web' || getShellLayout(Platform.OS === 'web', width) !== 'mobile';
+  const mobileWeb = Platform.OS === 'web' && getShellLayout(true, width) === 'mobile';
 
   return (
-    <>
-      {routeOwnsHeader ? (
-        <PageHeader
-          accessibilityLabel="로컬"
-          brandAccessibilityLabel="홈"
-          brandCurrent
-          brandHref={Platform.OS === 'web' ? '/home' : undefined}
-          onBrandCurrentNavigate={Platform.OS === 'web' ? shellChrome?.reselectHome : undefined}
-          variant="brand"
-        />
-      ) : null}
+    <MobileWebRouteChrome>
+      <PageHeader
+        accessibilityLabel="로컬"
+        brandAccessibilityLabel="홈"
+        brandCurrent
+        brandHref={Platform.OS === 'web' && !mobileWeb ? '/home' : undefined}
+        leading={mobileWeb ? <NavigationDrawerTrigger /> : undefined}
+        onBrandCurrentNavigate={
+          Platform.OS === 'web' && !mobileWeb ? shellChrome?.reselectHome : undefined
+        }
+        variant="brand"
+      />
       <View
         style={
-          Platform.OS === 'web'
-            ? [
-                styles.webTimelineTabs,
-                { top: shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0 },
-              ]
-            : undefined
+          Platform.OS === 'web' && !mobileWeb ? [styles.webTimelineTabs, { top: 0 }] : undefined
         }
       >
         <TimelineTabs value="local" />
       </View>
-    </>
+    </MobileWebRouteChrome>
   );
 }
 
 function LocalContent({
+  active,
   hasSuccessfulLocalRef,
   onRefresh,
   onRefreshComplete,
   refreshVersion,
   refreshing,
 }: {
+  active: boolean;
   hasSuccessfulLocalRef: MutableRefObject<boolean>;
   onRefresh: () => void;
   onRefreshComplete: () => void;
@@ -196,7 +202,7 @@ function LocalContent({
 
   return (
     <>
-      <LocalContentView data={data} onRefresh={onRefresh} refreshing={refreshing} />
+      <LocalContentView active={active} data={data} onRefresh={onRefresh} refreshing={refreshing} />
       <RelayFailOpenBoundary
         fallback={<LocalRefreshErrorFallback onRetry={onRefresh} />}
         reportUnexpectedErrors={false}
@@ -268,10 +274,12 @@ function LocalRefreshErrorFallback({ onRetry }: { onRetry: () => void }) {
 }
 
 function LocalContentView({
+  active,
   data,
   onRefresh,
   refreshing,
 }: {
+  active: boolean;
   data: LocalContent_query$data;
   onRefresh: () => void;
   refreshing: boolean;
@@ -307,6 +315,7 @@ function LocalContentView({
   return (
     <View style={styles.timeline}>
       <PostList
+        active={active}
         identityKey={`local:${selectedProfile?.id ?? 'guest'}`}
         local={data}
         onRefresh={onRefresh}

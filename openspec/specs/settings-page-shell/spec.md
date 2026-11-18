@@ -41,15 +41,16 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: 현재 Settings root와 공통 item 정보 구조
 
-**Authority / Provenance:** 제품 계약 `PROD-685`; 기능 경계 `PROD-645`, `PROD-667`; 테마·Mute·Block runtime `PROD-812`, `PROD-814`, `PROD-823`, `PROD-813`; 시각 handoff source `docs/design/profile-mute-block.md`, `DSN-53`, `DSN-54` — Settings root는 시각 label `계정 설정`인 Byulmaru ID 외부 진입점과 현재 선택값을 함께 보여 주는 `테마`, `게시물 기본 공개 범위`, `뮤트 및 차단` 내부 진입점을 이 순서로 직접 제공해야 한다(MUST). `테마`는 `/settings/theme` detail을 열어야 하며(MUST), `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 category를 열어야 한다(MUST). 두 Mute·Block 상태를 하나의 혼합 목록으로 표시해서는 안 된다(MUST NOT). 현재 네 entry를 위해 한 항목짜리 `계정`·`화면 설정`·`프로필` category를 만들어서는 안 되며(MUST NOT), 별도 canonical·Linear 승인이 없는 미래 category를 disabled item·placeholder·범용 registry로 노출해서는 안 된다(MUST NOT). 공통 presentational `SettingsItem`은 부모 container 폭에 맞는 row geometry와 필수 label·선택적 leading·description·trailing content·selected presentation을 조합할 수 있어야 한다(MUST). `SettingsItem`이 Link·Pressable·focus·accessible name·feature 조회·저장·persistence semantics를 추론하거나 소유해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 제품 계약 `PROD-685`; 기능 경계 `PROD-645`, `PROD-667`; 테마·Mute·Block runtime `PROD-812`, `PROD-814`, `PROD-823`, `PROD-813`; 시각 handoff source `docs/design/profile-mute-block.md`, `DSN-53`, `DSN-54` — Target Settings root는 `계정 설정` 외부 entry, `프로필 설정`, `다른 서비스에서 이전`, `뮤트 및 차단`, 현재 선택값을 보여 주는 `테마`, `정보`, `코스모 탈퇴` 내부 entry를 이 순서로 직접 제공해야 한다(MUST). `다른 서비스에서 이전`은 항상 표시해야 하며(MUST), `팔로잉 가져오기`를 별도 root entry로 표시해서는 안 된다(MUST NOT). `테마`는 `/settings/theme` detail을 열어야 하며(MUST), `뮤트 및 차단`은 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공하는 category를 열어야 한다(MUST). 두 Mute·Block 상태를 하나의 혼합 목록으로 표시해서는 안 된다(MUST NOT). 현재 root entry를 위해 한 항목짜리 `계정`·`화면 설정`·`프로필` category를 만들어서는 안 되며(MUST NOT), 별도 canonical·Linear 승인이 없는 미래 category를 disabled item·placeholder·범용 registry로 노출해서는 안 된다(MUST NOT). 공통 presentational `SettingsItem`은 부모 container 폭에 맞는 row geometry와 필수 label·선택적 leading·description·trailing content·selected presentation을 조합할 수 있어야 한다(MUST). `SettingsItem`이 Link·Pressable·focus·accessible name·feature 조회·저장·persistence semantics를 추론하거나 소유해서는 안 된다(MUST NOT).
 
-#### Scenario: 현재 승인된 네 entry를 직접 표시한다
+#### Scenario: 현재 승인된 root entry를 표시한다
 
 - **WHEN** 인증 사용자가 `/settings` root를 연다
-- **THEN** root는 첫 번째 시각 label `계정 설정`의 Byulmaru ID 외부 entry, 두 번째 현재 선택값을 함께 보여 주는 `테마`, 세 번째 `게시물 기본 공개 범위`, 네 번째 `뮤트 및 차단` 내부 entry를 표시한다
+- **THEN** root는 `계정 설정` → `프로필 설정` → `다른 서비스에서 이전` → `뮤트 및 차단` → `테마` → `정보` → `코스모 탈퇴` 순서로 entry를 표시한다
+- **AND** `다른 서비스에서 이전` entry는 항상 표시하고 별도 `팔로잉 가져오기` entry를 표시하지 않는다
 - **AND** `테마`를 선택하면 `/settings/theme` detail을 연다
 - **AND** `뮤트 및 차단`을 선택하면 `뮤트한 프로필`과 `차단한 프로필`을 별도 destination으로 제공한다
-- **AND** `계정`, `화면 설정` 또는 `프로필` 한 항목짜리 category를 중간 단계로 표시하지 않는다
+- **AND** `계정` 또는 `화면 설정` 한 항목짜리 category를 중간 단계로 표시하지 않는다
 
 #### Scenario: 같은 item 문법을 다른 폭에서 사용한다
 
@@ -134,7 +135,7 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 
 ### Requirement: Profile detail 상태 소유
 
-**Authority / Provenance:** 제품 근거 `docs/domain/objects/profile.md`, 승인된 ADR `docs/domain/decisions/0027-profile-migration-inbound-move.md`, Linear 계약 `PROD-685`, `PROD-743`; Profile 데이터·전환·저장 경계 `PROD-667` — Profile detail은 현재 Local Profile identity와 Profile query·loading·error·empty·content·retry 상태를 자기 화면 안에서 소유해야 한다(MUST). Profile loading 중 확인되지 않은 값을 확정된 것처럼 표시해서는 안 되며(MUST NOT), Profile 전환 뒤 이전 Profile 결과를 새 대상 아래에 표시해서는 안 된다(MUST NOT). 오류에는 backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공해야 한다(MUST). Settings shell과 Account entry가 Profile 오류 종류나 저장 상태를 공통 상태로 해석하거나 재구현해서는 안 된다(MUST NOT). page shell은 공개 범위 control의 inline·dropdown·sheet 또는 즉시·명시적 저장 interaction을 고정해서는 안 된다(MUST NOT). Profile Migration source 준비 control은 이 detail에서 현재 선택된 Profile을 target으로 사용하고 별도 target Profile ID 입력 없이 source qualified handle만 제출하도록 해당 feature flag가 켜져 있고 값이 확인된 경우에만 노출해야 하며(MUST), flag가 꺼져 있거나 확인할 수 없거나 로딩 중이면 렌더링해서는 안 된다(MUST NOT). 이 flag는 Profile Owner 권한을 대신하지 않으며(MUST NOT), 이미 준비된 관계와 그로부터 파생된 alias 및 inbound Move 처리를 flag 상태로 중단하거나 제거해서는 안 된다(MUST NOT).
+**Authority / Provenance:** 제품 근거 `docs/domain/objects/profile.md`, 승인된 ADR `docs/domain/decisions/0027-profile-migration-inbound-move.md`, Linear 계약 `PROD-685`, `PROD-743`; Profile 데이터·전환·저장 경계 `PROD-667` — Profile detail은 현재 Local Profile identity와 Profile query·loading·error·empty·content·retry 상태를 자기 화면 안에서 소유해야 한다(MUST). Profile loading 중 확인되지 않은 값을 확정된 것처럼 표시해서는 안 되며(MUST NOT), Profile 전환 뒤 이전 Profile 결과를 새 대상 아래에 표시해서는 안 된다(MUST NOT). 오류에는 backend 원문이 아닌 안전한 한국어 설명과 재시도 action을 제공해야 한다(MUST). Settings shell과 Account entry가 Profile 오류 종류나 저장 상태를 공통 상태로 해석하거나 재구현해서는 안 된다(MUST NOT). page shell은 공개 범위 control의 inline·dropdown·sheet 또는 즉시·명시적 저장 interaction을 고정해서는 안 된다(MUST NOT). `다른 서비스에서 이전`의 `계정 이전` control은 현재 선택된 Profile을 target으로 사용하고 별도 target Profile ID 입력 없이 source qualified handle만 제출해야 한다(MUST). 이 control은 기존 `Account.Active`와 `Profile.Owner` 권한 조건에 따라 제공해야 한다(MUST). 이미 준비된 관계와 그로부터 파생된 alias 및 inbound Move 처리를 중단하거나 제거해서는 안 된다(MUST NOT).
 
 #### Scenario: 선택한 Profile detail을 표시한다
 
@@ -142,35 +143,23 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 - **THEN** detail은 현재 Profile의 표시 이름·`relativeHandle`과 Profile 설정 content를 표시한다
 - **AND** Profile control의 accessible name은 Kosmo 내부 기능과 현재 대상을 전달한다
 
-#### Scenario: 확인된 feature flag가 켜져 있을 때 source 준비 control을 표시한다
-
-- **WHEN** selected Profile이 있고 Profile Migration feature flag가 켜진 것으로 확인된다
-- **THEN** Profile detail은 source qualified handle을 준비할 수 있는 Profile Migration control을 표시한다
-- **AND** control 실행은 기존 `Account.Active`와 `Profile.Owner` 권한 경계를 사용한다
-
 #### Scenario: source 등록 성공 뒤 ActivityPub Move를 안내한다
 
-- **WHEN** Profile detail의 현재 selected Profile에서 source qualified handle만 담은 `RegisterProfileMigrationSourceInput`으로 `registerProfileMigrationSource` mutation이 성공한다
-- **THEN** detail은 `RegisterProfileMigrationSourcePayload.profile`의 target Profile과 `migrationSource` field를 반영한다
-- **AND** 성공 안내는 기존 Mastodon 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 설명한다
+- **WHEN** `/settings/profile-migration`의 `계정 이전`에서 현재 selected Profile을 대상으로 source qualified handle만 담은 `RegisterProfileMigrationSourceInput`으로 `registerProfileMigrationSource` mutation이 성공한다
+- **THEN** section은 `RegisterProfileMigrationSourcePayload.profile`의 target Profile과 `migrationSource` field를 반영한다
+- **AND** 성공 안내는 기존 계정에서 새 Kosmo handle로 ActivityPub `Move`를 시작하도록 설명한다
 - **AND** detail은 Profile 이전 완료를 표시하거나 Move 이후 완료를 위한 별도 Kosmo API·action을 제공하지 않는다
 
-#### Scenario: feature flag가 꺼졌거나 확인되지 않으면 source 준비 control을 숨긴다
+#### Scenario: Profile Owner 권한을 확인한다
 
-- **WHEN** Profile Migration feature flag가 꺼져 있거나 값을 확인할 수 없거나 로딩 중이다
-- **THEN** Profile detail은 Profile Migration source 준비 control을 렌더링하지 않는다
-- **AND** Profile identity·기존 Profile 설정 content의 loading·error·empty 정책은 변경하지 않는다
-
-#### Scenario: Settings UI flag가 Profile 권한을 넓히지 않는다
-
-- **WHEN** feature flag는 켜져 있지만 현재 Account가 selected Profile의 `Profile.Owner`가 아니다
+- **WHEN** 현재 Account가 selected Profile의 `Profile.Member`이고 `Profile.Owner`가 아니다
 - **THEN** 시스템은 Profile Migration source 준비 action을 기존 Profile Owner 권한으로 거부한다
 - **AND** 준비 관계와 Profile 상태를 변경하지 않는다
 
 #### Scenario: source 준비 저장 실패에서 입력과 재시도를 보존한다
 
-- **WHEN** Profile Migration source qualified handle을 제출했지만 준비 요청이 실패한다
-- **THEN** Profile detail은 사용자가 제출한 source 입력과 안전한 오류 설명을 유지한다
+- **WHEN** `/settings/profile-migration`에서 Profile Migration source qualified handle을 제출했지만 준비 요청이 실패한다
+- **THEN** `계정 이전` section은 사용자가 제출한 source 입력과 안전한 오류 설명을 유지한다
 - **AND** 같은 입력으로 재시도할 수 있는 action을 제공한다
 - **AND** 기존 준비 관계와 alias를 실패 결과로 변경하지 않는다
 
@@ -192,20 +181,32 @@ Kosmo의 canonical `/settings` route family, responsive master-detail/one-pane s
 - **THEN** detail은 이전 결과를 새 Profile identity 아래에 표시하지 않는다
 - **AND** 새 Profile의 identity와 데이터가 일치할 때만 설정 control을 content 상태로 표시한다
 
-#### Scenario: flag 상태가 이미 준비된 inbound 동작을 중단하지 않는다
+### Requirement: Profile 이전과 팔로잉 가져오기를 하나의 Settings destination에서 제공한다
 
-- **WHEN** Profile Migration 관계와 그로부터 파생된 alias가 이미 존재하고 feature flag가 꺼지거나 확인되지 않는다
-- **THEN** Settings detail은 source 준비 control을 숨길 수 있다
-- **AND** 기존 관계·alias와 inbound Move 처리는 flag 상태에 따라 제거되거나 중단되지 않는다
+`다른 서비스에서 이전`은 `/settings/profile-migration`을 열고 같은 화면에 `계정 이전`과 `팔로잉 가져오기` section을 이 순서로 제공해야 한다(MUST).
+
+#### Scenario: 두 기능을 같은 destination의 정해진 순서로 표시한다
+
+- **WHEN** 사용자가 `/settings`의 `다른 서비스에서 이전` entry를 연다
+- **THEN** 시스템은 `/settings/profile-migration`을 연다
+- **AND** 같은 화면에서 `계정 이전` 다음 `팔로잉 가져오기` section을 표시한다
+- **AND** root에 별도 `팔로잉 가져오기` entry를 표시하지 않는다
+
+#### Scenario: 기존 팔로잉 가져오기 경로를 canonical destination으로 이동한다
+
+- **WHEN** 사용자가 `/settings/following-import`를 연다
+- **THEN** 시스템은 `/settings/profile-migration`으로 이동한다
+- **AND** back action의 parent는 `/settings` root다
 
 ### Requirement: Settings 접근성 계약
 
-**Authority / Provenance:** 제품 계약 `PROD-685`; 시각 handoff source `docs/design/settings.md`, `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `DSN-53`, `DSN-54` — root 화면과 full master pane은 `설정` heading을, one-pane category·detail 화면과 full detail pane은 현재 destination heading을 programmatic하게 노출해야 한다(MUST). 시각적으로 없는 category heading을 screen reader 전용으로 반복해서는 안 된다(MUST NOT). root/master 목록의 문서·보조기술 순서는 `설정` heading → 시각 label `계정 설정`의 Byulmaru ID 외부 entry → `테마`와 현재 선택값 → `게시물 기본 공개 범위` → `뮤트 및 차단`이어야 하며(MUST), full Web에서는 이어서 detail heading과 현재 선택된 content를 노출해야 한다(MUST). Account entry는 accessible name에서 Byulmaru ID 외부 서비스로 이동함을 전달해야 하고(MUST), 내부 entry는 selected/current destination을, Profile control은 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). heading과 비상호작용 identity는 tab stop이어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
+**Authority / Provenance:** 제품 계약 `PROD-685`; 시각 handoff source `docs/design/settings.md`, `docs/design/profile-mute-block.md`, `docs/design/accessibility.md`, `DSN-53`, `DSN-54` — root 화면과 full master pane은 `설정` heading을, one-pane category·detail 화면과 full detail pane은 현재 destination heading을 programmatic하게 노출해야 한다(MUST). 시각적으로 없는 category heading을 screen reader 전용으로 반복해서는 안 된다(MUST NOT). root/master 목록의 문서·보조기술 순서는 `설정` heading → `계정 설정` → `프로필 설정` → `다른 서비스에서 이전` → `뮤트 및 차단` → `테마`와 현재 선택값 → `정보` → `코스모 탈퇴`여야 하며(MUST). `다른 서비스에서 이전` destination에서는 `계정 이전` heading 다음에 `팔로잉 가져오기` heading과 section content를 읽어야 한다(MUST). full Web에서는 이어서 detail heading과 현재 선택된 content를 노출해야 한다(MUST). Account entry는 accessible name에서 Byulmaru ID 외부 서비스로 이동함을 전달해야 하고(MUST), 내부 entry는 selected/current destination을, Profile control은 Kosmo 내부 기능과 현재 대상을 전달해야 한다(MUST). heading과 비상호작용 identity는 tab stop이어서는 안 된다(MUST NOT). Web pointer target은 24×24 CSS px minimum 또는 공식 예외를 충족해야 하고(MUST), iOS는 기본 44×44pt, Android는 48×48dp touch target을 사용해야 한다(MUST).
 
 #### Scenario: screen reader가 master와 detail을 구분한다
 
 - **WHEN** screen reader 사용자가 full Web `/settings`를 heading과 control 단위로 탐색한다
-- **THEN** `설정` heading과 네 root entry 다음에 `게시물 기본 공개 범위` detail heading과 현재 Profile content가 노출된다
+- **THEN** `설정` heading과 일곱 root entry가 canonical 순서로 노출되고, 이어서 `게시물 기본 공개 범위` detail heading과 현재 Profile content가 노출된다
+- **AND** `다른 서비스에서 이전` destination에서는 `계정 이전` 다음 `팔로잉 가져오기` heading이 노출된다
 - **AND** `테마` entry의 현재 선택값을 accessible name과 state로 구분할 수 있다
 - **AND** Account 외부 destination, selected 내부 entry와 현재 Profile control을 accessible name과 state로 구분할 수 있다
 

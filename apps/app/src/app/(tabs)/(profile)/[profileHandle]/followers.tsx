@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useIsFocused, useLocalSearchParams } from 'expo-router';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import {
   ProfileConnectionList,
@@ -19,6 +19,7 @@ const ProfileFollowersPageQuery = graphql`
 `;
 
 export default function ProfileFollowersPage() {
+  const active = useIsFocused();
   const { profileHandle } = useLocalSearchParams<{
     profileHandle?: string | string[];
   }>();
@@ -36,13 +37,13 @@ export default function ProfileFollowersPage() {
         loading={<ProfileConnectionListState kind="followers" state="loading" />}
         title="팔로워 목록을 불러오지 못했어요"
       >
-        <ProfileFollowersPageContent handle={handle} />
+        <ProfileFollowersPageContent active={active} handle={handle} />
       </RouteBoundary>
     </ProfileRouteContainer>
   );
 }
 
-function ProfileFollowersPageContent({ handle }: { handle: string }) {
+function ProfileFollowersPageContent({ active, handle }: { active: boolean; handle: string }) {
   const { fetchKey } = useRouteBoundary();
   const data = useLazyLoadQuery<ProfileFollowersPageQueryType>(
     ProfileFollowersPageQuery,
@@ -51,6 +52,6 @@ function ProfileFollowersPageContent({ handle }: { handle: string }) {
   );
 
   return data.profileByHandle ? (
-    <ProfileConnectionList kind="followers" profile={data.profileByHandle} />
+    <ProfileConnectionList active={active} kind="followers" profile={data.profileByHandle} />
   ) : null;
 }

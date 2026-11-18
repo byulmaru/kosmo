@@ -82,7 +82,14 @@ it('keeps Sensitive Media and preview fields when every V1 body node is unknown'
             content: [{ type: 'future_block', content: [{ type: 'text', text: 'hidden' }] }],
           },
         },
-        media: [{ id: 'media-1', altText: 'description', url: 'https://media.example/1.webp' }],
+        media: [
+          {
+            id: 'media-1',
+            altText: 'description',
+            aiProhibitFilterApplied: true,
+            url: 'https://media.example/1.webp',
+          },
+        ],
       },
     },
   } as unknown as ReactionNotificationProps['notification'];
@@ -96,7 +103,14 @@ it('keeps Sensitive Media and preview fields when every V1 body node is unknown'
   assert.deepEqual(preview, {
     bodyText: 'future body text',
     contentWarning: 'warning',
-    media: [{ altText: 'description', id: 'media-1', url: 'https://media.example/1.webp' }],
+    media: [
+      {
+        altText: 'description',
+        aiProhibitFilterApplied: true,
+        id: 'media-1',
+        url: 'https://media.example/1.webp',
+      },
+    ],
     sensitiveMedia: true,
   });
 });

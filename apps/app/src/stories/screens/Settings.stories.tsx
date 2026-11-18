@@ -1,16 +1,50 @@
 import { View } from 'react-native';
-import { expect, spyOn, userEvent, within } from 'storybook/test';
+import { graphql, useLazyLoadQuery } from 'react-relay';
+import { expect, fn, spyOn, userEvent, within } from 'storybook/test';
 import SettingsRoute from '@/app/(tabs)/(protected)/settings';
 import { SettingsRouteLayout } from '@/app/(tabs)/(protected)/settings/_layout';
 import SettingsProfileMigrationRoute from '@/app/(tabs)/(protected)/settings/profile-migration';
 import SettingsThemeRoute from '@/app/(tabs)/(protected)/settings/theme';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import { SettingsProfileDetail } from '@/components/settings/SettingsProfileDetail';
+import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { ThemePreferenceProvider } from '@/theme/ThemePreferenceProvider';
 import { useTheme } from '@/theme/ThemeProvider';
-import { colors, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import { profile } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { ReactNode } from 'react';
 import type { RequestParameters, Variables } from 'relay-runtime';
+import type { SettingsNavigationStoryQuery as SettingsNavigationStoryQueryType } from './__generated__/SettingsNavigationStoryQuery.graphql';
+
+const navigationQuery = graphql`
+  query SettingsNavigationStoryQuery {
+    currentSession {
+      selectedProfile {
+        id
+        ...SettingsNavigationList_profile
+      }
+    }
+  }
+`;
+const openProfileSwitcher = fn();
+
+function SettingsStoryChrome({ children }: { children: ReactNode }) {
+  const data = useLazyLoadQuery<SettingsNavigationStoryQueryType>(navigationQuery, {});
+
+  return (
+    <ShellChromeProvider
+      navigationDrawerOpen={false}
+      openNavigationDrawer={() => undefined}
+      openProfileSwitcher={openProfileSwitcher}
+      registerHomeReselection={() => () => undefined}
+      reselectHome={() => undefined}
+      selectedProfile={data.currentSession?.selectedProfile ?? null}
+    >
+      {children}
+    </ShellChromeProvider>
+  );
+}
 
 const selectedProfile = profile({
   displayName: '현재 Profile',
@@ -25,7 +59,7 @@ const selectedProfile = profile({
     membership: { role: 'OWNER' },
   },
 });
-const ownerProfile = { ...selectedProfile, migrationSource: null };
+const ownerProfile = { ...selectedProfile, hasMigrationSource: false, migrationSource: null };
 const ownerData = {
   currentSession: {
     id: 'settings-session',
@@ -88,33 +122,75 @@ function setVisualViewportWidth(width: number, storyName: string) {
 }
 
 function expectProfileMigrationContentGutter(canvasElement: HTMLElement) {
-  const card = within(canvasElement).getByTestId('profile-migration-source-control');
-  const content = card.parentElement;
+  const control = within(canvasElement).getByTestId('profile-migration-source-control');
+  const content = control.parentElement;
   if (!content) {
     throw new Error('Profile migration content wrapper is missing.');
   }
-  const route = content.parentElement;
-  const pane = route?.parentElement;
-  if (!route || !pane) {
-    throw new Error('Profile migration route content or Settings pane is missing.');
+
+  const controlBounds = control.getBoundingClientRect();
+  const contentBounds = content.getBoundingClientRect();
+
+  expect(Math.abs(controlBounds.left - contentBounds.left - spacing.lg)).toBeLessThanOrEqual(1);
+  expect(Math.abs(contentBounds.right - controlBounds.right - spacing.lg)).toBeLessThanOrEqual(1);
+  expect(Math.abs(controlBounds.top - contentBounds.top - spacing.lg)).toBeLessThanOrEqual(1);
+}
+
+function expectProfileMigrationControlLayout(
+  canvasElement: HTMLElement,
+  direction: 'horizontal' | 'vertical',
+) {
+  const canvas = within(canvasElement);
+  const control = canvas.getByTestId('profile-migration-source-control');
+  const contentBounds = control.parentElement?.getBoundingClientRect();
+  if (!contentBounds) {
+    throw new Error('Profile migration content wrapper is missing.');
   }
 
-  const cardBounds = card.getBoundingClientRect();
-  const contentBounds = content.getBoundingClientRect();
-  const paneBounds = pane.getBoundingClientRect();
+  const pairs = [
+    [
+      canvas.getByRole('textbox', { name: '기존 계정 주소' }),
+      canvas.getByRole('button', { name: '기존 계정 등록' }),
+    ],
+    [
+      canvas.getByRole('button', { name: '팔로잉 CSV 파일 선택' }),
+      canvas.getByRole('button', { name: '팔로잉 가져오기' }),
+    ],
+  ];
 
-  expect(Math.abs(cardBounds.left - paneBounds.left - spacing.lg)).toBeLessThanOrEqual(1);
-  expect(Math.abs(paneBounds.right - cardBounds.right - spacing.lg)).toBeLessThanOrEqual(1);
-  expect(Math.abs(cardBounds.top - contentBounds.top - spacing.lg)).toBeLessThanOrEqual(1);
+  for (const [field, action] of pairs) {
+    const fieldBounds = field.getBoundingClientRect();
+    const actionBounds = action.getBoundingClientRect();
+    expect(fieldBounds.width).toBeGreaterThan(0);
+    expect(actionBounds.width).toBeGreaterThan(0);
+    expect(fieldBounds.right).toBeLessThanOrEqual(contentBounds.right + 1);
+    expect(actionBounds.right).toBeLessThanOrEqual(contentBounds.right + 1);
+
+    if (direction === 'horizontal') {
+      expect(Math.abs(fieldBounds.top - actionBounds.top)).toBeLessThanOrEqual(1);
+      expect(actionBounds.left).toBeGreaterThanOrEqual(fieldBounds.right);
+    } else {
+      expect(actionBounds.top).toBeGreaterThanOrEqual(fieldBounds.bottom);
+      expect(Math.abs(fieldBounds.left - actionBounds.left)).toBeLessThanOrEqual(1);
+    }
+  }
 }
 
 const meta = {
   component: SettingsRouteLayout,
   decorators: [
     (Story) => (
-      <View style={{ maxWidth: 950, minHeight: '100%', width: '100%' }}>
-        <Story />
-      </View>
+      <WebPushPermissionContext.Provider
+        value={{
+          permission: 'default',
+          support: 'supported',
+          requestPermission: async () => undefined,
+        }}
+      >
+        <View style={{ maxWidth: 950, minHeight: '100%', width: '100%' }}>
+          <Story />
+        </View>
+      </WebPushPermissionContext.Provider>
     ),
   ],
   parameters: {
@@ -127,9 +203,11 @@ const meta = {
     router: { pathname: '/settings' },
   },
   render: () => (
-    <SettingsRouteLayout>
-      <SettingsRoute />
-    </SettingsRouteLayout>
+    <SettingsStoryChrome>
+      <SettingsRouteLayout>
+        <SettingsRoute />
+      </SettingsRouteLayout>
+    </SettingsStoryChrome>
   ),
   title: 'KOSMO/Screens/Settings',
 } satisfies Meta<typeof SettingsRouteLayout>;
@@ -144,28 +222,39 @@ export const FullMasterDetail: Story = {
     const canvas = within(canvasElement);
     const navigation = canvas.getByRole('navigation', { name: '설정 목록' });
     const account = within(navigation).getByRole('link', {
-      name: 'Byulmaru ID Account Settings 외부 서비스로 이동',
+      name: '별마루 ID 계정 설정 외부 서비스로 이동',
     });
     const profileEntry = within(navigation).getByRole('link', {
-      name: '프로필 설정 열기',
+      name: '일반 설정 열기',
     });
     const migrationEntry = within(navigation).getByRole('link', {
       name: '다른 서비스에서 이전 설정 열기',
     });
 
     expect(canvas.getByRole('heading', { name: /^설정$/ })).toBeVisible();
-    expect(canvas.getByRole('heading', { name: /^프로필 설정$/ })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: /^일반$/ })).toBeVisible();
     expect(migrationEntry).toHaveAttribute('href', '/settings/profile-migration');
     expect(canvas.queryByTestId('profile-migration-source-control')).toBeNull();
     expect(account).toHaveAttribute('href', 'https://id.byulmaru.co');
     expect(account).toHaveAttribute('target', '_blank');
     expect(account).toHaveAttribute('rel', 'noopener noreferrer');
     expect(profileEntry).toHaveAttribute('href', '/settings/profile');
-    expect(profileEntry.firstElementChild).toHaveStyle({
-      backgroundColor: colors.light.selectedSurface,
-      borderColor: colors.light.selectedBorder,
-    });
+    expect(within(navigation).getByRole('heading', { name: '프로필' })).toBeVisible();
+    expect(within(navigation).getByRole('heading', { name: '앱' })).toBeVisible();
+    expect(within(navigation).getByRole('heading', { name: '계정' })).toBeVisible();
+    expect(within(navigation).getByText('현재 Profile')).toBeVisible();
+    expect(within(navigation).getByText('@settings-owner')).toBeVisible();
+    expect(
+      within(navigation).getByRole('button', {
+        name: /현재 Profile.*@settings-owner.*다른 Profile 선택/,
+      }),
+    ).toBeVisible();
+    expect(within(navigation).getByRole('link', { name: '스마트 필터 설정 열기' })).toHaveAttribute(
+      'href',
+      '/settings/natural-language-mute',
+    );
     expect(profileEntry).not.toHaveAttribute('aria-current');
+    expect(canvas.getByRole('button', { name: '브라우저 알림 켜기' })).toBeVisible();
     expect(canvas.getByRole('combobox', { name: '게시물 기본 공개 범위' })).toBeVisible();
     expect(canvasElement.querySelectorAll('[role="navigation"]')).toHaveLength(1);
   },
@@ -179,7 +268,7 @@ export const CompactRootFirst: Story = {
     expect(canvas.getByRole('heading', { name: /^설정$/ })).toBeVisible();
     expect(canvas.getByRole('navigation', { name: '설정 목록' })).toBeVisible();
     expect(canvas.queryByRole('radiogroup')).toBeNull();
-    expect(canvas.getByRole('link', { name: '프로필 설정 열기' })).not.toHaveAttribute(
+    expect(canvas.getByRole('link', { name: '일반 설정 열기' })).not.toHaveAttribute(
       'aria-current',
     );
     expect(canvas.getByRole('link', { name: '다른 서비스에서 이전 설정 열기' })).toHaveAttribute(
@@ -214,28 +303,45 @@ export const ProfileMigrationFullWeb: Story = {
     const canvas = within(canvasElement);
     expect(canvas.getByRole('heading', { name: '설정' })).toBeVisible();
     expect(canvas.getByRole('heading', { name: '다른 서비스에서 이전' })).toBeVisible();
+    const accountHeading = canvas.getByRole('heading', { name: '계정 이전' });
+    const followingHeading = canvas.getByRole('heading', { name: '팔로잉 가져오기' });
+    expect(accountHeading).toBeVisible();
+    expect(followingHeading).toBeVisible();
+    const accountSection = accountHeading.parentElement;
+    if (!accountSection) {
+      throw new Error('Profile migration account section is missing.');
+    }
+    expect(Number.parseFloat(getComputedStyle(accountSection).borderBottomWidth)).toBeGreaterThan(
+      0,
+    );
+    expect(accountSection.getBoundingClientRect().bottom).toBeLessThan(
+      followingHeading.getBoundingClientRect().top,
+    );
+    const navigation = canvas.getByRole('navigation', { name: '설정 목록' });
+    expect(
+      within(navigation).getAllByRole('link', { name: '다른 서비스에서 이전 설정 열기' }),
+    ).toHaveLength(1);
+    expect(
+      within(navigation).queryByRole('link', { name: '팔로잉 가져오기 설정 열기' }),
+    ).toBeNull();
     expect(canvas.getByRole('link', { name: '다른 서비스에서 이전 설정 열기' })).toHaveAttribute(
       'aria-current',
       'page',
     );
     expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
-    expect(
-      canvas.getByRole('group', {
-        name: '이전받을 Kosmo 프로필 현재 Profile @settings-owner@selected-profile.example',
-      }),
-    ).toBeVisible();
-    expect(
-      canvas.getByText(
-        '기존 계정 주소를 먼저 등록한 뒤 기존 서비스에서 이 Kosmo 프로필로 Move를 시작하세요. 팔로워는 옮길 수 있지만 게시물은 복사되지 않아요.',
-      ),
-    ).toBeVisible();
+    expect(canvas.queryByRole('button', { name: '기존 계정 등록 해제' })).toBeNull();
+    expect(canvas.getByRole('button', { name: '팔로잉 CSV 파일 선택' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '팔로잉 가져오기' })).toBeDisabled();
     expectProfileMigrationContentGutter(canvasElement);
+    expectProfileMigrationControlLayout(canvasElement, 'horizontal');
   },
   render: () => (
-    <SettingsRouteLayout>
-      <SettingsProfileMigrationRoute />
-    </SettingsRouteLayout>
+    <SettingsStoryChrome>
+      <SettingsRouteLayout>
+        <SettingsProfileMigrationRoute />
+      </SettingsRouteLayout>
+    </SettingsStoryChrome>
   ),
 };
 
@@ -249,9 +355,14 @@ export const ProfileMigrationMobileWeb: Story = {
   play: ({ canvasElement }) => {
     const canvas = within(canvasElement);
     expect(canvas.getByTestId('profile-migration-source-control')).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '계정 이전' })).toBeVisible();
+    expect(canvas.getByRole('heading', { name: '팔로잉 가져오기' })).toBeVisible();
     expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
+    expect(canvas.getByRole('button', { name: '팔로잉 CSV 파일 선택' })).toBeVisible();
+    expect(canvas.getByRole('button', { name: '팔로잉 가져오기' })).toBeDisabled();
     expectProfileMigrationContentGutter(canvasElement);
+    expectProfileMigrationControlLayout(canvasElement, 'vertical');
   },
   render: () => (
     <SettingsRouteLayout>

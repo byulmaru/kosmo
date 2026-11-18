@@ -38,7 +38,14 @@ mockModule('@/theme/useOverlayMotion', {
 });
 
 const PressableHost = 'Pressable' as unknown as ElementType;
+const ViewHost = 'View' as unknown as ElementType;
 let modalOverlayModule: typeof ModalOverlayModule;
+
+function styleObjects(style: unknown) {
+  return (Array.isArray(style) ? style : [style]).filter(
+    (value): value is Record<string, unknown> => value !== null && typeof value === 'object',
+  );
+}
 
 before(async () => {
   modalOverlayModule = await import('./ModalOverlay');
@@ -93,70 +100,109 @@ test('ModalOverlay closes from its backdrop or native back while preserving insi
   await act(async () => renderer.unmount());
 });
 
-test('ModalOverlay blocks dismissal when disabled and makes an exiting surface inert', async () => {
-  let closeRequests = 0;
-  let dismissed = 0;
-  let renderer!: ReactTestRenderer;
-  const onRequestClose = () => {
-    closeRequests += 1;
-  };
-  const onDismiss = () => {
-    dismissed += 1;
-  };
-  await act(async () => {
-    renderer = create(
-      createElement(modalOverlayModule.ModalOverlay, {
-        accessibilityLabel: '확인',
-        backdropTestID: 'overlay-backdrop',
-        dismissDisabled: true,
-        onDismiss,
-        onRequestClose,
-        visible: true,
-      }),
+test('ModalOverlay gates dismissal and keeps dialog and fullscreen exits inert', async () => {
+  for (const presentation of ['dialog', 'fullscreen'] as const) {
+    let closeRequests = 0;
+    let dismissed = 0;
+    let renderer!: ReactTestRenderer;
+    const onRequestClose = () => {
+      closeRequests += 1;
+    };
+    const onDismiss = () => {
+      dismissed += 1;
+    };
+    const props = {
+      accessibilityLabel: '확인',
+      backdropTestID: 'overlay-backdrop',
+      onDismiss,
+      onRequestClose,
+      presentation,
+      testID: 'overlay-surface',
+    };
+
+    await act(async () => {
+      renderer = create(
+        createElement(modalOverlayModule.ModalOverlay, {
+          ...props,
+          dismissDisabled: true,
+          visible: true,
+        }),
+      );
+    });
+    const modal = renderer.root.findByType('Modal' as never);
+    const backdrops = renderer.root.findAllByProps({ testID: 'overlay-backdrop' });
+    assert.equal(backdrops.length, presentation === 'fullscreen' ? 0 : 1);
+    if (backdrops[0]) {
+      assert.equal(backdrops[0].props.disabled, true);
+      await act(async () => backdrops[0].props.onPress());
+    }
+    await act(async () => modal.props.onRequestClose());
+    assert.equal(closeRequests, 0);
+
+    exitMounted = true;
+    await act(async () =>
+      renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
     );
-  });
-  const modal = renderer.root.findByType('Modal' as never);
-  const backdrop = renderer.root.findByProps({ testID: 'overlay-backdrop' });
-  assert.equal(backdrop.props.disabled, true);
-  await act(async () => backdrop.props.onPress());
-  await act(async () => modal.props.onRequestClose());
-  assert.equal(closeRequests, 0);
+    const root = renderer.root.find(
+      (node) => node.type === ViewHost && node.props.testID === 'overlay-surface',
+    );
+    assert.equal(renderer.root.findByType('Modal' as never).props.visible, true);
+    assert.equal(root.props.pointerEvents, 'none');
+    assert.equal(root.props.accessibilityElementsHidden, true);
+    assert.equal(root.props.importantForAccessibility, 'no-hide-descendants');
+    const exitingBackdrops = renderer.root.findAllByProps({ testID: 'overlay-backdrop' });
+    assert.equal(exitingBackdrops.length, presentation === 'fullscreen' ? 0 : 1);
+    if (exitingBackdrops[0]) {
+      assert.equal(exitingBackdrops[0].props.disabled, true);
+    }
+    assert.equal(dismissed, 0);
+    await act(async () => renderer.root.findByType('Modal' as never).props.onRequestClose());
+    assert.equal(closeRequests, 0);
 
-  exitMounted = true;
-  await act(async () =>
-    renderer.update(
-      createElement(modalOverlayModule.ModalOverlay, {
-        accessibilityLabel: '확인',
-        backdropTestID: 'overlay-backdrop',
-        onDismiss,
-        onRequestClose,
-        visible: false,
-      }),
-    ),
-  );
-  const root = renderer.root.findByType('View' as never);
-  assert.equal(renderer.root.findByType('Modal' as never).props.visible, true);
-  assert.equal(root.props.pointerEvents, 'none');
-  assert.equal(root.props.accessibilityElementsHidden, true);
-  assert.equal(root.props.importantForAccessibility, 'no-hide-descendants');
-  assert.equal(renderer.root.findByProps({ testID: 'overlay-backdrop' }).props.disabled, true);
-  assert.equal(dismissed, 0);
-  await act(async () => renderer.root.findByType('Modal' as never).props.onRequestClose());
-  assert.equal(closeRequests, 0);
+    if (presentation === 'fullscreen') {
+      const rootStyles = styleObjects(root.props.style);
+      const surfaceStyles = styleObjects(
+        renderer.root.findByType('AnimatedView' as never).props.style,
+      );
+      assert.equal(
+        rootStyles.some((style) => style.flex === 1),
+        true,
+      );
+      assert.equal(
+        rootStyles.some((style) => style.padding !== undefined),
+        false,
+      );
+      assert.equal(
+        surfaceStyles.some((style) => style.flex === 1 && style.width === '100%'),
+        true,
+      );
+      assert.equal(
+        surfaceStyles.some((style) => style.maxWidth !== undefined),
+        false,
+      );
+      assert.equal(
+        surfaceStyles.some((style) => style.transform !== undefined),
+        false,
+      );
+      assert.equal(
+        renderer.root
+          .findAllByType('AnimatedView' as never)
+          .flatMap((node) => styleObjects(node.props.style))
+          .some((style) => style.backgroundColor === 'scrim'),
+        false,
+      );
+      assert.equal(modal.props.transparent, true);
+      assert.equal(modal.props.statusBarTranslucent, true);
+      assert.equal(modal.props.navigationBarTranslucent, true);
+    }
 
-  exitMounted = false;
-  await act(async () =>
-    renderer.update(
-      createElement(modalOverlayModule.ModalOverlay, {
-        accessibilityLabel: '확인',
-        onDismiss,
-        onRequestClose,
-        visible: false,
-      }),
-    ),
-  );
-  assert.equal(dismissed, 1);
-  await act(async () => renderer.unmount());
+    exitMounted = false;
+    await act(async () =>
+      renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
+    );
+    assert.equal(dismissed, 1);
+    await act(async () => renderer.unmount());
+  }
 });
 
 test('ModalOverlay forwards the native dismissal lifecycle on iOS', async () => {
@@ -194,6 +240,129 @@ test('ModalOverlay forwards the native dismissal lifecycle on iOS', async () => 
   await act(async () =>
     renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
   );
+  assert.equal(dismissed, 1);
+  await act(async () => renderer.unmount());
+});
+
+test('ModalOverlay fullscreen on iOS uses native fade and reports native dismissal', async () => {
+  platformOS = 'ios';
+
+  for (const config of [
+    { expectedStyle: 'overFullScreen', transparent: true },
+    {
+      expectedStyle: 'fullScreen',
+      iosPresentationStyle: 'fullScreen' as const,
+      transparent: false,
+    },
+  ]) {
+    let dismissed = 0;
+    let renderer!: ReactTestRenderer;
+    const props = {
+      accessibilityLabel: '게시물 작성',
+      onDismiss: () => {
+        dismissed += 1;
+      },
+      onRequestClose: () => {},
+      presentation: 'fullscreen' as const,
+      testID: 'fullscreen-overlay',
+      ...('iosPresentationStyle' in config
+        ? { iosPresentationStyle: config.iosPresentationStyle }
+        : {}),
+    };
+    await act(async () => {
+      renderer = create(
+        createElement(modalOverlayModule.ModalOverlay, { ...props, visible: true }),
+      );
+    });
+
+    let modal = renderer.root.findByType('Modal' as never);
+    assert.equal(modal.props.visible, true);
+    assert.equal(modal.props.presentationStyle, config.expectedStyle);
+    assert.equal(modal.props.transparent, config.transparent);
+    assert.equal(modal.props.animationType, 'fade');
+    assert.equal(renderer.root.findAllByProps({ testID: 'overlay-backdrop' }).length, 0);
+
+    exitMounted = true;
+    await act(async () =>
+      renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
+    );
+    modal = renderer.root.findByType('Modal' as never);
+    const root = renderer.root.find(
+      (node) => node.type === ViewHost && node.props.testID === 'fullscreen-overlay',
+    );
+    const surfaceStyles = styleObjects(
+      renderer.root.findByType('AnimatedView' as never).props.style,
+    );
+    assert.equal(modal.props.visible, false);
+    assert.equal(root.props.pointerEvents, 'none');
+    assert.equal(
+      surfaceStyles.some((style) => style.opacity !== undefined),
+      false,
+    );
+    assert.equal(
+      surfaceStyles.some((style) => style.transform !== undefined),
+      false,
+    );
+    assert.equal(dismissed, 0);
+
+    await act(async () => modal.props.onDismiss());
+    assert.equal(dismissed, 1);
+    await act(async () =>
+      renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
+    );
+    assert.equal(dismissed, 1);
+    await act(async () => renderer.unmount());
+    exitMounted = false;
+  }
+});
+
+test('ModalOverlay fullscreen on Web keeps shared exit motion and dismissal handling', async () => {
+  platformOS = 'web';
+  let dismissed = 0;
+  let renderer!: ReactTestRenderer;
+  const props = {
+    accessibilityLabel: '게시물 작성',
+    onDismiss: () => {
+      dismissed += 1;
+    },
+    onRequestClose: () => {},
+    presentation: 'fullscreen' as const,
+    testID: 'fullscreen-overlay',
+  };
+  await act(async () => {
+    renderer = create(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: true }));
+  });
+
+  exitMounted = true;
+  await act(async () =>
+    renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
+  );
+  let modal = renderer.root.findByType('Modal' as never);
+  const root = renderer.root.find(
+    (node) => node.type === ViewHost && node.props.testID === 'fullscreen-overlay',
+  );
+  const surfaceStyles = styleObjects(renderer.root.findByType('AnimatedView' as never).props.style);
+  assert.equal(modal.props.visible, true);
+  assert.equal(root.props.pointerEvents, 'none');
+  assert.equal(
+    surfaceStyles.some((style) => style.opacity !== undefined),
+    true,
+  );
+  assert.equal(
+    surfaceStyles.some((style) => style.transform !== undefined),
+    false,
+  );
+  assert.equal(renderer.root.findAllByProps({ testID: 'overlay-backdrop' }).length, 0);
+  assert.equal(dismissed, 0);
+
+  exitMounted = false;
+  await act(async () =>
+    renderer.update(createElement(modalOverlayModule.ModalOverlay, { ...props, visible: false })),
+  );
+  modal = renderer.root.findByType('Modal' as never);
+  assert.equal(modal.props.visible, false);
+  assert.equal(typeof modal.props.onDismiss, 'function');
+  await act(async () => modal.props.onDismiss());
   assert.equal(dismissed, 1);
   await act(async () => renderer.unmount());
 });

@@ -14,11 +14,10 @@ import {
 } from '@kosmo/core/enums';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { ActivityFailure, ApplicationFailure, WorkflowFailedError } from '@temporalio/client';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { eq } from 'drizzle-orm';
 import { RemoteDocumentLoaderTypeError } from './activities/remote-document';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type { DocumentLoader } from '@fedify/vocab';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
@@ -125,9 +124,7 @@ test(
   'Oversized prepare results fail the lookup without retrying the Activity',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-payload-${process.pid}`;
     let prepareAttempts = 0;
@@ -147,7 +144,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     await worker.runUntil(async () => {
@@ -275,9 +272,7 @@ test(
       },
     );
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-remote-post-lookup-${process.pid}`;
     const activityInputs: Array<Parameters<typeof lookupRemotePostActivity>[0]> = [];
@@ -292,6 +287,7 @@ test(
     let effectActivityCalls = 0;
     const worker = await Worker.create({
       activities: {
+        collectPostLinkPreviewActivity: async () => {},
         lookupRemotePostActivity: async (input: Parameters<typeof lookupRemotePostActivity>[0]) => {
           activityInputs.push(input);
           return lookupRemotePostActivity(input);
@@ -332,11 +328,14 @@ test(
           }
           return createNotificationActivity(input);
         },
+        fanoutHomeTimelinePostActivity: async () => {},
+        loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+        insertHomeTimelinePostActivity: async () => undefined,
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
     const run = (input: unknown, id: string) =>
       environment.client.workflow.execute(remotePostLookupWorkflow.workflow, {
@@ -643,8 +642,9 @@ test(
       const directObjectUri = new URL('https://objects.example/notes/signed-direct');
       const directNoteDocument = await new Note({
         attribution: authorUri,
-        content: 'Signed Mention-only Direct',
+        content: `<p>Signed <a href="${recipientActorUri.href}">@mention-recipient</a> Direct</p>`,
         id: directObjectUri,
+        mediaType: 'text/html',
         tags: [new Mention({ href: recipientActorUri, name: '@mention-recipient' })],
         to: new URL('https://unrelated.example/users/recipient'),
       }).toJsonLd({ format: 'expand' });
@@ -827,9 +827,7 @@ test(
   'Remote Post Lookup replays the legacy remote-create child trace',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-remote-post-lookup-legacy-child-' + process.pid;
@@ -841,6 +839,9 @@ test(
       profileId,
     );
     const preparedInputs: Array<Parameters<typeof prepareRemotePostActivity>[0]> = [];
+    const generatedTimestampInputs: Array<
+      { publishedAt: string | null; receivedAt: string } | undefined
+    > = [];
     const createInputs: PostCreateActivityInput[] = [];
     const worker = await Worker.create({
       activities: {
@@ -850,7 +851,13 @@ test(
           preparedInputs.push(received);
           return { documentBytes: 42, input, requestId, status: 'prepared' } as const;
         },
-        generatePostIdActivity: async () => postId,
+        generatePostIdActivity: async (timestampInput?: {
+          publishedAt: string | null;
+          receivedAt: string;
+        }) => {
+          generatedTimestampInputs.push(timestampInput);
+          return postId;
+        },
         createPostActivity: async (
           received: PostCreateActivityInput,
         ): Promise<PostCreateActivityResult> => {
@@ -865,6 +872,9 @@ test(
           };
         },
         createNotificationActivity: async () => {},
+        fanoutHomeTimelinePostActivity: async () => {},
+        loadHomeTimelineRecipientPageActivity: async () => ({ profileIds: [], nextCursor: null }),
+        insertHomeTimelinePostActivity: async () => undefined,
         sendLocalPostCreateActivity: async () => {},
       },
       connection: environment.nativeConnection,
@@ -889,6 +899,9 @@ test(
       });
       assert.equal(preparedInputs.length, 1);
       assert.equal(preparedInputs[0]?.objectUri, input.objectUri);
+      assert.deepEqual(generatedTimestampInputs, [
+        { publishedAt: input.publishedAt, receivedAt: input.receivedAt },
+      ]);
       assert.deepEqual(createInputs, [{ input, postId }]);
 
       const history = await handle.fetchHistory();

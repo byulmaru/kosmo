@@ -4,9 +4,9 @@
   import * as Card from '#lib/components/ui/card/index.js';
   import { safeHttpUrl } from '#lib/profile-url.js';
   import { resolve } from '$app/paths';
-  import type { PageData } from './$types';
+  import type { ActionData, PageData } from './$types';
 
-  let { data }: { data: PageData } = $props();
+  let { data, form }: { data: PageData; form: ActionData | null } = $props();
 </script>
 
 <svelte:head>
@@ -62,14 +62,12 @@
     </Card.Root>
     <Card.Root>
       <Card.Header class="pb-2">
-        <Card.Title class="text-sm font-medium text-muted-foreground">
-          Posts (PUBLIC + UNLISTED)
-        </Card.Title>
+        <Card.Title class="text-sm font-medium text-muted-foreground">Posts</Card.Title>
       </Card.Header>
       <Card.Content class="text-2xl font-semibold tabular-nums">
         <a
           href={resolve('/profiles/[id]/posts', { id: data.profile.id })}
-          aria-label={`${data.profile.postCount} PUBLIC and UNLISTED posts for ${data.profile.relativeHandle}`}
+          aria-label={`${data.profile.postCount} posts for ${data.profile.relativeHandle}`}
           class="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {data.profile.postCount}
@@ -77,6 +75,40 @@
       </Card.Content>
     </Card.Root>
   </section>
+
+  {#if data.profile.origin === 'LOCAL'}
+    <Card.Root>
+      <Card.Content class="pt-6">
+        <form
+          method="POST"
+          action="?/updateDefaultPostVisibility"
+          class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"
+        >
+          <label for="default-post-visibility" class="grid gap-2 text-sm font-medium">
+            Default post visibility
+            <select
+              id="default-post-visibility"
+              name="defaultPostVisibility"
+              value={data.profile.defaultPostVisibility ?? 'UNLISTED'}
+              class="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <option value="PUBLIC">Public</option>
+              <option value="UNLISTED">Unlisted</option>
+              <option value="FOLLOWERS">Followers only</option>
+            </select>
+          </label>
+          <Button type="submit" class="w-full sm:w-auto">Save default visibility</Button>
+          {#if form?.success}
+            <p role="status" class="text-sm text-muted-foreground sm:col-span-2">
+              Default post visibility saved.
+            </p>
+          {:else if form?.error}
+            <p role="alert" class="text-sm text-destructive sm:col-span-2">{form.error}</p>
+          {/if}
+        </form>
+      </Card.Content>
+    </Card.Root>
+  {/if}
 
   <Card.Root>
     <Card.Content class="grid gap-0 px-0">

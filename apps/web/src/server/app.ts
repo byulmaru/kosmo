@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { routePath } from 'hono/route';
 import { OidcAuthError } from './auth';
 import graphqlRoutes from './routes/graphql';
+import imageUseTermsRoutes from './routes/image-use-terms';
 import loginRoutes from './routes/login';
 import logoutRoutes from './routes/logout';
 import postSharePreviewRoutes from './routes/post-share-preview';
@@ -92,6 +93,12 @@ app.get('/channel.js', (c) => {
 });
 app.all('/channel.js', (c) => c.text('Method Not Allowed', 405, { Allow: 'GET' }));
 
+app.get('/.well-known/tdmrep.json', (c) =>
+  c.json([{ location: '/', 'tdm-reservation': 1 }], 200, {
+    'Cache-Control': 'public, max-age=86400',
+  }),
+);
+
 app.on(['GET', 'HEAD'], '/robots.txt', (c, next) =>
   process.env.ENVIRONMENT === 'dev'
     ? c.text('User-agent: *\nAllow: /\n', 200, { 'Cache-Control': 'no-cache' })
@@ -102,6 +109,7 @@ app.route('/', loginRoutes);
 app.route('/', logoutRoutes);
 app.route('/', graphqlRoutes);
 app.route('/', postSharePreviewRoutes);
+app.route('/', imageUseTermsRoutes);
 app.route('/', staticRoutes);
 
 export default app;

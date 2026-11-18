@@ -16,10 +16,16 @@ import type { ReactTestRenderer } from 'react-test-renderer';
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 type QueryName = 'SessionProviderQuery' | 'ShellRecoveryQuery' | 'UniversalShellQuery';
+type RelayOperationName =
+  | QueryName
+  | 'WebPushRegisterInstallationMutation'
+  | 'WebPushUpdateInstallationMutation'
+  | 'WebPushUnregisterInstallationMutation';
 type QueryMode = 'error' | 'pending' | 'success';
 type OfrepRequest = { body: unknown; contentType: string | null; method: string; url: string };
 
 const flagEvaluationUrl = 'https://flags.kos.moe/ofrep/v1/evaluate/flags';
+const mockCommitMutation = () => undefined;
 
 const queryModes: Record<QueryName, QueryMode> = {
   SessionProviderQuery: 'success',
@@ -80,7 +86,9 @@ let originalFetch: typeof fetch;
 let originalWindowDescriptor: PropertyDescriptor | undefined;
 
 type MockBrowserWindow = {
+  addEventListener: () => void;
   location: { href: string };
+  removeEventListener: () => void;
 };
 
 let browserWindow: MockBrowserWindow;
@@ -199,6 +207,7 @@ const mockModule = (specifier: string | URL, exports: object) =>
   } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('react-native', {
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => undefined }) },
   Modal: 'Modal',
   PanResponder: { create: () => ({ panHandlers: {} }) },
   Platform: platform,
@@ -236,12 +245,16 @@ mockModule(require.resolve('lucide-react-native'), {
 mockModule('react-native-safe-area-context', {
   useSafeAreaInsets: () => ({ bottom: 0, left: 0, right: 0, top: 0 }),
 });
+mockModule('@/observability/sentry', {
+  captureHandledError: () => undefined,
+});
 mockModule('react-relay', {
   graphql: (parts: TemplateStringsArray) => {
-    const query = parts.join('').match(/query (\w+)/)?.[1];
-    assert.ok(query);
-    return query as QueryName;
+    const operation = parts.join('').match(/(?:query|mutation) (\w+)/)?.[1];
+    assert.ok(operation);
+    return operation as RelayOperationName;
   },
+  useMutation: () => [mockCommitMutation],
   useLazyLoadQuery: (
     query: QueryName,
     _variables: Record<string, unknown>,
@@ -277,6 +290,7 @@ mockModule(new URL('../analytics/client.ts', import.meta.url), {
     identifiedAnalyticsAccountId = accountId;
   },
   setAnalyticsSelectedProfile: () => undefined,
+  trackAnalyticsScreen: () => undefined,
   trackAnalytics,
 });
 mockModule(new URL('../components/post/PostContentWarningRevealContext.tsx', import.meta.url), {
@@ -294,6 +308,9 @@ mockModule('@/components/coachmark/CoachmarkProvider', {
 mockModule('@/components/notification/NotificationReadAllContext', {
   NotificationReadAllAction: () => null,
   NotificationReadAllProvider: ({ children }: PropsWithChildren) => children,
+});
+mockModule('@/components/notification/NotificationStreamUpdates', {
+  NotificationStreamUpdates: () => null,
 });
 mockModule('@/components/PageHeader', {
   PageHeader: () => null,
@@ -356,11 +373,8 @@ mockModule(new URL('./shell/shellLayout.ts', import.meta.url), {
     settingsWorkspace: false,
     showRightRail: false,
   }),
-  getWebMobileShellHeader: () => null,
   isSettingsRoute: () => false,
   isTimelineRoute: () => true,
-  isWebMobileRouteOwnedHeader: () => false,
-  webMobileShellHeaderHeight: 0,
 });
 mockModule(new URL('../relay/RelayActorProvider.tsx', import.meta.url), {
   RelayActorBoundary: MockRelayActorBoundary,
@@ -416,7 +430,9 @@ beforeEach(() => {
   selectedProfileWrites = [];
   routerReplacements.length = 0;
   browserWindow = {
+    addEventListener: () => undefined,
     location: { href: 'https://kos.moe/home' },
+    removeEventListener: () => undefined,
   };
   Object.defineProperty(globalThis, 'window', {
     configurable: true,

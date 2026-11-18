@@ -2,6 +2,7 @@ import { and, DrizzleQueryError, eq, exists, sql } from 'drizzle-orm';
 import { first, getDatabaseConnection, ProfileFollows, Profiles, Sessions } from '../db';
 import { ProfileState } from '../enums';
 import { NotFoundError } from '../error';
+import { publishProfileDisabled } from '../profile/events';
 import type { Database } from '../db';
 
 const disableProfileOnce = (profileId: string, handle?: Database) =>
@@ -72,9 +73,9 @@ const disableProfileOnce = (profileId: string, handle?: Database) =>
       .where(eq(Sessions.activeProfileId, profileId));
   });
 
-export const disableProfile = async (profileId: string, handle?: Database) => {
+export const disableProfile = async (profileId: string, handle?: Database): Promise<void> => {
   try {
-    return await disableProfileOnce(profileId, handle);
+    await disableProfileOnce(profileId, handle);
   } catch (error) {
     const deadlock =
       error instanceof DrizzleQueryError &&
@@ -86,6 +87,8 @@ export const disableProfile = async (profileId: string, handle?: Database) => {
       throw error;
     }
 
-    return disableProfileOnce(profileId, handle);
+    await disableProfileOnce(profileId, handle);
   }
+
+  await publishProfileDisabled(profileId);
 };

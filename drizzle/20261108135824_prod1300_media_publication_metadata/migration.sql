@@ -1,0 +1,1 @@
+ALTER TABLE "media" ADD COLUMN "publication_metadata" jsonb;

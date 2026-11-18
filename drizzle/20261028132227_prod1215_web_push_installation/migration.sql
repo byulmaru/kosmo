@@ -1,0 +1,1 @@
+ALTER TYPE "push_installation_platform" ADD VALUE 'WEB';

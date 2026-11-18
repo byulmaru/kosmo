@@ -51,7 +51,7 @@ PROD-1200은 공통 노출·다시 보기 기반을 소유한다. 화면별 단�
 
 - 말풍선 폭은 내용에 맞추되 256 logical unit 상한으로 하고, 좌우 safe area와 viewport 가장자리에서 16 logical unit 안으로 clamp한다. 높이는 콘텐츠에 따라 자동으로 정해지며 가용 공간을 상한으로 사용한다. 대상이 화면 밖에 남아 있어도 말풍선 높이는 safe area와 가장자리 여백을 제외한 viewport 높이를 넘지 않는다.
 - 단계마다 별도 ref 객체를 만들 필요는 없다. 같은 ref의 실제 대상이 React commit에서 교체되면 새 대상을 재측정한다. `anchorRef`의 실제 화면 좌표를 기준으로 anchor와 12 logical unit 간격을 두고 아래 공간이 부족하면 위에 배치한다. 가장자리 여백은 16 logical unit이다.
-- 화살표는 변 길이 16 logical unit인 정사각형을 45도 회전하고, 위치 보정에는 half-size 8 logical unit을 사용한다. 화살표 중심은 대상 중심을 향하되 말풍선 좌우 경계에서 최소 16 logical unit 떨어지도록 제한한다. 본문·footer를 말풍선 내부 하나의 스크롤 영역에 둔다. 긴 안내와 매우 작은 높이에서도 설명과 버튼을 모두 접근할 수 있다.
+- 화살표는 변 길이 16 logical unit인 정사각형을 45도 회전하고, 위치 보정에는 half-size 8 logical unit을 사용한다. 표면과 같은 `borderDefault` 색을 사용하며, 아래 배치에서는 위·왼쪽 두 변을, 위 배치에서는 아래·오른쪽 두 변을 표시해 표면 경계와 이어지게 한다. 화살표 중심은 대상 중심을 향하되 말풍선 좌우 경계에서 최소 16 logical unit 떨어지도록 제한한다. 본문·footer를 말풍선 내부 하나의 스크롤 영역에 둔다. 긴 안내와 매우 작은 높이에서도 설명과 버튼을 모두 접근할 수 있다.
 - 표면은 radius 16 logical unit, border 1 logical unit, 상단·좌우 padding 12 logical unit, 하단 padding 8 logical unit을 사용한다. 본문과 하단 action 행 사이는 8 logical unit이며 footer의 가로 action gap은 공용 `dialogActions` 규칙인 8 logical unit을 따른다.
 - 제목은 `uiLabelM`(14/20 logical unit), 본문은 `uiCopyM`(14/20 logical unit)을 사용하며 제목과 본문 사이 간격은 8이다. dialog 접근성 이름은 제목을 우선하고 제목이 없으면 본문을 사용한다. X 닫기는 제공하지 않는다.
 - 진행 표시는 제목 위 한 행에 배경과 테두리 없는 현재/전체 숫자 텍스트와 가로 분할 막대를 함께 둔다. 숫자는 `1/4` 형식의 `uiCopyS`와 `foregroundSecondary`로 표시한다. 막대는 숫자 텍스트 영역 상단에서 4 logical unit 내려 정렬한다. 전체 단계 수만큼 나누고 현재 단계까지 primary 색으로 채우며, 남은 단계는 중립색으로 표시하고 테두리는 두지 않는다. 숫자와 채움은 공용 semantic token으로 밝은·어두운 테마의 대비를 유지한다. 한 개의 비대화형 progressbar가 현재·전체 값을 전달하며 숫자와 각 막대를 중복해서 읽지 않는다. 제목이 없으면 본문 위에 표시한다.

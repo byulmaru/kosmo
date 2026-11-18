@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { afterEach, before, describe, it, mock } from 'node:test';
+import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
+import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { WebPushSupport } from '@/components/native-push/webPushPermissionContext';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -14,6 +17,18 @@ const require = createRequire(import.meta.url);
 
 const platform = { OS: 'ios' };
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+const browserWindow = {
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+  scrollTo: () => undefined,
+};
+const browserDocument = {
+  visibilityState: 'visible',
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+};
+const appState = { addEventListener: () => ({ remove: () => undefined }) };
 let activeProfileId = 'profile-a';
 let renderer: ReactTestRenderer | null = null;
 let nativeHomeReselectionHandler: (() => void) | null = null;
@@ -37,12 +52,15 @@ const toasts: Array<{
 let toastCleanupCount = 0;
 
 const environment = {
-  check: () => ({ status: 'missing' }),
   retain: () => ({ dispose: () => undefined }),
 };
 
-function MockPostList({ identityKey }: { identityKey?: string }) {
-  return createElement('TimelineRows', { identityKey });
+function MockPostList({ header, ...props }: { header?: ReactNode; [key: string]: unknown }) {
+  return createElement('TimelineRows', props, header);
+}
+
+function MockBanner() {
+  return createElement('Banner');
 }
 
 function localData() {
@@ -59,6 +77,20 @@ const homeData = {
   currentSession: { id: 'session', selectedProfile: { id: 'profile-a' } },
   me: { id: 'me', name: 'Me', profiles: [{ id: 'profile-a' }] },
 };
+
+function homeWithWebPush(support: WebPushSupport) {
+  return createElement(
+    WebPushPermissionContext.Provider,
+    {
+      value: {
+        permission: 'default',
+        requestPermission: async () => undefined,
+        support,
+      },
+    },
+    createElement(HomeTimelineScreen),
+  );
+}
 
 const localRefetch = (
   _variables: object,
@@ -85,10 +117,16 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
 
 mockModule('expo-router', {
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
+  useIsFocused: () => true,
+  useFocusEffect: () => undefined,
 });
-mockModule('lucide-react-native', { UserRoundPlus: 'UserRoundPlus' });
-mockModule(require.resolve('lucide-react-native'), { UserRoundPlus: 'UserRoundPlus' });
+mockModule('lucide-react-native', { Bell: 'Bell', UserRoundPlus: 'UserRoundPlus' });
+mockModule(require.resolve('lucide-react-native'), {
+  Bell: 'Bell',
+  UserRoundPlus: 'UserRoundPlus',
+});
 mockModule('react-native', {
+  AppState: appState,
   Platform: platform,
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
@@ -102,8 +140,11 @@ mockModule('react-relay', {
     options.fetchPolicy === 'store-or-network' ? homeData : localData(),
   useRefetchableFragment: () => [null, localRefetch],
   useRelayEnvironment: () => environment,
+  useSubscription: () => undefined,
 });
 mockModule('relay-runtime', {
+  ConnectionHandler,
+  ROOT_ID,
   createOperationDescriptor: () => ({}),
   fetchQuery: () => ({
     subscribe: (observer: { complete?: () => void; error?: (error: Error) => void }) => {
@@ -114,7 +155,13 @@ mockModule('relay-runtime', {
   getRequest: () => ({}),
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+mockModule('@/components/shell/NavigationDrawerTrigger', { NavigationDrawerTrigger: () => null });
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+});
 mockModule('@/components/post/PostList', { PostList: MockPostList });
+mockModule('@/components/ui/Banner', { Banner: MockBanner });
+mockModule('@/components/post/PostRequestList', { PostRequestListSummary: () => null });
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
 });
@@ -130,7 +177,6 @@ mockModule('@/components/shell/ShellChromeContext', {
 });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
-  getWebMobileShellHeaderStickyOffset: () => 0,
 });
 mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
 mockModule('@/components/ui/Button', { Button: () => null });
@@ -154,6 +200,11 @@ before(async () => {
   ({ default: LocalTimelineScreen } = await import('./LocalTimelineScreen'));
 });
 
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
+});
+
 afterEach(async () => {
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -171,12 +222,29 @@ afterEach(async () => {
   } else {
     Reflect.deleteProperty(globalThis, 'window');
   }
+  if (originalDocumentDescriptor) {
+    Object.defineProperty(globalThis, 'document', originalDocumentDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, 'document');
+  }
 });
 
 describe('Timeline refresh', () => {
+  it('places the eligible Web permission banner before Home posts', async () => {
+    platform.OS = 'web';
+    await act(async () => {
+      renderer = create(homeWithWebPush('supported'));
+    });
+
+    const contentOrder = renderer?.root
+      .findAll((node) => node.type === MockBanner || node.type === MockPostList)
+      .map((node) => node.type);
+    assert.deepEqual(contentOrder, [MockBanner, MockPostList]);
+  });
+
   it('iOS Home root 재선택은 pending refresh를 중복 요청하지 않고 완료 뒤 다시 처리한다', async () => {
     await act(async () => {
-      renderer = create(createElement(HomeTimelineScreen));
+      renderer = create(homeWithWebPush('unsupported'));
     });
 
     assert.ok(nativeHomeReselectionHandler);
@@ -210,12 +278,12 @@ describe('Timeline refresh', () => {
       if (os === 'web') {
         Object.defineProperty(globalThis, 'window', {
           configurable: true,
-          value: { scrollTo: () => undefined },
+          value: { ...browserWindow, scrollTo: () => undefined },
         });
       }
 
       await act(async () => {
-        renderer = create(createElement(HomeTimelineScreen));
+        renderer = create(homeWithWebPush('unsupported'));
       });
 
       let postList = renderer?.root.findByType(MockPostList);
