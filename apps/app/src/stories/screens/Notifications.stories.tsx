@@ -869,6 +869,75 @@ export const SourceUnavailableNotificationFallbacks: Story = {
   render: () => <SourceUnavailableList />,
 };
 
+const sensitivePreviewText = '이 알림에서 볼 수 있는 게시글 내용';
+const sensitivePreviewAlt = '가려진 첨부 이미지 설명';
+const sensitivePreviewPost = notificationPost({
+  bodyText: sensitivePreviewText,
+  id: 'notification-sensitive-preview-post',
+  media: [
+    {
+      ...notificationReplyMedia,
+      aiProhibitFilterApplied: true,
+      altText: sensitivePreviewAlt,
+    },
+  ],
+  profile: notificationRecipient,
+});
+const sensitiveReaction = reactionNotification({
+  id: 'notification-sensitive-preview-reaction',
+  post: sensitivePreviewPost,
+  profile: readFollower,
+});
+
+export const SensitivePreviewWithUnknownContent: Story = {
+  parameters: {
+    relay: {
+      data: {
+        nodes: storyProfiles.map((node) =>
+          node.id === contentProfile.id
+            ? {
+                ...contentProfile,
+                notifications: {
+                  ...contentProfile.notifications,
+                  edges: [
+                    {
+                      cursor: sensitiveReaction.id,
+                      node: {
+                        ...sensitiveReaction,
+                        post: {
+                          ...sensitivePreviewPost,
+                          content: {
+                            ...sensitivePreviewPost.content,
+                            document: {
+                              version: 1,
+                              summary: null,
+                              body: {
+                                type: 'doc',
+                                attrs: { sensitiveMedia: true },
+                                content: [{ type: 'future_block' }],
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              }
+            : node,
+        ),
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.findByText(sensitivePreviewText)).resolves.toBeVisible();
+    expect(canvas.queryByLabelText(/가려진 첨부 이미지 설명|학습방지 필터 적용됨/)).toBeNull();
+    expect(canvas.queryByAltText(sensitivePreviewAlt)).toBeNull();
+  },
+  render: () => <RefreshList />,
+};
+
 export const ReadAllLoadedZero: Story = {
   play: ({ canvasElement }) => {
     const action = within(canvasElement).getByRole('button', { name: '모두 읽음' });
