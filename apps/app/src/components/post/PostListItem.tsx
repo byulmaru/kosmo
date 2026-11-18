@@ -381,13 +381,7 @@ function PostListItemFeedback({
   );
 }
 
-function PostAttributionRow({
-  children,
-  icon,
-}: {
-  children: ReactNode;
-  icon: ReactNode;
-}) {
+function PostAttributionRow({ children, icon }: { children: ReactNode; icon: ReactNode }) {
   return (
     <View pointerEvents="box-none" style={styles.attributionRow}>
       <View style={[styles.attributionIconColumn, { pointerEvents: 'none' }]}>{icon}</View>

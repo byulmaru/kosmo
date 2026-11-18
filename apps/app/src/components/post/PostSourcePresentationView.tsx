@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
@@ -9,8 +9,7 @@ import { TimestampText } from '@/components/ui/TimestampText';
 import { useAnimatedColorTransition } from '@/components/ui/useAnimatedColorTransition';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
-import { textStyles } from '@/theme/tokens';
+import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
 import { PostVisibilityIcon } from './PostVisibilityIcon';

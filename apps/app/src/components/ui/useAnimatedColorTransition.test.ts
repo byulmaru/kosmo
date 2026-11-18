@@ -61,7 +61,8 @@ const opacityTimingCalls: OpacityTimingCall[] = [];
 const themeKey = {};
 
 mockModule('react-native', {
-  processColor: () => undefined,
+  processColor: (value: string) =>
+    value === '#4080c080' ? { r: 64, g: 128, b: 192, a: 128 / 255 } : undefined,
   Animated: {
     Color: AnimatedColorMock,
     Value: AnimatedValueMock,
