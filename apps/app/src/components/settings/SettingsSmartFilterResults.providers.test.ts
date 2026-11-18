@@ -88,6 +88,7 @@ mockModule('expo-router', {
   useRouter: () => ({ push: (href: string) => navigations.push(href) }),
 });
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   Platform: { OS: 'ios' },
   Pressable: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) =>
     createElement('Pressable', props, children),
@@ -130,12 +131,16 @@ mockModule('@/components/ui/StateView', {
 mockModule('@/components/ui/TextField', {
   TextArea: (props: Record<string, unknown>) => createElement('TextArea', props),
 });
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+});
 mockModule('@/lib/date', { formatTimelineTimestamp: () => '방금' });
 mockModule('@/relay/RelayActorProvider', { useRelayActorLifecycleKey: () => 'actor' });
 mockModule('@/session/SessionProvider', {
   useSession: () => ({ selectedProfileId: profile.id, sessionId: 'session:one', status: 'valid' }),
 });
 mockModule('@/theme/ThemeProvider', {
+  useReducedMotion: () => false,
   useTheme: () => ({
     ...mockTheme,
     feedbackDangerBase: 'danger',

@@ -420,6 +420,7 @@ mockModule('@/relay/RelayEnvironmentBoundary', {
 });
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
+  useReducedMotion: () => false,
   useTheme: () => ({
     backgroundElevated: '#fff',
     borderDefault: '#ddd',

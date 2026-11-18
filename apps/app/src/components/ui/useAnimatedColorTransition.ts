@@ -14,6 +14,8 @@ function createAnimatedColor(value: string): Animated.AnimatedColor {
 export type AnimatedColorRole = 'instant' | 'interaction' | 'selection';
 export type AnimatedColorValue = string | Animated.AnimatedColor;
 
+export type AnimatedOpacityValue = number | Animated.Value;
+
 type AnimatedColorTransitionOptions = {
   color: string;
   interactionKey?: unknown;
@@ -145,4 +147,102 @@ export function useAnimatedColorTransition({
   }, [animatedColor, color, reducedMotion, transition.duration]);
 
   return transition.duration === motion.duration.instant || reducedMotion ? color : animatedColor;
+}
+
+type AnimatedOpacityTransitionOptions = {
+  instantKey?: unknown;
+  interactionKey?: unknown;
+  opacity: number;
+  reducedMotion: boolean;
+  role: AnimatedColorRole;
+  selectionKey?: unknown;
+};
+
+type OpacityTransitionState = {
+  duration: number;
+  instantKey?: unknown;
+  interactionKey?: unknown;
+  opacity: number;
+  role: AnimatedColorRole;
+  selectionKey?: unknown;
+};
+
+/** Reuses the same timing contract for existing scalar opacity feedback. */
+export function useAnimatedOpacityTransition({
+  instantKey,
+  interactionKey,
+  opacity,
+  reducedMotion,
+  role,
+  selectionKey,
+}: AnimatedOpacityTransitionOptions): AnimatedOpacityValue {
+  const [transition, setTransition] = useState<OpacityTransitionState>(() => ({
+    duration: motion.duration.instant,
+    interactionKey,
+    instantKey,
+    opacity,
+    role,
+    selectionKey,
+  }));
+
+  if (
+    transition.opacity !== opacity ||
+    transition.instantKey !== instantKey ||
+    (reducedMotion && transition.duration !== motion.duration.instant)
+  ) {
+    setTransition({
+      duration:
+        reducedMotion || transition.instantKey !== instantKey
+          ? motion.duration.instant
+          : durationForTransition(
+              transition.role,
+              role,
+              selectionKey !== transition.selectionKey &&
+                interactionKey === transition.interactionKey,
+            ),
+      opacity,
+      interactionKey,
+      instantKey,
+      role,
+      selectionKey,
+    });
+  } else if (
+    transition.role !== role ||
+    transition.selectionKey !== selectionKey ||
+    transition.interactionKey !== interactionKey
+  ) {
+    setTransition({
+      ...transition,
+      duration: role === 'instant' ? motion.duration.instant : transition.duration,
+      interactionKey,
+      role,
+      selectionKey,
+    });
+  }
+
+  const animatedOpacity = useRef<Animated.Value | null>(null);
+  if (animatedOpacity.current === null) {
+    animatedOpacity.current = new Animated.Value(opacity);
+  }
+  const value = animatedOpacity.current;
+
+  useEffect(() => {
+    value.stopAnimation();
+
+    if (transition.duration === motion.duration.instant || reducedMotion) {
+      value.setValue(opacity);
+      return;
+    }
+
+    const animation = Animated.timing(value, {
+      duration: transition.duration,
+      easing: Easing.bezier(...motion.easingPoints.standard),
+      toValue: opacity,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [opacity, reducedMotion, transition.duration, value]);
+
+  return transition.duration === motion.duration.instant || reducedMotion ? opacity : value;
 }

@@ -8,10 +8,12 @@ import baseMeta, {
   MobileHandleRowTargetContract as mobileHandleRowTargetContract,
   MobileOverlayContract as mobileOverlayContract,
   MobileWebSearchScrollResetContract as mobileWebSearchScrollResetContract,
+  MotionContract as motionContract,
   RecentSectionContract as recentSectionContract,
   RecentTwoRowsMobileWebContract as recentTwoRowsMobileWebContract,
   RecentTwoRowsNativeContract as recentTwoRowsNativeContract,
   RecentTwoRowsWebContract as recentTwoRowsWebContract,
+  ReducedMotionContract as reducedMotionContract,
   SearchScrollResetContract as searchScrollResetContract,
   SequentialKeyboardBrowseContract as sequentialKeyboardBrowseContract,
   WebGridGeometryContract as webGridGeometryContract,
@@ -22,6 +24,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 const meta = {
   ...baseMeta,
   excludeStories: [],
+  parameters: { ...baseMeta.parameters, controls: { disable: true } },
   title: 'KOSMO/Components/Full Reaction Picker/Tests',
 } satisfies Meta<typeof baseMeta.component>;
 
@@ -30,6 +33,8 @@ type Story = StoryObj<typeof meta>;
 
 export const InteractionContract: Story = interactionContract;
 export const LoadingContract: Story = loadingContract;
+export const MotionContract: Story = { ...motionContract, tags: ['motion'] };
+export const ReducedMotionContract: Story = { ...reducedMotionContract, tags: ['motion'] };
 export const MobileGridGeometryContract: Story = mobileGridGeometryContract;
 export const MobileBrowseGeometryContract: Story = mobileBrowseGeometryContract;
 export const MobileExpandedGeometryContract: Story = mobileExpandedGeometryContract;

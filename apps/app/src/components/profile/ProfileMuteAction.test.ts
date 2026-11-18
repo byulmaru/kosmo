@@ -10,6 +10,7 @@ import type * as MuteModule from './ProfileMuteAction';
 const mockModule = (specifier: string, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 mockModule('react-native', {
+  Animated: { Text: 'AnimatedText' },
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
   Text: 'Text',
@@ -26,9 +27,13 @@ mockModule('@/components/profile/ProfileMuteController', { useProfileMuteMutatio
 mockModule('@/components/ui/Button', { Button: 'Button' });
 mockModule('@/components/ui/ConfirmationContent', { ConfirmationContent: 'ConfirmationContent' });
 mockModule('@/components/ui/ModalSheet', { ModalSheet: 'ModalSheet' });
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+});
 mockModule('@/components/ui/ToastProvider', { useToast: () => ({ showToast: () => {} }) });
 mockModule('@/session/SessionProvider', { useSession: () => ({ selectedProfileId: 'viewer' }) });
-mockModule('@/theme/ThemeProvider', { useTheme: () => ({}) });
+mockModule('@/theme/ThemeProvider', { useReducedMotion: () => false, useTheme: () => ({}) });
 let muteModule: typeof MuteModule;
 before(async () => {
   muteModule = await import('./ProfileMuteAction');
