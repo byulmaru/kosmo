@@ -9,8 +9,8 @@ import {
   getUnreadNotificationAccessibilityLabel,
 } from './navigationChrome';
 import { useAnimatedColorTransition } from './useAnimatedColorTransition';
-import type { ReactElement, ReactNode } from 'react';
-import type { ViewStyle } from 'react-native';
+import type { ReactElement, ReactNode, RefObject } from 'react';
+import type { View as NativeView, ViewStyle } from 'react-native';
 import type {
   BottomTabBarProps,
   BottomTabBarRenderControlProps,
@@ -30,6 +30,7 @@ const items = [
 
 type BottomTabBarItemProps = {
   contentHeight: number;
+  controlRef?: RefObject<NativeView | null>;
   destination: BottomTabDestination;
   label: string;
   onNavigate: (destination: BottomTabDestination) => void;
@@ -102,6 +103,7 @@ function BottomTabVisual({
 
 function BottomTabBarItem({
   contentHeight,
+  controlRef,
   destination,
   label,
   onNavigate,
@@ -141,6 +143,7 @@ function BottomTabBarItem({
       accessibilityRole="button"
       accessibilityState={{ disabled, selected: active }}
       disabled={disabled}
+      ref={controlRef}
       onBlur={() => setFocusVisible(false)}
       onFocus={(event) => {
         if (!web) {
@@ -223,6 +226,7 @@ function BottomTabBarItem({
 }
 
 export function BottomTabBar({
+  composeControlRef,
   currentDestination = null,
   onNavigate,
   platform = 'web',
@@ -251,6 +255,7 @@ export function BottomTabBar({
       {items.map(({ destination, label }) => (
         <BottomTabBarItem
           contentHeight={contentHeight}
+          controlRef={destination === 'compose' ? composeControlRef : undefined}
           destination={destination}
           key={destination}
           label={label}

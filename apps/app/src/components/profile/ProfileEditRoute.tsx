@@ -142,6 +142,25 @@ const updateProfileMutation = graphql`
   }
 `;
 
+type SelectedProfile = NonNullable<
+  NonNullable<ProfileEditRouteQuery['response']['currentSession']>['selectedProfile']
+>;
+type EditableProfile = Omit<SelectedProfile, 'displayName' | 'tags'> & {
+  displayName: NonNullable<SelectedProfile['displayName']>;
+  tags: NonNullable<SelectedProfile['tags']>;
+};
+
+function isEditableProfile(
+  profile: SelectedProfile | null | undefined,
+): profile is EditableProfile {
+  return (
+    profile?.instance?.kind === 'LOCAL' &&
+    profile.viewerState?.membership?.role === 'OWNER' &&
+    profile.displayName != null &&
+    profile.tags != null
+  );
+}
+
 export function ProfileEditRoute({ fetchKey }: { fetchKey: string }) {
   const router = useRouter();
   const data = useLazyLoadQuery<ProfileEditRouteQuery>(
@@ -150,11 +169,7 @@ export function ProfileEditRoute({ fetchKey }: { fetchKey: string }) {
     { fetchKey, fetchPolicy: 'network-only' },
   );
   const selectedProfile = data.currentSession?.selectedProfile;
-  const profile =
-    selectedProfile?.instance.kind === 'LOCAL' &&
-    selectedProfile.viewerState?.membership?.role === 'OWNER'
-      ? selectedProfile
-      : null;
+  const profile = isEditableProfile(selectedProfile) ? selectedProfile : null;
 
   if (!profile) {
     const returnHandle = selectedProfile?.relativeHandle;
@@ -176,13 +191,7 @@ export function ProfileEditRoute({ fetchKey }: { fetchKey: string }) {
   return <EditableProfileRoute key={profile.id} profile={profile} />;
 }
 
-function EditableProfileRoute({
-  profile,
-}: {
-  profile: NonNullable<
-    NonNullable<ProfileEditRouteQuery['response']['currentSession']>['selectedProfile']
-  >;
-}) {
+function EditableProfileRoute({ profile }: { profile: EditableProfile }) {
   const router = useRouter();
   const { showToast } = useToast();
   const initialAvatar = createProfileEditRouteImage(profile.avatar);
@@ -403,7 +412,7 @@ function EditableProfileRoute({
           }
           const savedDraft = {
             ...draft,
-            tags: response.updateProfile.profile.tags.map((tag) => tag.name),
+            tags: response.updateProfile.profile.tags?.map((tag) => tag.name) ?? draft.tags,
           };
           setValue(savedDraft);
           setCleanValue(savedDraft);

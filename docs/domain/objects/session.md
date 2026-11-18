@@ -54,6 +54,8 @@ Account의 Session은 변경하지 않는다.
 
 현재 Session 폐기는 상태 수준에서 멱등이다. 폐기 완료 뒤 같은 credential로 시작한 새 요청은 인증 경계에서 거부되며,
 폐기 전에 인증을 마친 경쟁 요청은 Session을 다른 terminal 상태로 덮어쓰지 않는다.
+현재 Session 폐기는 해당 Session에 열린 실시간 구독에 종료를 알린다. 같은 Account의 다른 Session과 그 구독에는
+영향을 주지 않는다.
 
 `Session.Self`는 현재 Session 폐기 행동의 진입 권한이며 클라이언트 로그아웃의 완료 조건이 아니다. 현재
 Session 폐기는 Suspended Account도 요청할 수 있는 `Account.Active`의 명시적 예외다. 따라서 credential이

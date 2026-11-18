@@ -7,6 +7,7 @@ import {
   useUnexpectedErrorReporter,
 } from '@/observability/UnexpectedErrorContext';
 import { formatGraphQLError } from '@/relay/network';
+import { NativeResumeRetry } from './NativeResumeRetry';
 import type { PropsWithChildren } from 'react';
 import type { UnexpectedErrorReporter } from '@/observability/UnexpectedErrorContext';
 
@@ -28,13 +29,16 @@ export function GraphQLErrorBoundary({ children, onError, onRetry }: GraphQLErro
     <UnexpectedErrorContext.Provider value={reportError}>
       <ErrorBoundary
         fallbackRender={({ error, resetErrorBoundary }) => (
-          <StateView
-            actionLabel="앱 다시 불러오기"
-            alert
-            description={formatGraphQLError(error)}
-            onAction={resetErrorBoundary}
-            title="앱을 불러오지 못했어요"
-          />
+          <>
+            <NativeResumeRetry onRetry={resetErrorBoundary} />
+            <StateView
+              actionLabel="앱 다시 불러오기"
+              alert
+              description={formatGraphQLError(error)}
+              onAction={resetErrorBoundary}
+              title="앱을 불러오지 못했어요"
+            />
+          </>
         )}
         onError={(error, info) => {
           reportError?.(error, info);

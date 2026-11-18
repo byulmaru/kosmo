@@ -599,6 +599,57 @@ export const ViewportCollision: Story = {
   },
 };
 
+export const LongMenuWithError: Story = {
+  render: (args) => (
+    <ActionMenu
+      accessibilityLabel="긴 작업 메뉴"
+      error="작업을 완료하지 못했습니다. 다시 시도해 주세요."
+      items={Array.from({ length: 24 }, (_, index) => ({
+        key: `long-${index}`,
+        label: `작업 ${index + 1}`,
+        onSelect: () => args.onSelect?.(`long-${index}`),
+      }))}
+      renderTrigger={({ onPress, ref, expanded }) => (
+        <Pressable
+          ref={ref}
+          onPress={onPress}
+          aria-expanded={expanded}
+          accessibilityRole="button"
+          accessibilityLabel="긴 작업 열기"
+          style={styles.trigger}
+        >
+          <Text>긴 작업 열기</Text>
+        </Pressable>
+      )}
+    />
+  ),
+  play: async ({ args, canvasElement }) => {
+    args.onSelect?.mockClear();
+    const trigger = within(canvasElement).getByRole('button', { name: '긴 작업 열기' });
+    await userEvent.click(trigger);
+    const menu = await screen.findByRole('menu', { name: '긴 작업 메뉴' });
+    const scroll = menu.parentElement!;
+    const error = screen.getByRole('alert');
+    const last = within(menu).getByRole('menuitem', { name: '작업 24' });
+    await waitFor(() => expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight));
+    scroll.scrollTop = scroll.scrollHeight;
+    await waitFor(() => {
+      const bounds = scroll.getBoundingClientRect();
+      expect(error.getBoundingClientRect().bottom).toBeLessThanOrEqual(bounds.bottom + 1);
+      expect(last.getBoundingClientRect().top).toBeGreaterThanOrEqual(bounds.top);
+      expect(bounds.bottom).toBeLessThanOrEqual(
+        canvasElement.ownerDocument.documentElement.clientHeight,
+      );
+    });
+    await userEvent.click(last);
+    await waitFor(() => expect(args.onSelect).toHaveBeenCalledWith('long-23'));
+    await waitFor(() =>
+      expect(screen.queryByRole('menu', { name: '긴 작업 메뉴' })).not.toBeInTheDocument(),
+    );
+    expect(trigger).toHaveFocus();
+  },
+};
+
 const styles = StyleSheet.create({
   compactTrigger: { height: 28, minHeight: 28, padding: 0, width: 50 },
   fixture: { gap: spacing.md },

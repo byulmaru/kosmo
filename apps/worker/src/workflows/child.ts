@@ -8,8 +8,13 @@ import type {
   WorkflowResultType,
 } from '@temporalio/workflow';
 
+type ChildWorkflowCallOptions<T extends Workflow> = WithWorkflowArgs<
+  T,
+  Omit<ChildWorkflowOptions, 'typeInfo'> & { typeInfo?: never }
+>;
+
 type RunChildWorkflowOptions<T extends Workflow, Mode extends 'start' | 'execute'> = Omit<
-  WithWorkflowArgs<T, ChildWorkflowOptions>,
+  ChildWorkflowCallOptions<T>,
   'workflowId'
 > & {
   readonly mode: Mode;
@@ -31,7 +36,7 @@ export async function runChildWorkflow<T extends Workflow>(
   const options = {
     ...childOptions,
     workflowId: definition.workflowIdFromArgs(...args),
-  } as WithWorkflowArgs<T, ChildWorkflowOptions>;
+  } as ChildWorkflowCallOptions<T>;
 
   if (mode === 'start') {
     if (typeof definition.workflow === 'string') {

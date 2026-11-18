@@ -17,6 +17,7 @@ import { postListMetrics } from './postListMetrics';
 import { usePostMediaViewerHost } from './PostMediaViewerHost';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView, PostSourcePreview } from './PostSourcePresentationView';
+import { PostVisibilityIcon } from './PostVisibilityIcon';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { PostListItem_post$key } from './__generated__/PostListItem_post.graphql';
@@ -29,6 +30,7 @@ const PostListRowFragment = graphql`
   fragment PostListRow_post on Post {
     id
     createdAt
+    visibility
     content {
       id
     }
@@ -41,7 +43,6 @@ const PostListRowFragment = graphql`
         url
       }
       id
-      handle
       relativeHandle
       displayName
       ...ProfileNameBlock_profile
@@ -64,7 +65,6 @@ const PostListItemFragment = graphql`
         url
       }
       id
-      handle
       relativeHandle
       displayName
     }
@@ -72,6 +72,7 @@ const PostListItemFragment = graphql`
       id
       profile {
         displayName
+        relativeHandle
       }
     }
     ...PostReplySurface_post
@@ -179,10 +180,14 @@ export function PostListItem({
           numberOfLines={1}
           style={[styles.attributionLabel, { color: theme.textSecondary, pointerEvents: 'none' }]}
         >
-          {post.replyParent.profile.displayName}님에게 답글
+          {post.replyParent.profile.displayName ?? post.replyParent.profile.relativeHandle}님에게
+          답글
         </Text>
       </PostAttributionRow>
     ) : null;
+
+  const authorTopInset =
+    pinnedAttribution || replyAttribution ? 0 : post.repostSource ? spacing.sm : spacing.md;
 
   const renderWithReplySurface = (presentation: ReactNode) => (
     <>
@@ -201,6 +206,7 @@ export function PostListItem({
         {replyAttribution}
         <PostListRow
           actionBarStyle={Platform.OS === 'web' ? styles.webActionBarSlot : styles.actionBarSlot}
+          authorTopInset={authorTopInset}
           post={post}
           reply={reply}
         />
@@ -224,7 +230,7 @@ export function PostListItem({
         >
           <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
             <Pressable
-              accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
+              accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle} 프로필 보기`}
               accessibilityRole="link"
               style={styles.repostLabelTarget}
             >
@@ -232,7 +238,7 @@ export function PostListItem({
                 numberOfLines={1}
                 style={[styles.attributionLabel, { color: theme.textSecondary }]}
               >
-                {post.profile.displayName}님이 재게시함
+                {post.profile.displayName ?? post.profile.relativeHandle}님이 재게시함
               </Text>
             </Pressable>
           </NavigationLink>
@@ -251,7 +257,10 @@ export function PostListItem({
     <PostListItemCard onBackgroundPress={openDetail} style={compactCardStyle}>
       {pinnedAttribution}
       {replyAttribution}
-      <PostDetailBackground onBackgroundPress={openDetail} style={styles.quoteRow}>
+      <PostDetailBackground
+        onBackgroundPress={openDetail}
+        style={[styles.quoteRow, { marginTop: -authorTopInset }]}
+      >
         <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
           <Pressable
             aria-hidden
@@ -259,18 +268,19 @@ export function PostListItem({
             accessible={false}
             focusable={false}
             importantForAccessibility="no-hide-descendants"
-            style={styles.avatar}
+            style={[styles.avatar, { paddingTop: authorTopInset }]}
             tabIndex={-1}
           >
             <Avatar
               imageUri={post.profile.avatar?.url}
-              label={post.profile.displayName || post.profile.handle}
+              label={post.profile.displayName || post.profile.relativeHandle}
               size={48}
             />
           </Pressable>
         </NavigationLink>
         <View style={styles.sourcePresentation}>
           <PostSourcePresentationView
+            authorTopInset={authorTopInset}
             onBackgroundPress={openDetail}
             onMediaOpen={handleQuoteMediaOpen}
             post={post}
@@ -279,6 +289,7 @@ export function PostListItem({
           />
           <PostActionSurface
             actionBarStyle={Platform.OS === 'web' ? styles.webQuoteActionBar : undefined}
+            onActionBarBackgroundPress={openDetail}
             onReactionSummaryBackgroundPress={openDetail}
             reactionSummaryStyle={styles.quoteReactionSummary}
             reply={reply}
@@ -367,11 +378,13 @@ function PostAttributionRow({
 
 function PostListRow({
   actionBarStyle,
+  authorTopInset = 0,
   post: postKey,
   reply,
   surfacePostId,
 }: {
   actionBarStyle?: StyleProp<ViewStyle>;
+  authorTopInset?: number;
   post: PostListRow_post$key;
   reply?: PostActionBarProps['reply'];
   surfacePostId?: string;
@@ -396,7 +409,7 @@ function PostListRow({
   return (
     <PostDetailBackground
       onBackgroundPress={openDetail}
-      style={styles.standardRow}
+      style={[styles.standardRow, { marginTop: -authorTopInset }]}
       testID="post-list-standard-row"
     >
       <NavigationLink resetScroll href={profileHref} push={Platform.OS !== 'web'}>
@@ -406,26 +419,33 @@ function PostListRow({
           accessible={false}
           focusable={false}
           importantForAccessibility="no-hide-descendants"
-          style={styles.avatar}
+          style={[styles.avatar, { paddingTop: authorTopInset }]}
           tabIndex={-1}
         >
           <Avatar
             imageUri={post.profile.avatar?.url}
-            label={post.profile.displayName || post.profile.handle}
+            label={post.profile.displayName || post.profile.relativeHandle}
             size={48}
           />
         </Pressable>
       </NavigationLink>
       <PostDetailBackground onBackgroundPress={openDetail} style={styles.content}>
         <PostDetailBackground onBackgroundPress={openDetail} style={styles.header}>
-          <ProfileNameBlock href={profileHref} profile={post.profile} />
-          <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
-            <Pressable accessibilityRole="link" style={styles.timeLink}>
-              <TimestampText style={styles.time}>
-                {formatTimelineTimestamp(post.createdAt)}
-              </TimestampText>
-            </Pressable>
-          </Link>
+          <ProfileNameBlock
+            href={profileHref}
+            profile={post.profile}
+            style={[styles.authorText, { paddingTop: authorTopInset }]}
+          />
+          <View style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
+            <Link asChild href={detailHref} push={Platform.OS !== 'web'}>
+              <Pressable accessibilityRole="link" style={styles.timeLink}>
+                <TimestampText testID="post-timestamp">
+                  {formatTimelineTimestamp(post.createdAt)}
+                </TimestampText>
+              </Pressable>
+            </Link>
+            <PostVisibilityIcon visibility={post.visibility} />
+          </View>
         </PostDetailBackground>
         {post.content ? (
           <PostDetailBackground onBackgroundPress={openDetail} style={styles.bodyLink}>
@@ -437,6 +457,7 @@ function PostListRow({
         ) : null}
         <PostActionSurface
           actionBarStyle={actionBarStyle}
+          onActionBarBackgroundPress={openDetail}
           onReactionSummaryBackgroundPress={openDetail}
           reactionSummaryStyle={styles.reactionSummary}
           reply={reply}
@@ -484,11 +505,20 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: 'space-between',
   },
-  timeLink: { borderRadius: radii.sm, flexShrink: 0 },
-  time: {
+  authorText: { flex: -1 },
+  timeLink: {
+    alignItems: 'flex-end',
+    borderRadius: radii.sm,
+    flexShrink: 0,
+    justifyContent: 'center',
     minHeight: 44,
     minWidth: 44,
-    paddingTop: 12,
+  },
+  timeMetadata: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: spacing.xs,
   },
   bodyLink: { borderRadius: radii.sm, minWidth: 0 },
   sourcePresentation: { flex: 1, minWidth: 0 },

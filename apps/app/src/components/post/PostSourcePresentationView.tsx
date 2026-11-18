@@ -1,15 +1,17 @@
 import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
 import { Avatar } from '@/components/ui/Avatar';
+import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
+import { PostVisibilityIcon } from './PostVisibilityIcon';
 import type { Href } from 'expo-router';
 import type { ReactNode } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -17,6 +19,7 @@ import type { ProfileNameBlock_profile$key } from '@/components/profile/__genera
 import type { PostContentMention_profile$key } from './__generated__/PostContentMention_profile.graphql';
 import type { PostSourcePresentationView_post$key } from './__generated__/PostSourcePresentationView_post.graphql';
 import type { PostSourcePreview_source$key } from './__generated__/PostSourcePreview_source.graphql';
+import type { PostLinkPreviewData } from './PostLinkPreview';
 import type { PostMediaItem, PostMediaOpenHandler } from './PostMediaImage';
 
 type AuthorProfile = ProfileNameBlock_profile$key & {
@@ -27,8 +30,8 @@ type AuthorProfile = ProfileNameBlock_profile$key & {
       }
     | null
     | undefined;
-  readonly displayName: string;
-  readonly handle: string;
+  readonly displayName: string | null | undefined;
+  readonly relativeHandle: string;
 };
 
 type MentionedProfile = PostContentMention_profile$key & {
@@ -39,8 +42,10 @@ type PresentationContent = {
   readonly bodyText: string;
   readonly contentWarning: string | null | undefined;
   readonly document: unknown;
+  readonly linkPreview: PostLinkPreviewData | null | undefined;
   readonly media:
     | ReadonlyArray<{
+        readonly aiProhibitFilterApplied: boolean | null | undefined;
         readonly altText: string | null | undefined;
         readonly id: string;
         readonly url: string | null | undefined;
@@ -58,6 +63,14 @@ const PostSourcePreviewFragment = graphql`
       bodyText
       contentWarning
       document
+      linkPreview {
+        description
+        imageHeight
+        imageUrl
+        imageWidth
+        title
+        url
+      }
       mentionedProfiles {
         id
         ...PostContentMention_profile
@@ -65,6 +78,7 @@ const PostSourcePreviewFragment = graphql`
       media {
         id
         altText
+        aiProhibitFilterApplied
         url
       }
     }
@@ -74,7 +88,6 @@ const PostSourcePreviewFragment = graphql`
         url
       }
       displayName
-      handle
       relativeHandle
       ...ProfileNameBlock_profile
     }
@@ -85,10 +98,19 @@ const PostSourcePresentationViewFragment = graphql`
   fragment PostSourcePresentationView_post on Post {
     id
     createdAt
+    visibility
     content {
       bodyText
       contentWarning
       document
+      linkPreview {
+        description
+        imageHeight
+        imageUrl
+        imageWidth
+        title
+        url
+      }
       mentionedProfiles {
         id
         ...PostContentMention_profile
@@ -96,6 +118,7 @@ const PostSourcePresentationViewFragment = graphql`
       media {
         id
         altText
+        aiProhibitFilterApplied
         url
       }
     }
@@ -105,7 +128,6 @@ const PostSourcePresentationViewFragment = graphql`
         url
       }
       displayName
-      handle
       relativeHandle
       ...ProfileNameBlock_profile
     }
@@ -128,51 +150,55 @@ function presentationKind(post: {
 }
 
 export function PostSourcePresentationView({
+  authorTopInset = 0,
   onBackgroundPress,
   onMediaOpen,
   post: postKey,
   showPostAvatar = true,
   sourcePreviewStyle,
 }: {
+  authorTopInset?: number;
   onBackgroundPress?: () => void;
   onMediaOpen?: PostMediaOpenHandler;
   post: PostSourcePresentationView_post$key;
   showPostAvatar?: boolean;
   sourcePreviewStyle?: StyleProp<ViewStyle>;
 }): ReactNode {
-  const theme = useTheme();
+  const router = useRouter();
   const post = useFragment(PostSourcePresentationViewFragment, postKey);
   const kind = presentationKind(post);
 
+  const postProfileHref = `/${post.profile.relativeHandle}` as Href;
+  const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as Href;
+  const openPost = useCallback(() => router.push(postDetailHref), [postDetailHref, router]);
   if (kind === 'invalid') {
     return null;
   }
-
-  const postProfileHref = `/${post.profile.relativeHandle}` as Href;
-  const postDetailHref = `/${post.profile.relativeHandle}/${post.id}` as Href;
   const postHeader = (
-    <View style={styles.authorHeader}>
-      <View style={styles.authorSlot}>
+    <PostDetailBackground onBackgroundPress={openPost} style={styles.authorHeader}>
+      <PostDetailBackground onBackgroundPress={openPost} style={styles.authorSlot}>
         <PresentationLink
-          accessibilityLabel={`${post.profile.displayName} 프로필 보기`}
+          accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle} 프로필 보기`}
           href={postProfileHref}
           resetScroll
+          style={{ paddingTop: authorTopInset }}
         >
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
-      </View>
-      <PresentationLink
-        accessibilityLabel={`${post.profile.displayName}의 게시글 보기`}
-        href={postDetailHref}
-      >
-        <Text
-          style={[styles.timestamp, { color: theme.foregroundSecondary }]}
-          testID="post-timestamp"
+      </PostDetailBackground>
+      <View style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
+        <PresentationLink
+          accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle}의 게시글 보기`}
+          href={postDetailHref}
+          style={styles.timestampLink}
         >
-          {formatTimelineTimestamp(post.createdAt)}
-        </Text>
-      </PresentationLink>
-    </View>
+          <TimestampText testID="post-timestamp">
+            {formatTimelineTimestamp(post.createdAt)}
+          </TimestampText>
+        </PresentationLink>
+        <PostVisibilityIcon visibility={post.visibility} />
+      </View>
+    </PostDetailBackground>
   );
 
   if (kind === 'ordinary') {
@@ -230,31 +256,45 @@ export function PostSourcePreview({
 }): ReactNode {
   const theme = useTheme();
   const [pointerHovered, setPointerHovered] = useState(false);
+  const router = useRouter();
   const source = useFragment(PostSourcePreviewFragment, sourceKey);
   const sourceProfileHref = `/${source.profile.relativeHandle}` as Href;
   const sourcePostHref = `/${source.profile.relativeHandle}/${source.id}` as Href;
   const previewStyle = [styles.preview, style, { borderColor: theme.borderDefault }];
+  const authorTopInset = interactive ? spacing.md : 0;
+  const openSource = useCallback(() => router.push(sourcePostHref), [router, sourcePostHref]);
   if (!interactive && pointerHovered) {
     setPointerHovered(false);
   }
   const content = (
     <>
-      <View style={styles.authorHeader}>
-        <View style={styles.authorSlot}>
+      <PostDetailBackground
+        onBackgroundPress={interactive ? openSource : undefined}
+        style={[styles.authorHeader, { marginTop: -authorTopInset }]}
+      >
+        <PostDetailBackground
+          onBackgroundPress={interactive ? openSource : undefined}
+          style={styles.authorSlot}
+        >
           {interactive ? (
             <PresentationLink
-              accessibilityLabel={`${source.profile.displayName} 프로필 보기`}
+              accessibilityLabel={`${source.profile.displayName ?? source.profile.relativeHandle} 프로필 보기`}
               href={sourceProfileHref}
               resetScroll
+              style={{ paddingTop: authorTopInset }}
             >
               <Author profile={source.profile} showAvatar />
             </PresentationLink>
           ) : (
             <Author profile={source.profile} showAvatar />
           )}
-        </View>
+        </PostDetailBackground>
         {interactive ? (
-          <PresentationLink accessibilityLabel="원문 게시글 보기" href={sourcePostHref}>
+          <PresentationLink
+            accessibilityLabel="원문 게시글 보기"
+            href={sourcePostHref}
+            style={{ paddingTop: authorTopInset }}
+          >
             <Text style={[styles.timestamp, { color: theme.foregroundSecondary }]}>
               {formatTimelineTimestamp(source.createdAt)}
             </Text>
@@ -264,7 +304,7 @@ export function PostSourcePreview({
             {formatTimelineTimestamp(source.createdAt)}
           </Text>
         )}
-      </View>
+      </PostDetailBackground>
       {source.content && interactive ? (
         <PostBodyPressTarget
           content={source.content}
@@ -280,6 +320,7 @@ export function PostSourcePreview({
             contentWarning={source.content.contentWarning}
             document={source.content.document}
             interactive={false}
+            linkPreview={source.content.linkPreview}
             media={presentationMedia(source.content.media)}
             mentionedProfiles={source.content.mentionedProfiles}
             postId={source.id}
@@ -333,17 +374,19 @@ function PresentationLink({
   children,
   href,
   resetScroll = false,
+  style,
 }: {
   accessibilityLabel: string;
   children: ReactNode;
   href: Href;
   resetScroll?: boolean;
+  style?: StyleProp<ViewStyle>;
 }) {
   const trigger = (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="link"
-      style={styles.presentationLink}
+      style={StyleSheet.flatten([styles.presentationLink, style])}
     >
       {children}
     </Pressable>
@@ -390,6 +433,7 @@ function PostBodyPressTarget({
         bodyText={content.bodyText}
         contentWarning={content.contentWarning}
         document={content.document}
+        linkPreview={content.linkPreview}
         media={presentationMedia(content.media)}
         mentionedProfiles={content.mentionedProfiles}
         onMediaOpen={onMediaOpen}
@@ -404,8 +448,9 @@ function presentationMedia(
   media: PresentationContent['media'],
 ): ReadonlyArray<PostMediaItem> | null {
   return (
-    media?.map(({ altText, id, url }) => ({
+    media?.map(({ aiProhibitFilterApplied, altText, id, url }) => ({
       altText: altText ?? null,
+      aiProhibitFilterApplied,
       id,
       url: url ?? null,
     })) ?? null
@@ -418,7 +463,7 @@ function Author({ profile, showAvatar }: { profile: AuthorProfile; showAvatar: b
       {showAvatar ? (
         <Avatar
           imageUri={profile.avatar?.url}
-          label={profile.displayName || profile.handle}
+          label={profile.displayName || profile.relativeHandle}
           size={40}
         />
       ) : null}
@@ -433,12 +478,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
+    maxWidth: '100%',
     minHeight: 44,
     minWidth: 0,
   },
-  authorText: { flex: 1, minWidth: 0 },
+  authorText: { flex: -1, minWidth: 0 },
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
-  authorSlot: { flex: 1, minWidth: 0 },
+  authorSlot: { alignItems: 'flex-start', flex: 1, minWidth: 0 },
+  timeMetadata: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: spacing.xs,
+  },
+  timestampLink: {
+    alignItems: 'flex-end',
+    borderRadius: radii.sm,
+    flexShrink: 0,
+    justifyContent: 'center',
+    minHeight: 44,
+    minWidth: 44,
+  },
   timestamp: {
     fontFamily: fontFamilies.ui,
     minHeight: 44,
@@ -449,5 +509,5 @@ const styles = StyleSheet.create({
   },
   sourceBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
-  presentationLink: { minWidth: 0 },
+  presentationLink: { maxWidth: '100%', minWidth: 0 },
 });

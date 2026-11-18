@@ -49,6 +49,10 @@ globalThis.removeEventListener = ((type: string, listener: EventListenerOrEventL
   }
 }) as typeof globalThis.removeEventListener;
 
+mock.module('react-native-safe-area-context', {
+  exports: { useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) },
+} as unknown as Parameters<typeof mock.module>[1]);
+
 mock.module('react-native', {
   exports: {
     Platform: platform,
@@ -400,7 +404,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
     it(`짧은 ${mobile ? 'mobile shell' : 'standalone'} 상세의 잘린 sticky header 대신 viewport 상단에 정렬한다`, async () => {
       windowDimensions.width = mobile ? 390 : 1200;
       shellChromePresent = mobile;
-      headerViewportStyle.top = mobile ? '64px' : '0px';
+      headerViewportStyle.top = '0px';
       documentElement.scrollHeight = 844;
       Object.assign(globalThis, { innerHeight: 657, scrollY: 2446 });
       const frames: FrameRequestCallback[] = [];
@@ -414,7 +418,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
       await act(async () => {
         renderer = create(
           createElement(PostDetailThread, {
-            header: mobile ? null : createElement('Header'),
+            header: createElement('Header'),
             identity: 'short-mobile-viewport',
             post: {} as never,
           }),
@@ -427,7 +431,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
                 if (current) {
                   done(0, -2382, 390, 180);
                 } else {
-                  done(0, mobile ? -2202 : -2266, 390, mobile ? 0 : 64);
+                  done(0, -2266, 390, 64);
                 }
               },
             }),

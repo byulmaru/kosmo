@@ -1,11 +1,4 @@
-import {
-  db,
-  Instances,
-  Posts,
-  ProfilePinnedPosts,
-  profilePinOrderKey,
-  Profiles,
-} from '@kosmo/core/db';
+import { db, Instances, Posts, ProfilePinnedPosts, Profiles } from '@kosmo/core/db';
 import { profilePostListAccessWhere } from '@kosmo/core/visibility';
 import { and, asc, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -32,7 +25,7 @@ builder.objectField(Profile, 'pinnedPosts', (t) =>
             }),
           ),
         )
-        .orderBy(asc(profilePinOrderKey), asc(ProfilePinnedPosts.id));
+        .orderBy(asc(ProfilePinnedPosts.orderKey), asc(ProfilePinnedPosts.id));
     },
   }),
 );

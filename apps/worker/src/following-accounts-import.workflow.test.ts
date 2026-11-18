@@ -15,7 +15,6 @@ import {
   WorkflowIdConflictPolicy,
   WorkflowIdReusePolicy,
 } from '@temporalio/client';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { followImportedProfileActivity } from './activities/following-accounts-import';
@@ -23,12 +22,11 @@ import {
   lookupRemoteActorUriActivity,
   materializeRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type { FollowingAccountsImportInput } from '@kosmo/core/temporal/workflows';
 import type { SQL } from 'drizzle-orm';
 import type * as activities from './activities';
 
-const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 const followerProfileId = '00000000-0000-8000-8000-000000000101';
 const otherFollowerProfileId = '00000000-0000-8000-8000-000000000103';
 const remoteProfileId = '00000000-0000-8000-8000-000000000102';
@@ -158,9 +156,7 @@ test(
   'Following Accounts Import rejects active same-profile starts, reuses completed IDs, and continues bounded batches',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = `${KOSMO_TASK_QUEUE}-following-import-test-${process.pid}`;
@@ -279,7 +275,7 @@ test(
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath,
+      ...testWorkflowSource,
     });
 
     const start = (input: FollowingAccountsImportInput) =>

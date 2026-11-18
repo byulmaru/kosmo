@@ -21,10 +21,15 @@ function initializeAnalytics(): PostHogClient | null {
 
     client = new PostHog(apiKey, {
       host,
-      captureAppLifecycleEvents: false,
       disableRemoteFeatureFlags: true,
       enableSessionReplay: false,
       sendFeatureFlagEvent: false,
+      before_send: (event) => {
+        if (event?.event === 'Application Opened' && event.properties) {
+          delete event.properties.url;
+        }
+        return event;
+      },
     });
   } catch {
     client = null;
@@ -42,6 +47,19 @@ export function trackAnalytics<Name extends AnalyticsEventName>(
       eventName,
       properties as Parameters<PostHogClient['capture']>[1],
     );
+  } catch {
+    // Analytics is best-effort and must not affect the product flow.
+  }
+}
+
+export function trackAnalyticsScreen(screenName: string): void {
+  try {
+    const analyticsClient = initializeAnalytics();
+    if (!analyticsClient) {
+      return;
+    }
+
+    void analyticsClient.screen(screenName).catch(() => undefined);
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }

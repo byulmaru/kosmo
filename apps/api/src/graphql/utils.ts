@@ -25,6 +25,7 @@ const alignByIds = <T extends { id: string }>(
 export const createObjectRef = <TRow extends { id: string }>(
   name: string,
   load: (ids: string[], ctx: UserContext) => Promise<readonly LoadableRow<TRow>[]>,
+  { cacheResolved = true }: { readonly cacheResolved?: boolean } = {},
 ) =>
   builder.loadableNodeRef(name, {
     load: (async (ids: string[], ctx: UserContext) => {
@@ -33,6 +34,6 @@ export const createObjectRef = <TRow extends { id: string }>(
       return alignByIds(ids, rows);
     }) as (ids: string[], ctx: UserContext) => Promise<TRow[]>,
     toKey: (obj) => obj.id,
-    cacheResolved: true,
+    cacheResolved,
     id: { resolve: (obj) => obj.id },
   });

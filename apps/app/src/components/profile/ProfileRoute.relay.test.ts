@@ -39,6 +39,9 @@ mockModule('react-relay', {
       : require(`./__generated__/${name}.graphql.ts`).default;
   },
 });
+mockModule(new URL('../shell/MobileWebRouteMenu.tsx', import.meta.url), {
+  MobileWebRouteMenu: () => null,
+});
 mockModule('expo-router', {
   Slot: () => null,
   Stack: () => null,

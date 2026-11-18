@@ -37,6 +37,7 @@ graphqlRoutes.post('/graphql', async (c) => {
     headers,
     method: 'POST',
     redirect: 'manual',
+    signal: c.req.raw.signal,
   };
   const response = await globalThis.fetch(new URL('/graphql', internalApiOrigin), requestInit);
 

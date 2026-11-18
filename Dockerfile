@@ -30,8 +30,8 @@ COPY packages/fedify/package.json ./packages/fedify/package.json
 
 FROM workspace AS deps
 
-RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
-  pnpm install --frozen-lockfile --ignore-scripts --store-dir=/var/cache/pnpm/store
+# Keep the store in the cached deps layer so the app license check can read it.
+RUN pnpm install --frozen-lockfile --ignore-scripts --store-dir=/var/cache/pnpm/store
 
 RUN pnpm rebuild --pending
 
@@ -57,7 +57,7 @@ COPY scripts ./scripts
 
 # Public client settings are selected from the channel configuration in the Web bundle.
 RUN --mount=type=secret,id=sentry_auth_token,env=SENTRY_AUTH_TOKEN,required=false \
-  pnpm build:sentry-artifacts
+  PNPM_CONFIG_STORE_DIR=/var/cache/pnpm/store pnpm build:sentry-artifacts
 RUN find apps/app/dist -type f \( \
       -name '*.css' -o -name '*.html' -o -name '*.js' -o -name '*.json' \
       -o -name '*.mjs' -o -name '*.svg' -o -name '*.ttf' -o -name '*.wasm' \

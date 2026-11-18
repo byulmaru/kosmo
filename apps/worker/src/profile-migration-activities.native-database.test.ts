@@ -13,18 +13,15 @@ import {
 } from '@kosmo/core/enums';
 import { NotFoundError } from '@kosmo/core/error';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq } from 'drizzle-orm';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 process.env.PUBLIC_ORIGIN = publicOrigin;
 
-const environment = await TestWorkflowEnvironment.createLocal({
-  server: { executable: temporalTestExecutable },
-});
+const environment = await createTestWorkflowEnvironment();
 process.env.TEMPORAL_ADDRESS = environment.address;
 process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
 
@@ -60,8 +57,6 @@ const [
   import('@kosmo/core/services'),
   import('@kosmo/fedify'),
 ]);
-
-const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 
 const truncateDatabase = () =>
   pg.unsafe(
@@ -187,7 +182,7 @@ const runWithWorker = async <T>(operation: () => Promise<T>): Promise<T> => {
     connection: environment.nativeConnection,
     namespace: environment.namespace,
     taskQueue: KOSMO_TASK_QUEUE,
-    workflowsPath,
+    ...testWorkflowSource,
   });
   return worker.runUntil(operation);
 };

@@ -45,6 +45,7 @@ const query = graphql`
 type Mode = 'error-once' | 'pending' | 'success';
 
 function createEnvironment({
+  hasMigrationSource,
   initialSource,
   mode,
   onMutationAttempt,
@@ -53,6 +54,7 @@ function createEnvironment({
   targetCanonicalOrigin,
   targetId,
 }: {
+  hasMigrationSource: boolean | null;
   initialSource: typeof preparedSource | null;
   mode: Mode;
   onMutationAttempt: (operationName: string, variables: Variables) => void;
@@ -78,6 +80,7 @@ function createEnvironment({
                   profile: {
                     __typename: 'Profile',
                     displayName: '현재 Profile',
+                    hasMigrationSource: false,
                     handle: 'target',
                     id: targetId,
                     instance: {
@@ -118,6 +121,7 @@ function createEnvironment({
       node: {
         __typename: 'Profile',
         displayName: '현재 Profile',
+        hasMigrationSource,
         handle: 'target',
         id: targetId,
         instance: { __typename: 'ProfileInstance', canonicalOrigin: targetCanonicalOrigin },
@@ -141,6 +145,7 @@ function preparePayload(
       profile: {
         __typename: 'Profile',
         displayName: '현재 Profile',
+        hasMigrationSource: true,
         handle: 'target',
         id: targetId,
         instance: { __typename: 'ProfileInstance', canonicalOrigin: targetCanonicalOrigin },
@@ -156,6 +161,7 @@ function preparePayload(
 
 function ProfileMigrationSourceStory({
   editable = true,
+  hasMigrationSource,
   initialSource = null,
   mode = 'success',
   onMutationAttempt,
@@ -163,6 +169,7 @@ function ProfileMigrationSourceStory({
   targetCanonicalOrigin = 'https://selected-profile.example',
 }: {
   editable?: boolean;
+  hasMigrationSource: boolean | null;
   initialSource?: typeof preparedSource | null;
   mode?: Mode;
   onMutationAttempt: (operationName: string, variables: Variables) => void;
@@ -173,6 +180,7 @@ function ProfileMigrationSourceStory({
   const createActorEnvironment = useCallback(
     () =>
       createEnvironment({
+        hasMigrationSource,
         initialSource,
         mode,
         onMutationAttempt,
@@ -183,7 +191,14 @@ function ProfileMigrationSourceStory({
         targetCanonicalOrigin,
         targetId: profileId,
       }),
-    [initialSource, mode, onMutationAttempt, sourceFixture, targetCanonicalOrigin],
+    [
+      hasMigrationSource,
+      initialSource,
+      mode,
+      onMutationAttempt,
+      sourceFixture,
+      targetCanonicalOrigin,
+    ],
   );
 
   return (
@@ -266,16 +281,19 @@ function ProfileMigrationSourceStoryContents({
 }
 
 const meta = {
-  args: { onMutationAttempt: fn<(operationName: string, variables: Variables) => void>() },
+  args: {
+    hasMigrationSource: false,
+    onMutationAttempt: fn<(operationName: string, variables: Variables) => void>(),
+  },
   component: ProfileMigrationSourceStory,
   excludeStories: [
     'DestinationAddressUnavailable',
     'FailureAndRetry',
     'LateCompletionIgnoredAfterActorLifecycleReset',
     'MemberCannotUnregisterPreparedSource',
-    'OwnerNullSourceUnregisterThenRegister',
+    'OwnerUnregisterThenRegister',
     'OwnerPreparationAndSuccess',
-    'OwnerUnregistersPreparedSource',
+    'OwnerCanUnregisterWhenSourceIsNotVisible',
   ],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Profile Migration Source Control',
@@ -290,12 +308,19 @@ export const Playground: Story = {
 
 export const OwnerWithPreparedSource: Story = {
   render: (args) => (
-    <ProfileMigrationSourceStory {...args} editable initialSource={preparedSource} />
+    <ProfileMigrationSourceStory
+      {...args}
+      editable
+      hasMigrationSource={true}
+      initialSource={preparedSource}
+    />
   ),
 };
 
 export const MemberReadOnly: Story = {
-  render: (args) => <ProfileMigrationSourceStory {...args} editable={false} />,
+  render: (args) => (
+    <ProfileMigrationSourceStory {...args} editable={false} hasMigrationSource={null} />
+  ),
 };
 
 export const OwnerPreparationAndSuccess: Story = {
@@ -307,87 +332,116 @@ export const OwnerPreparationAndSuccess: Story = {
     );
     await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
-    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeDisabled();
+    expect(canvas.queryByRole('button', { name: '기존 계정 등록 해제' })).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '요청 완료' }));
-    await expect(canvas.findByText('이전 원본을 등록했어요')).resolves.toBeVisible();
+    await expect(canvas.findByText('기존 계정을 등록했어요.')).resolves.toBeVisible();
     await expect(
-      canvas.findByText('이제 기존 서비스의 계정에서 이 Kosmo 프로필로 Move를 시작하세요.'),
+      canvas.findByText('이제 기존 서비스에서 아래 주소로 이전을 시작하세요.'),
     ).resolves.toBeVisible();
     await expect(
       canvas.findByRole('group', {
-        name: '이전받을 Kosmo 프로필 현재 Profile @target@selected-profile.example',
+        name: '이전할 Kosmo 프로필 @target@selected-profile.example',
       }),
     ).resolves.toBeVisible();
     await expect(
       canvas.findByRole('group', {
-        name: '현재 등록된 원본 원격 원본 Profile @source@remote.example',
+        name: '등록한 계정 @source@remote.example',
       }),
     ).resolves.toBeVisible();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="pending" />,
 };
 
-export const OwnerNullSourceUnregisterThenRegister: Story = {
+export const OwnerUnregisterThenRegister: Story = {
   play: async ({ args, canvasElement }) => {
     args.onMutationAttempt.mockClear();
     const canvas = within(canvasElement);
-    const input = canvas.getByRole('textbox', { name: '기존 계정 주소' });
+    expect(canvas.queryByRole('textbox', { name: '기존 계정 주소' })).toBeNull();
+    await expect(
+      canvas.findByRole('button', { name: '기존 계정 등록 해제' }),
+    ).resolves.toBeVisible();
     await expect(
       canvas.findByText(
-        '등록 해제 후 남은 팔로워 이전은 중단될 수 있어요. 이미 이전된 팔로워는 그대로 유지돼요.',
+        '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
     ).resolves.toBeVisible();
-    await userEvent.type(input, '@old@remote.example');
     await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
 
     expect(args.onMutationAttempt).toHaveBeenCalledWith(
       'ProfileMigrationSourceControlUnregisterMutation',
       {},
     );
-    expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
     expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeDisabled();
-    await expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toHaveValue(
-      '@old@remote.example',
-    );
+    expect(canvas.queryByRole('button', { name: '기존 계정 등록' })).toBeNull();
 
     await userEvent.click(canvas.getByRole('button', { name: '요청 완료' }));
-    await expect(canvas.findByRole('textbox', { name: '기존 계정 주소' })).resolves.toHaveValue('');
+    const input = await canvas.findByRole('textbox', { name: '기존 계정 주소' });
+    await expect(input).toHaveValue('');
+    await expect(canvas.queryByRole('button', { name: '기존 계정 등록 해제' })).toBeNull();
+    expect(
+      canvas.queryByText(
+        '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
+      ),
+    ).toBeNull();
 
-    const nextInput = canvas.getByRole('textbox', { name: '기존 계정 주소' });
-    await userEvent.type(nextInput, '@new@remote.example');
+    await userEvent.type(input, '@new@remote.example');
     await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
     expect(args.onMutationAttempt).toHaveBeenCalledWith('ProfileMigrationSourceControlMutation', {
       input: { sourceHandle: '@new@remote.example' },
     });
     await expect(
       canvas.findByRole('group', {
-        name: '현재 등록된 원본 원격 원본 Profile @new@remote.example',
+        name: '등록한 계정 @new@remote.example',
       }),
     ).resolves.toBeVisible();
-    await expect(canvas.findByText('이전 원본을 등록했어요')).resolves.toBeVisible();
-  },
-  render: (args) => <ProfileMigrationSourceStory {...args} editable mode="pending" />,
-};
-
-export const OwnerUnregistersPreparedSource: Story = {
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const source = canvas.getByRole('group', {
-      name: '현재 등록된 원본 원격 원본 Profile @source@remote.example',
-    });
-    expect(source).toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
-    await expect(canvas.findByRole('textbox', { name: '기존 계정 주소' })).resolves.toBeVisible();
-    await expect(canvas.findByRole('button', { name: '기존 계정 등록' })).resolves.toBeDisabled();
+    expect(canvas.queryByRole('textbox', { name: '기존 계정 주소' })).toBeNull();
+    expect(canvas.queryByRole('button', { name: '기존 계정 등록' })).toBeNull();
+    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
     await expect(
       canvas.findByText(
-        '등록 해제 후 남은 팔로워 이전은 중단될 수 있어요. 이미 이전된 팔로워는 그대로 유지돼요.',
+        '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
     ).resolves.toBeVisible();
-    expect(canvas.queryByRole('group', { name: /현재 등록된 원본/ })).toBeNull();
+    await expect(canvas.findByText('기존 계정을 등록했어요.')).resolves.toBeVisible();
   },
   render: (args) => (
-    <ProfileMigrationSourceStory {...args} editable initialSource={preparedSource} />
+    <ProfileMigrationSourceStory
+      {...args}
+      editable
+      hasMigrationSource={true}
+      initialSource={preparedSource}
+      mode="pending"
+    />
+  ),
+};
+
+export const OwnerCanUnregisterWhenSourceIsNotVisible: Story = {
+  play: async ({ args, canvasElement }) => {
+    args.onMutationAttempt.mockClear();
+    const canvas = within(canvasElement);
+    expect(canvas.queryByRole('textbox', { name: '기존 계정 주소' })).toBeNull();
+    await expect(
+      canvas.findByRole('button', { name: '기존 계정 등록 해제' }),
+    ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
+    expect(args.onMutationAttempt).toHaveBeenCalledWith(
+      'ProfileMigrationSourceControlUnregisterMutation',
+      {},
+    );
+    await expect(
+      canvas.findByText(
+        '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
+      ),
+    ).resolves.toBeVisible();
+    expect(canvas.queryByRole('button', { name: '기존 계정 등록' })).toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '요청 완료' }));
+    await expect(canvas.findByRole('textbox', { name: '기존 계정 주소' })).resolves.toBeVisible();
+    expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeVisible();
+    expect(canvas.queryByRole('button', { name: '기존 계정 등록 해제' })).toBeNull();
+  },
+  render: (args) => (
+    <ProfileMigrationSourceStory {...args} editable hasMigrationSource={true} mode="pending" />
   ),
 };
 
@@ -403,9 +457,9 @@ export const FailureAndRetry: Story = {
       '이전 원본을 등록하지 못했어요.',
     );
     expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeVisible();
-    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
+    expect(canvas.queryByRole('button', { name: '기존 계정 등록 해제' })).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
-    await expect(canvas.findByText('이전 원본을 등록했어요')).resolves.toBeVisible();
+    await expect(canvas.findByText('기존 계정을 등록했어요.')).resolves.toBeVisible();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="error-once" />,
 };
@@ -423,7 +477,7 @@ export const LateCompletionIgnoredAfterActorLifecycleReset: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '현재 Profile 환경 재설정' }));
     await expect(canvas.getByRole('textbox', { name: '기존 계정 주소' })).toHaveValue('');
     await userEvent.click(canvas.getByRole('button', { name: '요청 완료' }));
-    expect(canvas.queryByText('이전 원본을 등록했어요')).toBeNull();
+    expect(canvas.queryByText('기존 계정을 등록했어요.')).toBeNull();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="pending" />,
 };
@@ -432,13 +486,21 @@ export const DestinationAddressUnavailable: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(
-      canvas.findByRole('group', { name: '이전받을 Kosmo 프로필 현재 Profile' }),
+      canvas.findByRole('group', { name: '이전할 Kosmo 프로필 주소를 확인할 수 없어요.' }),
     ).resolves.toBeVisible();
     await expect(canvas.findByText('주소를 확인할 수 없어요.')).resolves.toBeVisible();
-    await expect(canvas.findByRole('textbox', { name: '기존 계정 주소' })).resolves.toBeVisible();
-    await expect(canvas.getByRole('button', { name: '기존 계정 등록' })).toBeDisabled();
+    expect(canvas.queryByRole('textbox', { name: '기존 계정 주소' })).toBeNull();
+    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
   },
-  render: (args) => <ProfileMigrationSourceStory {...args} editable targetCanonicalOrigin={null} />,
+  render: (args) => (
+    <ProfileMigrationSourceStory
+      {...args}
+      editable
+      hasMigrationSource={true}
+      initialSource={preparedSource}
+      targetCanonicalOrigin={null}
+    />
+  ),
 };
 
 export const MemberCannotUnregisterPreparedSource: Story = {
@@ -446,7 +508,7 @@ export const MemberCannotUnregisterPreparedSource: Story = {
     const canvas = within(canvasElement);
     await expect(
       canvas.findByRole('group', {
-        name: '현재 등록된 원본 원격 원본 Profile @source@remote.example',
+        name: '등록한 계정 @source@remote.example',
       }),
     ).resolves.toBeVisible();
     expect(canvas.queryByRole('button', { name: '기존 계정 등록 해제' })).toBeNull();
@@ -454,7 +516,12 @@ export const MemberCannotUnregisterPreparedSource: Story = {
     expect(canvas.getAllByText('프로필 소유자만 원본을 변경할 수 있어요.')).toHaveLength(1);
   },
   render: (args) => (
-    <ProfileMigrationSourceStory {...args} editable={false} initialSource={preparedSource} />
+    <ProfileMigrationSourceStory
+      {...args}
+      editable={false}
+      hasMigrationSource={null}
+      initialSource={preparedSource}
+    />
   ),
 };
 
@@ -472,9 +539,8 @@ const longSourceReflowPlay = async ({ canvasElement }: { canvasElement: HTMLElem
   expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth + 1);
 
   await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
-  const source = await canvas.findByRole('group', { name: /현재 등록된 원본/ });
+  const source = await canvas.findByRole('group', { name: /등록한 계정/ });
   expect(source).toBeVisible();
-  expect(within(source).getByText(longPreparedSource.displayName)).toBeVisible();
   expect(within(source).getByText(longHandle)).toBeVisible();
   expect(control.scrollWidth).toBeLessThanOrEqual(control.clientWidth + 1);
   expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth + 1);

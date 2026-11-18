@@ -357,35 +357,95 @@ export const MobileOverlayContract: Story = {
   ...MobileBrowse,
   play: async ({ canvasElement }) => {
     const document = canvasElement.ownerDocument;
+    const storyWindow = document.defaultView;
+    const visualViewport = storyWindow?.visualViewport;
+    if (!storyWindow || !visualViewport) {
+      throw new Error('Mobile reaction picker overlay story requires visualViewport.');
+    }
+    const originalHeightDescriptor = Object.getOwnPropertyDescriptor(visualViewport, 'height');
+    const originalOffsetTopDescriptor = Object.getOwnPropertyDescriptor(
+      visualViewport,
+      'offsetTop',
+    );
+    const originalHeight = visualViewport.height;
+    const originalOffsetTop = visualViewport.offsetTop;
     const page = within(document.body);
     const overlay = await page.findByTestId('full-reaction-picker-modal');
     const backdrop = within(overlay).getByTestId('full-reaction-picker-backdrop-dismiss');
     const sheet = within(overlay).getByTestId('full-reaction-picker-sheet');
     const search = within(overlay).getByRole('searchbox', { name: '반응 검색' });
-    const overlayBounds = overlay.getBoundingClientRect();
-    const sheetBounds = sheet.getBoundingClientRect();
 
-    expect(overlay).toBeVisible();
-    expect(page.getAllByRole('dialog', { name: '반응 선택' })).toHaveLength(1);
-    expect(sheetBounds.top).toBeGreaterThan(overlayBounds.top);
-    const searchBounds = search.getBoundingClientRect();
-    const insideHitTarget = document.elementFromPoint(
-      searchBounds.left + searchBounds.width / 2,
-      searchBounds.top + searchBounds.height / 2,
-    );
-    expect(insideHitTarget).not.toBeNull();
-    expect(search.contains(insideHitTarget)).toBe(true);
-    await userEvent.click(insideHitTarget as HTMLElement);
-    expect(overlay).toBeVisible();
+    try {
+      expect(overlay).toBeVisible();
+      expect(page.getAllByRole('dialog', { name: '반응 선택' })).toHaveLength(1);
 
-    const backdropHitTarget = document.elementFromPoint(
-      overlayBounds.left + overlayBounds.width / 2,
-      overlayBounds.top + (sheetBounds.top - overlayBounds.top) / 2,
-    );
-    expect(backdropHitTarget).not.toBeNull();
-    expect(backdrop.contains(backdropHitTarget)).toBe(true);
-    await userEvent.click(backdropHitTarget as HTMLElement);
-    await waitFor(() => expect(overlay).not.toBeVisible());
+      Object.defineProperty(visualViewport, 'height', { configurable: true, value: 360 });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = overlay.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(360, 0);
+      });
+
+      Object.defineProperty(visualViewport, 'offsetTop', { configurable: true, value: 40 });
+      visualViewport.dispatchEvent(new storyWindow.Event('scroll'));
+      await waitFor(() => {
+        const bounds = overlay.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(40, 0);
+        expect(bounds.height).toBeCloseTo(360, 0);
+      });
+      expect(backdrop.getBoundingClientRect().top).toBeCloseTo(40, 0);
+      expect(backdrop.getBoundingClientRect().height).toBeCloseTo(360, 0);
+
+      Object.defineProperty(visualViewport, 'height', {
+        configurable: true,
+        value: originalHeight,
+      });
+      Object.defineProperty(visualViewport, 'offsetTop', {
+        configurable: true,
+        value: originalOffsetTop,
+      });
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+      await waitFor(() => {
+        const bounds = overlay.getBoundingClientRect();
+        expect(bounds.top).toBeCloseTo(originalOffsetTop, 0);
+        expect(bounds.height).toBeCloseTo(originalHeight, 0);
+      });
+
+      const overlayBounds = overlay.getBoundingClientRect();
+      const sheetBounds = sheet.getBoundingClientRect();
+      expect(sheetBounds.top).toBeGreaterThan(overlayBounds.top);
+      const searchBounds = search.getBoundingClientRect();
+      const insideHitTarget = document.elementFromPoint(
+        searchBounds.left + searchBounds.width / 2,
+        searchBounds.top + searchBounds.height / 2,
+      );
+      expect(insideHitTarget).not.toBeNull();
+      expect(search.contains(insideHitTarget)).toBe(true);
+      await userEvent.click(insideHitTarget as HTMLElement);
+      expect(overlay).toBeVisible();
+
+      const backdropHitTarget = document.elementFromPoint(
+        overlayBounds.left + overlayBounds.width / 2,
+        overlayBounds.top + (sheetBounds.top - overlayBounds.top) / 2,
+      );
+      expect(backdropHitTarget).not.toBeNull();
+      expect(backdrop.contains(backdropHitTarget)).toBe(true);
+      await userEvent.click(backdropHitTarget as HTMLElement);
+      await waitFor(() => expect(overlay).not.toBeVisible());
+    } finally {
+      if (originalHeightDescriptor) {
+        Object.defineProperty(visualViewport, 'height', originalHeightDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'height');
+      }
+      if (originalOffsetTopDescriptor) {
+        Object.defineProperty(visualViewport, 'offsetTop', originalOffsetTopDescriptor);
+      } else {
+        Reflect.deleteProperty(visualViewport, 'offsetTop');
+      }
+      visualViewport.dispatchEvent(new storyWindow.Event('resize'));
+    }
   },
 };
 
@@ -754,18 +814,29 @@ export const SequentialKeyboardBrowseContract: Story = {
     await userEvent.tab({ shift: true });
     expect(firstOption).toHaveFocus();
 
-    scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
-    // Avoid formatting the whole virtualized list on each missing-role poll.
     await waitFor(
-      () => expect(within(scroll).queryByRole('button', { name: tailName })).not.toBeNull(),
+      () => {
+        expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
+        scroll.scroll({ top: scroll.scrollHeight, behavior: 'instant' });
+        const scrollMetrics = `scrollTop=${scroll.scrollTop}, clientHeight=${scroll.clientHeight}, scrollHeight=${scroll.scrollHeight}`;
+        expect(scroll.scrollTop + scroll.clientHeight, scrollMetrics).toBeGreaterThanOrEqual(
+          scroll.scrollHeight - 1,
+        );
+
+        // Avoid formatting the whole virtualized list on each missing-role poll.
+        const tailOption = within(scroll).queryByRole('button', { name: tailName });
+        expect(tailOption, scrollMetrics).not.toBeNull();
+        const tailRect = tailOption!.getBoundingClientRect();
+        const scrollRect = scroll.getBoundingClientRect();
+        const viewportTop = scrollRect.top + scroll.clientTop;
+        const viewportBottom = viewportTop + scroll.clientHeight;
+        expect(tailRect.top < viewportBottom && tailRect.bottom > viewportTop, scrollMetrics).toBe(
+          true,
+        );
+      },
       { container: scroll },
     );
     const tailOption = within(scroll).getByRole('button', { name: tailName });
-    await waitFor(() => {
-      const tailRect = tailOption.getBoundingClientRect();
-      const scrollRect = scroll.getBoundingClientRect();
-      expect(tailRect.top < scrollRect.bottom && tailRect.bottom > scrollRect.top).toBe(true);
-    });
 
     tailOption.focus();
     expect(tailOption).toHaveFocus();

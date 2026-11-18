@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { PostActionBackground } from './PostActionBackground';
 import { formatPostActionCount } from './postActionCount';
 import type { ComponentType, Ref } from 'react';
 import type { AccessibilityState } from 'react-native';
@@ -94,7 +95,8 @@ export function PostActionControl({
   const iconStyle = native && !formattedCount ? styles.nativeVisual : styles.icon;
 
   return (
-    <View
+    <PostActionBackground
+      testID={`post-action-${testID}-slot`}
       style={[
         styles.slot,
         native ? [styles.nativeSlot, { height: nativeTargetSize }] : undefined,
@@ -138,7 +140,11 @@ export function PostActionControl({
           alignToEnd ? styles.alignToEndAction : undefined,
           native ? styles.nativeAction : styles.webAction,
           native && (alignToEnd || alignVisualToEnd) ? styles.nativeEndAction : undefined,
-          blocked ? styles.blocked : pressed ? styles.pressed : undefined,
+          blocked
+            ? [styles.blocked, !native && styles.blockedWeb]
+            : pressed
+              ? styles.pressed
+              : undefined,
         ]}
       >
         {({ pressed }) => {
@@ -213,7 +219,7 @@ export function PostActionControl({
           );
         }}
       </Pressable>
-    </View>
+    </PostActionBackground>
   );
 }
 
@@ -241,6 +247,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   blocked: { opacity: 0.45 },
+  // RN Web disables Pressable with box-none; retain its full target instead of hitting the slot.
+  blockedWeb: { cursor: 'auto', pointerEvents: 'auto' },
   count: {
     flexShrink: 0,
     fontFamily: fontFamilies.ui,

@@ -531,7 +531,7 @@ describe('GraphQL profile follow graph', () => {
     const cleanupResult = await readNode(followerAuth.token);
     assertNoGraphQLErrors(cleanupResult);
     assert.deepEqual(cleanupResult.data?.node, {
-      followee: null,
+      followee: { id: globalId('Profile', followeeAuth.profile.id) },
       follower: { id: globalId('Profile', followerAuth.profile.id) },
       id: globalId('ProfileFollowRequest', request.id),
     });

@@ -7,7 +7,7 @@ Production migration은 canonical release image의 preflight 고정 digest를 �
 - Dev와 production의 migration Job은 현재 PostgreSQL Cluster가 생성한 `<cluster>-app` Secret의 `password`로 schema owner `kosmo`에 직접 로그인한다. Production Cluster `kosmo-postgres`의 Secret은 `kosmo-postgres-app`이며, `PGUSER=kosmo`는 고정한다.
 - 별도 `kosmo_migration` login, Vault/VSO migration credential, `DATABASE_MIGRATION_ROLE` 또는 `SET ROLE` 경계를 migration 경로에 두지 않는다.
 - Runtime workload는 `kosmo_runtime` credential만 사용한다. Owner Secret을 runtime에 복제하거나 migration 장애 시 runtime credential로 fallback하지 않는다.
-- Production release workflow는 `workflow_dispatch`로만 실행한다. `main` push/merge는 `sha-<full SHA>` tag를 게시하는 canonical Docker Build와 triggering `head_sha` tag digest를 사용하는 dev build·배포를 시작하며, `main` ref에서 dispatch할 때 `target_sha`를 입력하면 해당 full SHA를 사용하고 비워 두면 preflight가 실행 시점의 최신 `main` commit을 immutable target SHA로 확정한다. Preflight는 target SHA의 성공한 main push Docker Build run을 확인한 뒤 GHCR SHA tag digest를 조회·검증한다. `prod` Environment 승인 뒤에는 target checkout이나 image build·push·tag/digest 재조회 없이 Argo CD credential, migration과 모든 활성화 workload만 preflight 고정 digest로 변경한다. 그 production digest의 migration Job 성공 뒤에만 wave 2 workload를 활성화한다.
+- Production release workflow는 `workflow_dispatch`로만 실행한다. `main` push/merge는 `sha-<full SHA>` tag를 게시하는 canonical Docker Build와 triggering `head_sha` tag digest를 사용하는 dev build·배포를 시작하며, `main` ref에서 dispatch할 때 `target_sha`를 입력하면 해당 full SHA를 사용하고 비워 두면 preflight가 실행 시점의 최신 `main` commit을 immutable target SHA로 확정한다. Preflight는 target SHA의 성공한 main push Docker Build run을 확인한 뒤 GHCR SHA tag digest를 조회·검증한다. `prod` Environment 승인 뒤에는 target checkout이나 image build·push·tag/digest 재조회 없이 Argo CD credential, migration과 모든 활성화 workload만 preflight 고정 digest로 변경한다. 그 production digest의 migration Job이 wave 1에서 성공한 뒤 Worker Deployment, Web Rollout·HPA와 나머지 background workload를 wave 2에서 적용한다. Wave 2가 Healthy가 된 뒤 API Rollout과 API HPA를 wave 3에서 적용해, 새 API가 markerless Redis key를 쓰기 전에 새 Worker가 준비되게 한다.
 - PROD-545는 runtime 준비, restore rehearsal, 첫 production release와 public smoke의 최종 통합을 검증한다.
 
 Migration database identity는 schema/database owner `kosmo`이며 database와 기존 schema/table ownership을 유지한다. Runtime workload database identity `kosmo_runtime`에는 DDL 권한을 부여하지 않는다.
@@ -22,7 +22,7 @@ Production migration Job은 다음 값만 사용한다.
 
 Job과 모든 활성화 workload는 `image@sha256:...` 형태의 같은 image reference를 렌더한다. Production migration에서 mutable tag나 유효하지 않은 digest를 사용하면 Helm render가 실패한다.
 
-Migration Job은 기반 리소스가 적용되는 기본 Sync wave 뒤의 wave 1에서 실행하고, API·Web Rollout·HPA와 background Deployment는 Job 성공 뒤 wave 2에서 교체한다. Migration을 `PreSync`로 실행하거나 workload와 같은 wave에 배치하지 않는다.
+Migration Job은 기반 리소스가 적용되는 기본 Sync wave 뒤의 wave 1에서 실행한다. Job 성공 뒤 Worker Deployment, Web Rollout·HPA와 나머지 background workload를 wave 2에서 교체하고, wave 2가 Healthy가 된 뒤 API Rollout과 API HPA를 wave 3에서 교체한다. API HPA는 API Rollout과 같은 wave에서 적용해 fresh install에서 Rollout이 아직 없는 wave 2에 HPA가 먼저 적용되지 않게 한다. Migration을 `PreSync`로 실행하거나 workload와 같은 wave에 배치하지 않는다.
 
 Application workload에는 별도 activation flag가 없다. API·Web Service·Rollout·HTTPRoute와 background Deployment는 chart에서 항상 렌더되며, `prod` Environment 승인 뒤 실행된 workflow_dispatch release job이 prod credential·OIDC 범위와 감사 기록을 사용해 preflight가 확정한 target full SHA, SHA tag에서 조회·고정한 digest와 migration 설정을 갱신한다. 따라서 production Application에는 release workflow가 설정한 유효한 `imageDigest` parameter와 target source revision이 존재해야 한다. Production에서 별도 image build·push를 수행하지 않으며, Dev가 다른 시점에 조회한 digest와의 일치는 요구하지 않는다. `prod` Environment 승인은 해당 release의 production 상태 변경 전체를 보호하는 유일한 사람 승인이다.
 
@@ -59,7 +59,7 @@ transition 입력을 전달하지 않는다.
 3. Reviewer는 preflight가 확정한 target SHA, canonical build run·조회 digest, workflow definition ref, Helm/chart diff와 migration compatibility를 확인한 뒤 한 번 승인한다. 승인 전에는 production source checkout, prod credential 접근, image build·push, Argo CD credential 접근과 migration·workload 상태 변경이 없어야 한다.
 4. 승인 job은 target SHA를 checkout하거나 image를 build·push하지 않는다. Preflight가 확정한 production digest와 target source revision을 audit summary에 기록하고, 승인 뒤 production Argo CD credential로 target SHA를 source revision에, 그 digest를 migration·workload image에 각각 지정한다. Dispatch의 `github.sha`가 아니라 resolved target SHA를 source와 감사 metadata에 사용한다.
 5. 승인 job은 canonical digest와 현재 PostgreSQL Cluster의 generated application Secret으로 migration Job을 실행해 완료를 기다린다.
-6. Job이 성공한 경우에만 preflight가 고정한 GHCR digest의 API·Web Rollout·HPA와 background Deployment를 wave 2에서 활성화한다.
+6. Job이 성공한 경우에만 preflight가 고정한 GHCR digest의 Worker Deployment, Web Rollout·HPA와 나머지 background workload를 wave 2에서 활성화한다. Wave 2가 Healthy가 된 뒤 API Rollout과 API HPA를 wave 3에서 활성화한다.
 
 Workflow_dispatch release는 같은 production concurrency, migration success barrier와 감사 필드를 사용한다. 실행 중인 release는 취소하지 않으며, pending release를 대체하는 경우 취소된 SHA와 trigger를 Actions 기록에 남긴다. Preflight 또는 승인 후 migration·sync가 실패하면 배포를 중단하고 기존 workload를 그대로 유지한다. Production에서 image를 재빌드·재-push하지 않고, canonical main build가 완료된 DB-compatible revert 또는 호환 가능한 workflow_dispatch target SHA로 새 forward release를 실행한다.
 
@@ -105,7 +105,7 @@ JOIN pg_roles granted ON granted.oid = pg_auth_members.roleid
 WHERE member.rolname = 'kosmo_migration' OR granted.rolname = 'kosmo_migration';
 ```
 
-Preflight 실패 시 owner migration SQL과 wave 2 workload activation을 시작하지 않는다.
+Preflight 실패 시 owner migration SQL과 wave 2·wave 3 workload activation을 시작하지 않는다.
 
 ### Postflight
 
@@ -140,7 +140,7 @@ Contract SQL은 transition image에 미리 포함하지 않는다. 각 단계는
 
 - Credential 또는 Secret 실패: SQL을 실행하지 않는다. Runtime credential로 우회하지 않는다.
 - Advisory lock 실패: 다른 migration을 확인하고 종료된 뒤 원인을 수정한 main PR 또는 승인된 workflow_dispatch target SHA로 새 production release를 재시도한다.
-- SQL 또는 timeout 실패: 실패한 migration 파일의 schema와 history를 rollback하고 wave 2 workload 활성화를 중단한다. Drizzle history를 수동 성공 처리하지 않는다.
+- SQL 또는 timeout 실패: 실패한 migration 파일의 schema와 history를 rollback하고 wave 2·wave 3 workload 활성화를 중단한다. Drizzle history를 수동 성공 처리하지 않는다.
 - 부분 적용: 앞서 성공한 파일의 schema와 history는 유지한다. 자동 down migration이나 database rollback을 실행하지 않고, 원인을 수정한 뒤 workflow_dispatch production release가 이미 적용된 name/hash를 건너뛰고 아직 적용되지 않은 파일만 재시도하거나 새 forward migration을 사용한다.
 - Destructive migration의 restore 판단: 해당 schema migration runbook과 [Production PostgreSQL backup과 복구](./postgres-backup.md)를 따른다.
 

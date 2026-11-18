@@ -45,7 +45,6 @@ const PostLayoutFragment = graphql`
         url
       }
       id
-      handle
       relativeHandle
       displayName
       ...ProfileNameBlock_profile
@@ -73,6 +72,7 @@ const visibilityLabels: Record<string, string> = {
 export function PostLayout({
   contentWarningPresentation = 'default',
   mediaPresentation = 'default',
+  onActionBarBackgroundPress,
   onDeleted,
   onReplyPress,
   post: postKey,
@@ -82,6 +82,7 @@ export function PostLayout({
 }: {
   contentWarningPresentation?: PostContentWarningPresentation;
   mediaPresentation?: 'default' | 'hidden';
+  onActionBarBackgroundPress?: () => void;
   onDeleted?: () => void;
   onReplyPress?: () => void;
   post: PostLayout_post$key;
@@ -202,7 +203,7 @@ export function PostLayout({
           >
             <Avatar
               imageUri={post.profile.avatar?.url}
-              label={post.profile.displayName || post.profile.handle}
+              label={post.profile.displayName || post.profile.relativeHandle}
               size={compact ? 40 : 48}
             />
           </Pressable>
@@ -295,6 +296,7 @@ export function PostLayout({
               !compact && Platform.OS === 'web' ? styles.webActionBarFrame : null,
               { borderColor: theme.borderSubtle },
             ]}
+            onActionBarBackgroundPress={onActionBarBackgroundPress}
             onDeleted={handleDeleted}
             reactionSummaryStyle={compact ? styles.compactReactionSummary : undefined}
             reply={reply}

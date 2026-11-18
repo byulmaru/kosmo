@@ -3,17 +3,19 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { fraciBinary } from 'fraci';
 import postgres from 'postgres';
 import drizzleConfig from '../drizzle.config';
 import { migrationLock, runDatabaseMigrations } from './migrate';
-import { ProfilePinnedPosts, profilePinOrderKey } from './tables';
+import { ProfilePinnedPosts } from './tables';
 import type { FractionalIndexOf } from 'fraci';
 
 const databaseUrl = process.env.DATABASE_URL;
+
+const preBackfillProfilePinOrderKey = sql<Buffer>`coalesce(${ProfilePinnedPosts.orderKey}, decode('94', 'hex') || int4send(coalesce(${ProfilePinnedPosts.position}, 2147483647)) || case when ${ProfilePinnedPosts.position} is null then decode('01', 'hex') else decode('00', 'hex') end || uuid_send(${ProfilePinnedPosts.id}))`;
 
 if (!databaseUrl) {
   throw new Error('DATABASE_URL is required for migration integration tests.');
@@ -65,6 +67,39 @@ async function profilePinMigrationFolders() {
     await migrationFolder([
       profilePinBaseMigration,
       { name: profilePinBackfillName, sql: migrationSql },
+    ]),
+  ] as const;
+}
+
+const postMentionBackfillName = '20261115150054_prod1333_post_mentions_backfill';
+const postMentionBaseMigration: MigrationFixture = {
+  name: '20261115150053_prod1333_post_mentions_backfill_base',
+  sql: `
+    CREATE TABLE post (
+      id uuid PRIMARY KEY,
+      current_content_id uuid
+    );
+    CREATE TABLE post_mentions (
+      post_content_id uuid NOT NULL,
+      profile_id uuid NOT NULL,
+      post_id uuid REFERENCES post(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_content_id, profile_id)
+    );
+    CREATE UNIQUE INDEX post_mentions_post_id_profile_id_unique
+      ON post_mentions (post_id, profile_id) WHERE post_id IS NOT NULL;
+  `,
+};
+
+async function postMentionMigrationFolders() {
+  const migrationSql = await readFile(
+    new URL(`../../../drizzle/${postMentionBackfillName}/migration.sql`, import.meta.url),
+    'utf8',
+  );
+  return [
+    await migrationFolder(postMentionBaseMigration.name, postMentionBaseMigration.sql),
+    await migrationFolder([
+      postMentionBaseMigration,
+      { name: postMentionBackfillName, sql: migrationSql },
     ]),
   ] as const;
 }
@@ -350,10 +385,10 @@ test('고정글 순서 키 Backfill은 기존 유효 순서와 키를 보존하�
   const profilePinKeys = fraciBinary();
   const readEffectivePins = (profileId: string) =>
     pinDb
-      .select({ id: ProfilePinnedPosts.id, key: profilePinOrderKey })
+      .select({ id: ProfilePinnedPosts.id, key: preBackfillProfilePinOrderKey })
       .from(ProfilePinnedPosts)
       .where(eq(ProfilePinnedPosts.profileId, profileId))
-      .orderBy(asc(profilePinOrderKey), asc(ProfilePinnedPosts.id));
+      .orderBy(asc(preBackfillProfilePinOrderKey), asc(ProfilePinnedPosts.id));
   const readPhysicalPins = (profileId: string) =>
     pinDb
       .select({ id: ProfilePinnedPosts.id, key: ProfilePinnedPosts.orderKey })
@@ -479,7 +514,7 @@ test('고정글 순서 키 Backfill 충돌은 행과 migration history를 함께
       VALUES (${nullId}, ${profileId}, ${nullId}, null)
     `;
     const [nullPin] = await pinDb
-      .select({ key: profilePinOrderKey })
+      .select({ key: preBackfillProfilePinOrderKey })
       .from(ProfilePinnedPosts)
       .where(eq(ProfilePinnedPosts.id, nullId));
     assert.ok(nullPin);
@@ -516,6 +551,97 @@ test('고정글 순서 키 Backfill 충돌은 행과 migration history를 함께
       history.map(({ name }) => name),
       [profilePinBaseMigration.name],
     );
+  } finally {
+    await control.unsafe(
+      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
+    );
+    await control.unsafe('CREATE SCHEMA public;');
+    await control.end({ timeout: 5 });
+    await rm(baseMigrations, { force: true, recursive: true });
+    await rm(backfillMigrations, { force: true, recursive: true });
+  }
+});
+
+test('post mention Backfill은 현재 콘텐츠 관계만 연결하고 기존 행을 보존한다', async () => {
+  const [baseMigrations, backfillMigrations] = await postMentionMigrationFolders();
+  const control = postgres(databaseUrl, { max: 1 });
+  const fillPostId = '10000000-0000-7000-8000-000000000001';
+  const historicalPostId = '10000000-0000-7000-8000-000000000002';
+  const markedPostId = '10000000-0000-7000-8000-000000000003';
+  const currentPostId = '10000000-0000-7000-8000-000000000004';
+  const prelinkedPostId = '10000000-0000-7000-8000-000000000005';
+  const nullCurrentPostId = '10000000-0000-7000-8000-000000000006';
+  const fillProfileId = '20000000-0000-7000-8000-000000000001';
+  const historicalProfileId = '20000000-0000-7000-8000-000000000002';
+  const markedProfileId = '20000000-0000-7000-8000-000000000003';
+  const currentProfileId = '20000000-0000-7000-8000-000000000004';
+  const nullCurrentProfileId = '20000000-0000-7000-8000-000000000005';
+  const fillContentId = '30000000-0000-7000-8000-000000000001';
+  const historicalCurrentContentId = '30000000-0000-7000-8000-000000000002';
+  const historicalContentId = '30000000-0000-7000-8000-000000000003';
+  const markedContentId = '30000000-0000-7000-8000-000000000004';
+  const markedCurrentContentId = '30000000-0000-7000-8000-000000000005';
+  const currentContentId = '30000000-0000-7000-8000-000000000006';
+  const nullCurrentContentId = '30000000-0000-7000-8000-000000000007';
+  const readMentions = () =>
+    control<{ postContentId: string; profileId: string; postId: string | null }[]>`
+      SELECT post_content_id::text AS "postContentId",
+        profile_id::text AS "profileId", post_id::text AS "postId"
+      FROM post_mentions
+      ORDER BY post_content_id, profile_id
+    `;
+
+  try {
+    await control.unsafe(
+      'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',
+    );
+    await control.unsafe('CREATE SCHEMA public;');
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: baseMigrations });
+    await control`
+      INSERT INTO post (id, current_content_id) VALUES
+        (${fillPostId}, ${fillContentId}),
+        (${historicalPostId}, ${historicalCurrentContentId}),
+        (${markedPostId}, ${markedCurrentContentId}),
+        (${currentPostId}, ${currentContentId}),
+        (${prelinkedPostId}, null),
+        (${nullCurrentPostId}, null)
+    `;
+    await control`
+      INSERT INTO post_mentions (post_content_id, profile_id, post_id) VALUES
+        (${fillContentId}, ${fillProfileId}, null),
+        (${historicalContentId}, ${historicalProfileId}, null),
+        (${markedContentId}, ${markedProfileId}, ${markedPostId}),
+        (${markedCurrentContentId}, ${markedProfileId}, null),
+        (${currentContentId}, ${currentProfileId}, ${prelinkedPostId}),
+        (${nullCurrentContentId}, ${nullCurrentProfileId}, null)
+    `;
+
+    await runDatabaseMigrations({ databaseUrl, migrationsFolder: backfillMigrations });
+
+    const after = Array.from(await readMentions());
+    assert.deepEqual(after, [
+      { postContentId: fillContentId, profileId: fillProfileId, postId: fillPostId },
+      { postContentId: historicalContentId, profileId: historicalProfileId, postId: null },
+      { postContentId: markedContentId, profileId: markedProfileId, postId: markedPostId },
+      {
+        postContentId: markedCurrentContentId,
+        profileId: markedProfileId,
+        postId: null,
+      },
+      { postContentId: currentContentId, profileId: currentProfileId, postId: prelinkedPostId },
+      { postContentId: nullCurrentContentId, profileId: nullCurrentProfileId, postId: null },
+    ]);
+
+    const backfill = readMigrationFiles({ migrationsFolder: backfillMigrations }).find(
+      ({ name }) => name === postMentionBackfillName,
+    );
+    assert.ok(backfill);
+    await control.begin(async (transaction) => {
+      for (const statement of backfill.sql) {
+        await transaction.unsafe(statement);
+      }
+    });
+    assert.deepEqual(Array.from(await readMentions()), after);
   } finally {
     await control.unsafe(
       'DROP SCHEMA IF EXISTS drizzle CASCADE; DROP SCHEMA IF EXISTS public CASCADE;',

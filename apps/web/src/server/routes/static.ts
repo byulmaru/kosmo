@@ -12,6 +12,7 @@ const PUBLIC_POLICY_PATHS = new Set([
   '/privacy/changes/2026-10-13',
   '/account-deletion',
   '/child-safety',
+  '/terms/image-use/v1',
 ]);
 const PUBLIC_PROFILE_PATH =
   /^\/@(?:\w{3,30}|[\w.]+@(?:[\w.-]+|\[[\da-f:.]+\])(?::\d+)?)(?:\/[\w-]+(?:\/reactions)?)?\/?$/i;
