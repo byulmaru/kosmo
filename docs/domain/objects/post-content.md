@@ -230,9 +230,9 @@ Media의 최신 Alt Text가 그 Media를 참조하는 모든 Post에서 보인�
 
 ## Link Preview
 
-발행된 Local·Remote Post 본문의 첫 HTTP(S) 링크를 Link Preview 후보로 사용한다. 뒤의 링크로 fallback하지 않는다. 표시 가능한 metadata가 있으면 본문 뒤에 카드 하나를 표시한다. Open Graph title을
-우선 사용하고 없으면 HTML `<title>`을 사용하며, 어느 쪽에서도 제목을 얻지 못하면 카드를 표시하지 않는다. Description과
-HTTP(S) image는 선택 값이며 원문 body와 링크는 유지한다.
+발행된 Local·Remote Post 본문의 첫 HTTP(S) 링크를 Link Preview 후보로 사용한다. 뒤의 링크로 fallback하지 않는다. 표시 가능한 metadata가 있으면 본문 뒤에 카드 하나를 표시한다. 일반 외부 링크는 Open Graph title을
+우선 사용하고 없으면 HTML `<title>`을 사용한다. 공개 YouTube 동영상 링크(`youtu.be/<video-id>`, `youtube.com/watch?v=<video-id>`)는 YouTube oEmbed에서 제목과 제공되는 썸네일을 수집한다. oEmbed의 실행 가능한 HTML은 사용하지 않는다. 어느 경로에서도 제목을 얻지 못하면 카드를 표시하지 않는다. Description과
+안전성 검증을 통과한 HTTP(S) image는 선택 값이며 원문 body와 링크는 유지한다.
 
 Local 게시물 생성, Federated Post 수신, 게시물 가져오기는 모두 Post 생성 완료 뒤 공통 비동기 처리로 metadata를 가져온다.
 PostContent 조회는 해당 URL에 이미 저장된 metadata만 읽으며 새 조회나 갱신을 시작하지 않는다. 이전 게시물을 대상으로 일괄
