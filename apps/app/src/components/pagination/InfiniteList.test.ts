@@ -210,7 +210,7 @@ describe('InfiniteList', () => {
     await act(async () => {
       renderer = create(
         createElement(InfiniteList, {
-          ...props({ empty, footer: null }),
+          ...props({ data: [], empty, footer: null }),
         }),
       );
     });
@@ -223,7 +223,7 @@ describe('InfiniteList', () => {
     assert.equal(loadRequests.length, 1);
     assert.equal(loadRequests[0]?.count, 20);
 
-    await update(props({ empty, footer, isLoadingNext: true }));
+    await update(props({ data: [], empty, footer, isLoadingNext: true }));
     list = flatList();
     assert.equal(list.findAll((node) => String(node.type) === 'LoadingFooter').length, 1);
 
@@ -239,7 +239,9 @@ describe('InfiniteList', () => {
       }),
     );
     list = flatList();
+    assert.equal(list.findAll((node) => String(node.type) === 'Empty').length, 0);
     assert.equal(list.findAll((node) => String(node.type) === 'LoadingFooter').length, 0);
+    assert.ok(list.findAll((node) => node.children.includes('B')).length > 0);
 
     await act(async () => list.props.onEndReached());
     assert.equal(loadRequests.length, 2, 'page 완료 뒤 다음 endReached를 처리한다');
