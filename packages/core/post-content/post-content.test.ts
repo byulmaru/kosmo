@@ -9,6 +9,7 @@ import {
   canonicalizePostContentDocument,
   findLocalPostContentHashtagCandidates,
   findRemotePostContentHashtags,
+  getPostContentMentionProfileIds,
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
   postContentDocumentToHtml,
@@ -26,6 +27,30 @@ const otherHashtagId = '019f6678-86fa-709b-984e-1520766b8444';
 function serializeJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
+
+test('returns deduplicated Profile identities from Mention body nodes only', () => {
+  const document = canonicalizePostContentDocument({
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'mention', attrs: { profileId: aliceProfileId } },
+            { type: 'text', text: ' ' },
+            { type: 'mention', attrs: { profileId: aliceProfileId } },
+            { type: 'mention', attrs: { profileId: otherProfileId } },
+          ],
+        },
+        { type: 'media', attrs: { mediaId: hashtagId } },
+      ],
+    },
+  });
+
+  assert.deepEqual(getPostContentMentionProfileIds(document), [aliceProfileId, otherProfileId]);
+});
 
 test('converts trimmed Plain Text and normalized line endings to hard breaks', () => {
   const body = postContentDocumentFromText('  first\r\n\rsecond\n\nlast  ');

@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { graphql, usePaginationFragment } from 'react-relay';
 import { useAutomaticPagination } from '@/components/pagination/useAutomaticPagination';
 import { PostActionAuthenticationProvider } from '@/components/post/PostActionAuthentication';
@@ -15,10 +16,9 @@ import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerC
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
 import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
-import { useShellChrome } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
-import { getShellLayout, getWebMobileShellHeaderStickyOffset } from '../shell/shellLayout';
+import { getShellLayout } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
 import type { PropsWithChildren, ReactNode, RefObject } from 'react';
 import type {
@@ -152,7 +152,7 @@ export function PostDetailFrame({
   onHeaderLayout,
 }: PostDetailFrameProps) {
   const { width } = useWindowDimensions();
-  const shellChrome = useShellChrome();
+  const insets = useSafeAreaInsets();
 
   return Platform.OS === 'web' ? (
     <View style={styles.frame} testID="post-detail-scroll">
@@ -161,7 +161,7 @@ export function PostDetailFrame({
         ref={headerRef}
         style={[
           styles.header,
-          webStickyHeader(shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0),
+          webStickyHeader(getShellLayout(true, width) === 'mobile' ? insets.top : 0),
         ]}
       >
         {header}
@@ -187,6 +187,7 @@ export function PostDetailFrame({
 }
 
 type PostDetailThreadProps = {
+  active?: boolean;
   onCurrentPostBackgroundPress?: () => void;
   currentPostReplyAvailable?: boolean;
   currentPostReplyOnPress?: () => void;
@@ -202,6 +203,7 @@ type PostDetailThreadProps = {
 };
 
 export function PostDetailThread({
+  active = true,
   onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
@@ -224,6 +226,7 @@ export function PostDetailThread({
         preserveScrollPosition={preserveScrollPosition}
       >
         <PostDetailThreadData
+          active={active}
           onCurrentPostBackgroundPress={onCurrentPostBackgroundPress}
           currentPostReplyAvailable={currentPostReplyAvailable}
           currentPostReplyOnPress={currentPostReplyOnPress}
@@ -285,7 +288,7 @@ export function PostDetailThreadViewport({
   preserveScrollPosition,
 }: RouteThreadViewportProps) {
   const { height, width } = useWindowDimensions();
-  const shellChrome = useShellChrome();
+  const insets = useSafeAreaInsets();
   const [headerHeight, setHeaderHeight] = useState(0);
   const [nativeViewportHeight, setNativeViewportHeight] = useState(0);
   const nativeViewportHeightRef = useRef(0);
@@ -587,7 +590,7 @@ export function PostDetailThreadViewport({
 
   const viewportHeight =
     Platform.OS === 'web'
-      ? height - (shellChrome ? getWebMobileShellHeaderStickyOffset(width) : 0)
+      ? height - (getShellLayout(true, width) === 'mobile' ? insets.top : 0)
       : nativeViewportHeight;
   const contextValue = {
     currentRef: currentRowRef,
@@ -657,6 +660,7 @@ type PostDetailThreadRowsProps = {
 };
 
 export function PostDetailThreadData({
+  active = true,
   onCurrentPostBackgroundPress,
   currentPostReplyAvailable,
   currentPostReplyOnPress,
@@ -682,6 +686,7 @@ export function PostDetailThreadData({
     itemCount: data.replyDescendants.edges.length,
     loadNext,
     pageSize: 20,
+    webDocumentActive: active,
     webScrollTarget: presentation === 'viewer' ? 'container' : 'document',
   });
   useLayoutEffect(() => {
@@ -706,6 +711,7 @@ export function PostDetailThreadData({
 }
 
 export function PostDetailConversationData({
+  active = true,
   conversationKey,
   conversationError = false,
   conversationLoading = false,
@@ -719,6 +725,7 @@ export function PostDetailConversationData({
   onPostDeleted,
   presentation = 'route',
 }: {
+  active?: boolean;
   conversationKey: PostDetailConversation_post$key | null;
   conversationError?: boolean;
   conversationLoading?: boolean;
@@ -747,6 +754,7 @@ export function PostDetailConversationData({
     itemCount: conversationData?.replyDescendants.edges.length ?? 0,
     loadNext,
     pageSize: 20,
+    webDocumentActive: active,
     webScrollTarget: presentation === 'viewer' ? 'container' : 'document',
   });
   useLayoutEffect(() => {

@@ -28,6 +28,7 @@ KOSMO의 UI/시각 디자인, 상호작용 표현, 접근성 결정을 기록하
 - [post-media-viewer.md](./post-media-viewer.md) — 선택한 Post 이미지의 modal 탐색, 원문 panel과 Action Bar 배치 계약
 - [post-composer.md](./post-composer.md) — 일반 Post·Reply·Quote가 공유하는 Composer와 관계형 modal·fullscreen 계약
 - [post-thread.md](./post-thread.md) — Post 상세 thread의 renderer·connector·row boundary 소유권과 geometry
+- [post-content-link-preview.md](./post-content-link-preview.md) — 발행된 Post Content의 공용 Link Preview 카드 presentation과 consumer 범위
 - [post-content-mentions.md](./post-content-mentions.md) — canonical Mention 표시, 기존 Profile route 이동, fallback과 플랫폼 접근성 계약
 - [post-content-hashtags.md](./post-content-hashtags.md) — 본문 Hashtag inline 표시와 PROD-827까지의 비대화형 경계
 - [media-upload-errors.md](./media-upload-errors.md) — Post Composer·Profile 편집의 공통 이미지 업로드 오류 분류와 복구 안내

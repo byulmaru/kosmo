@@ -12,6 +12,7 @@ import {
   InstanceState,
   MediaSource,
   MediaState,
+  MediaUsePermission,
   NotificationKind,
   OAuthTokenState,
   PostState,
@@ -32,8 +33,12 @@ import {
   WorkflowIdReusePolicy,
 } from '@temporalio/client';
 import { MockActivityEnvironment } from '@temporalio/testing';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type * as CoreDb from '@kosmo/core/db';
+import type {
+  NotificationAddedPayload,
+  notificationPubSub as NotificationPubSub,
+} from '@kosmo/core/notification/events';
 import type { PostContentDocumentV1 } from '@kosmo/core/post-content';
 import type {
   createPost as CreatePost,
@@ -79,6 +84,7 @@ let Instances: typeof CoreDb.Instances;
 let Media: typeof CoreDb.Media;
 let NotificationQuoteJudgments: typeof CoreDb.NotificationQuoteJudgments;
 let Notifications: typeof CoreDb.Notifications;
+let notificationPubSub: typeof NotificationPubSub;
 let OAuthAuthorizationCodes: typeof CoreDb.OAuthAuthorizationCodes;
 let OAuthTokens: typeof CoreDb.OAuthTokens;
 let pg: typeof CoreDb.pg;
@@ -143,6 +149,7 @@ before(async () => {
     Reactions,
     Sessions,
   } = await import('@kosmo/core/db'));
+  ({ notificationPubSub } = await import('@kosmo/core/notification/events'));
   ({
     createNotificationActivity,
     createReactionNotificationActivity,
@@ -159,7 +166,14 @@ before(async () => {
     await import('./activities/media-upload'));
   ({ reprocessLocalPostContentActivity } = await import('./activities/post-content-reprocessing'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
-  ({ createPost: createCorePost, deletePost, repostPost } = await import('@kosmo/core/services'));
+  ({ repostPost } = await import('@kosmo/core/services'));
+  const { createPostPersisted, deletePostPersisted } =
+    await import('../../../packages/core/services/post');
+  createCorePost = createPostPersisted;
+  deletePost = async (input) => {
+    const { result } = await deletePostPersisted(input);
+    return { ...result, replyParentId: result.replyParentId ?? null };
+  };
 });
 
 beforeEach(async () => {
@@ -191,13 +205,29 @@ after(async () => {
   await pg.end();
 });
 
-test('Operational audience capture is stable across retries, payload mismatches, and later signups', async () => {
+test('Operational audience capture is stable across retries, payload mismatches, and later signups', async (t) => {
   const active = await createAccountDeletionFixture({ profileStates: [] });
   const anotherActive = await createAccountDeletionFixture({ profileStates: [] });
   const disabled = await createAccountDeletionFixture({ profileStates: [] });
   const sendId = crypto.randomUUID();
   const data = { href: '/maintenance', title: 'Scheduled maintenance' };
   let lateSignup: Awaited<ReturnType<typeof createAccountDeletionFixture>> | undefined;
+  const publishedNotifications: Array<{
+    readonly recipientAccountId: string;
+    readonly notificationId: string;
+    readonly recipientProfileId: string | null;
+  }> = [];
+  t.mock.method(
+    notificationPubSub,
+    'publish',
+    (
+      _topic: 'notificationAdded',
+      recipientAccountId: string,
+      payload: NotificationAddedPayload,
+    ) => {
+      publishedNotifications.push({ recipientAccountId, ...payload });
+    },
+  );
 
   try {
     await db
@@ -227,6 +257,12 @@ test('Operational audience capture is stable across retries, payload mismatches,
       assert.deepEqual(notification.data, data);
     }
     const notificationIds = notifications.map(({ id }) => id).sort();
+    assert.deepEqual(
+      publishedNotifications
+        .map(({ notificationId, recipientAccountId }) => `${recipientAccountId}:${notificationId}`)
+        .sort(),
+      notifications.map(({ id, recipientAccountId }) => `${recipientAccountId}:${id}`).sort(),
+    );
 
     const readAt = Temporal.Instant.from('2026-10-02T01:23:45.123456Z');
     const readNotificationId = notifications[0]!.id;
@@ -234,6 +270,7 @@ test('Operational audience capture is stable across retries, payload mismatches,
     lateSignup = await createAccountDeletionFixture({ profileStates: [] });
 
     assert.equal(await captureOperationalNotificationAudienceActivity({ sendId, data }), true);
+    assert.equal(publishedNotifications.length, 2);
     const retriedNotifications = await db
       .select({
         id: Notifications.id,
@@ -918,6 +955,7 @@ test('Quote Notification Activity는 source author에게 한 건만 생성한다
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: author.id,
@@ -945,6 +983,7 @@ test('Quote와 Reply 판단이 경합해도 Reply가 대표가 된다', async ()
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Combined quote',
     origin: 'LOCAL',
     profileId: author.id,
@@ -977,6 +1016,7 @@ test('Quote와 Reply의 recipient가 다르면 각 알림을 독립적으로 만
   });
   const replyParent = await createPost(replyRecipient.id);
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Quote and reply',
     origin: 'LOCAL',
     profileId: author.id,
@@ -1067,6 +1107,63 @@ test('공통 Notification Activity는 저장된 ID로 Push Workflow를 시작하
   assert.equal(startOptions.workflowIdReusePolicy, WorkflowIdReusePolicy.REJECT_DUPLICATE);
 });
 
+test('Notification events publish only new rows while Push retries retain existing IDs', async (t) => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+  const published: Array<{
+    readonly recipientAccountId: string;
+    readonly notificationId: string;
+    readonly recipientProfileId: string | null;
+  }> = [];
+  const publish = t.mock.method(
+    notificationPubSub,
+    'publish',
+    (
+      _topic: 'notificationAdded',
+      recipientAccountId: string,
+      payload: NotificationAddedPayload,
+    ) => {
+      published.push({ recipientAccountId, ...payload });
+    },
+  );
+  const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
+  const input = { kind: NotificationKind.REPLY, sourceId: reply.id } as const;
+
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+
+  const [notification] = await db.select().from(Notifications);
+  assert.ok(notification);
+  assert.deepEqual(published, [
+    {
+      notificationId: notification.id,
+      recipientAccountId: activityTestAccountId,
+      recipientProfileId: recipient.id,
+    },
+  ]);
+  assert.equal(publish.mock.calls.length, 1);
+  assert.equal(start.mock.calls.length, 2);
+});
+
+test('Notification event publish failure preserves the committed string ID result', async (t) => {
+  const recipient = await createProfile();
+  const author = await createProfile();
+  const parent = await createPost(recipient.id);
+  const reply = await createPost(author.id, { replyParentId: parent.id });
+  t.mock.method(notificationPubSub, 'publish', () => {
+    throw new Error('Redis event publish failed');
+  });
+
+  const notificationIds = await createReplyNotificationActivity(reply.id);
+
+  assert.equal(notificationIds.length, 1);
+  assert.deepEqual(await db.select({ id: Notifications.id }).from(Notifications), [
+    { id: notificationIds[0] },
+  ]);
+});
+
 test('공통 Notification Activity는 Notification이 materialize되지 않으면 Push를 시작하지 않는다', async (t) => {
   const start = t.mock.method(temporalClient.workflow, 'start', async () => undefined as never);
 
@@ -1148,6 +1245,101 @@ test('공통 Notification Activity는 Push start 실패 뒤 저장된 알림을 
   assert.deepEqual(workflowIds, [
     `push-notification:${notifications[0]?.id}`,
     `push-notification:${notifications[0]?.id}`,
+  ]);
+});
+
+test('공통 Notification Activity는 Mention이 투영된 Quote를 안정적인 Push 하나로 연결한다', async (t) => {
+  const sourceAuthor = await createProfile();
+  const quoteAuthor = await createProfile();
+  const mentionedProfile = await createProfile();
+  const { post: source } = await createCorePost({
+    document: postContentDocumentFromText('Quote source'),
+    origin: 'LOCAL',
+    profileId: sourceAuthor.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const { post: quote, content } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
+    authoredBodyText: `Quote @${mentionedProfile.handle}`,
+    document: {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Quote ' },
+              { type: 'mention', attrs: { profileId: mentionedProfile.id } },
+            ],
+          },
+        ],
+      },
+    },
+    origin: 'LOCAL',
+    profileId: quoteAuthor.id,
+    repostSourceId: source.id,
+    visibility: PostVisibility.PUBLIC,
+  });
+  const mentions = await db
+    .select()
+    .from(PostMentions)
+    .where(eq(PostMentions.postContentId, content.id));
+  assert.deepEqual(
+    mentions.map(({ profileId }) => profileId),
+    [mentionedProfile.id],
+  );
+
+  const duplicateStart = new Error('Push workflow already started');
+  duplicateStart.name = 'WorkflowExecutionAlreadyStartedError';
+  const dispatched = new Set<string>();
+  const start = t.mock.method(
+    temporalClient.workflow,
+    'start',
+    async (workflow: string | Workflow, options: WorkflowStartOptions) => {
+      assert.equal(workflow, 'pushNotificationDeliveryWorkflow');
+      if (dispatched.has(options.workflowId)) {
+        throw duplicateStart;
+      }
+      dispatched.add(options.workflowId);
+      return undefined as never;
+    },
+  );
+
+  // Creation returns before effects settle. Exercise both projections explicitly rather than
+  // assuming the separate production Worker's Mention Activity has already finished.
+  await new MockActivityEnvironment().run(createNotificationActivity, {
+    kind: NotificationKind.MENTION,
+    sourceId: quote.id,
+  });
+  const input = { kind: NotificationKind.QUOTE, sourceId: quote.id } as const;
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+  await new MockActivityEnvironment().run(createNotificationActivity, input);
+
+  const notifications = await db
+    .select()
+    .from(Notifications)
+    .where(eq(Notifications.sourceId, quote.id));
+  assert.equal(notifications.length, 2);
+  assert.deepEqual(
+    new Set(notifications.map(({ kind, recipientProfileId }) => `${kind}:${recipientProfileId}`)),
+    new Set([
+      `${NotificationKind.MENTION}:${mentionedProfile.id}`,
+      `${NotificationKind.QUOTE}:${sourceAuthor.id}`,
+    ]),
+  );
+  const quoteNotification = notifications.find(({ kind }) => kind === NotificationKind.QUOTE);
+  assert.ok(quoteNotification);
+  const mentionNotification = notifications.find(({ kind }) => kind === NotificationKind.MENTION);
+  assert.ok(mentionNotification);
+  assert.equal(start.mock.calls.length, 3);
+  assert.equal(dispatched.size, 2);
+  const workflowIds = start.mock.calls.map((call) => call.arguments[1]?.workflowId);
+  assert.deepEqual(workflowIds, [
+    `push-notification:${mentionNotification.id}`,
+    `push-notification:${quoteNotification.id}`,
+    `push-notification:${quoteNotification.id}`,
   ]);
 });
 
@@ -1259,6 +1451,7 @@ test('Post deletion Notification Activity removes exact related rows and is idem
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
@@ -1385,6 +1578,7 @@ test('Post deletion Notification Activity removes direct Reply, Quote, and Repos
     visibility: PostVisibility.PUBLIC,
   });
   const { post: quote } = await createCorePost({
+    admissionId: `${Date.now()}:${crypto.randomUUID()}`,
     bodyText: 'Quote body',
     origin: 'LOCAL',
     profileId: actor.id,
@@ -1952,6 +2146,7 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
     });
     postIds.push(reply.id);
     const { post: quote } = await createCorePost({
+      admissionId: `${Date.now()}:${crypto.randomUUID()}`,
       bodyText: 'quote',
       origin: 'LOCAL',
       profileId: actor.id,
@@ -1991,8 +2186,8 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
       [NotificationKind.QUOTE, quote.id],
     ] as const;
     const notifications = await Promise.all(
-      notificationSources.map(([kind, sourceId]) =>
-        db
+      notificationSources.map(async ([kind, sourceId]) => {
+        const [inserted] = await db
           .insert(Notifications)
           .values({
             kind,
@@ -2000,9 +2195,24 @@ test('Profile Notification의 유형별 기본 notification payload를 전달한
             recipientProfileId: recipient.id,
             sourceId,
           })
-          .returning({ id: Notifications.id })
-          .then(firstOrThrow),
-      ),
+          .onConflictDoNothing()
+          .returning({ id: Notifications.id });
+        if (inserted) {
+          return inserted;
+        }
+        return db
+          .select({ id: Notifications.id })
+          .from(Notifications)
+          .where(
+            and(
+              eq(Notifications.kind, kind),
+              eq(Notifications.recipientAccountId, fixture.account.id),
+              eq(Notifications.recipientProfileId, recipient.id),
+              eq(Notifications.sourceId, sourceId),
+            ),
+          )
+          .then(firstOrThrow);
+      }),
     );
 
     const installationIds = await listPushNotificationInstallationsActivity(notifications[0]!.id);
@@ -2147,8 +2357,32 @@ test('공통 Notification Activity는 저장된 Mention ID마다 Push를 시작�
     assert.ok(secondRecipient);
     const author = await createProfile({ instanceKind: InstanceKind.ACTIVITYPUB });
     const publishedAt = Temporal.Now.instant();
+    const document: PostContentDocumentV1 = {
+      version: 1,
+      summary: null,
+      body: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Mention source preview ' },
+              {
+                type: 'mention',
+                attrs: { handle: `@${recipient.handle}`, profileId: recipient.id },
+              },
+              { type: 'text', text: ' ' },
+              {
+                type: 'mention',
+                attrs: { handle: `@${secondRecipient.handle}`, profileId: secondRecipient.id },
+              },
+            ],
+          },
+        ],
+      },
+    };
     const createdPost = await createCorePost({
-      document: postContentDocumentFromText('Mention source preview'),
+      document,
       mentionProfileIds: [recipient.id, secondRecipient.id],
       objectUri: `https://${author.handle}.example/posts/${crypto.randomUUID()}`,
       origin: 'ACTIVITYPUB',
@@ -2334,7 +2568,7 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     const publishedAt = Temporal.Now.instant();
     const createdPost = await createCorePost({
       document: postContentDocumentFromText('Mention source preview'),
-      mentionProfileIds: [recipient.id],
+      mentionProfileIds: [],
       objectUri: `https://${author.handle}.example/posts/${crypto.randomUUID()}`,
       origin: 'ACTIVITYPUB',
       profileId: author.id,
@@ -2347,6 +2581,12 @@ test('Mention Push Notification은 원인 Post의 Mention 타입·경로·안전
     }
     const { post } = createdPost;
     postId = post.id;
+    // Model a legacy stored Mention relation without asking the new Post writer to create it.
+    await db.insert(PostMentions).values({
+      postContentId: createdPost.content.id,
+      postId: post.id,
+      profileId: recipient.id,
+    });
     const authorInstance = await db
       .select({ domain: Instances.domain })
       .from(Instances)
@@ -2490,11 +2730,13 @@ test('Push Notification Activity는 등록되지 않은 FID만 제거하고 inva
   }
 });
 
-test('Media Upload preparation은 소유자와 상태를 검증하고 staging source를 확인한다', async () => {
+test('Media Upload preparation은 출처를 고정하고 finalization receipt를 검증한다', async () => {
   const fixture = await createAccountDeletionFixture({ profileStates: [ProfileState.ACTIVE] });
   const mediaIds: string[] = [];
   const requests: { authorization: string | undefined; method: string; url: string }[] = [];
   let headResponseStatus = 200;
+  let headResponseContentType = 'image/jpeg';
+  let thumbhashHeader: string | undefined = 'dGh1bWJoYXNo';
   const server = createServer((request, response) => {
     requests.push({
       authorization: request.headers.authorization,
@@ -2523,8 +2765,9 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
     response
       .writeHead(200, {
         'Content-Length': '128',
-        'Content-Type': 'image/jpeg',
+        'Content-Type': headResponseContentType,
         'Last-Modified': new Date().toUTCString(),
+        ...(thumbhashHeader === undefined ? {} : { 'X-Thumbhash': thumbhashHeader }),
       })
       .end();
   });
@@ -2561,10 +2804,12 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       .select({
         accountId: Media.accountId,
         mediaType: Media.mediaType,
+        publicationMetadata: Media.publicationMetadata,
         readyAt: Media.readyAt,
         source: Media.source,
         state: Media.state,
         storageReference: Media.storageReference,
+        thumbhash: Media.thumbhash,
         url: Media.url,
       })
       .from(Media)
@@ -2573,10 +2818,21 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       .then(firstOrThrow);
     return { ...media, readyAt: media.readyAt?.toString() ?? null };
   };
+  const readMediaRowVersion = async (mediaId: string) =>
+    db
+      .select({ rowVersion: sql<string>`xmin::text` })
+      .from(Media)
+      .where(eq(Media.id, mediaId))
+      .limit(1)
+      .then(firstOrThrow);
   const hasFailureType = (type: string) => (error: unknown) =>
     error instanceof ApplicationFailure && error.nonRetryable && error.type === type;
 
   try {
+    const publicationMetadata = {
+      attributionName: 'Creator',
+      attributionUrl: 'https://kosmo.example/@creator',
+    };
     const uploading = await createUploadingMedia();
     const uploadingState = await readMediaState(uploading.mediaId);
     const uuid = uploading.storageReference.slice('nexus:v1:'.length);
@@ -2593,13 +2849,218 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
         url: `/v1/uploads/${uploadId}?staging=true`,
       },
     ]);
-    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+    const preparedState = await readMediaState(uploading.mediaId);
+    assert.deepEqual(preparedState, { ...uploadingState, thumbhash: thumbhashHeader });
 
     await assert.rejects(
-      prepareMediaUploadActivity({ ...uploading, accountId: crypto.randomUUID() }),
+      prepareMediaUploadActivity({
+        ...uploading,
+        accountId: crypto.randomUUID(),
+        publicationMetadata,
+      }),
       hasFailureType('MediaUploadSessionInvalid'),
     );
-    assert.deepEqual(await readMediaState(uploading.mediaId), uploadingState);
+    assert.deepEqual(await readMediaState(uploading.mediaId), preparedState);
+
+    const absentThumbhash = await createUploadingMedia();
+    const absentThumbhashState = await readMediaState(absentThumbhash.mediaId);
+    const absentThumbhashVersion = await readMediaRowVersion(absentThumbhash.mediaId);
+    thumbhashHeader = undefined;
+    const absentUuid = absentThumbhash.storageReference.slice('nexus:v1:'.length);
+    const absentUploadId = `u_${absentUuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(absentThumbhash), {
+      id: absentUploadId,
+      sourceKey: `uploads/${absentUploadId}/${absentUuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(absentThumbhash.mediaId), absentThumbhashState);
+    assert.deepEqual(await readMediaRowVersion(absentThumbhash.mediaId), absentThumbhashVersion);
+
+    const invalidThumbhash = await createUploadingMedia();
+    const invalidThumbhashState = await readMediaState(invalidThumbhash.mediaId);
+    thumbhashHeader = 'YWJjZGU===';
+    const invalidUuid = invalidThumbhash.storageReference.slice('nexus:v1:'.length);
+    const invalidUploadId = `u_${invalidUuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(invalidThumbhash), {
+      id: invalidUploadId,
+      sourceKey: `uploads/${invalidUploadId}/${invalidUuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(invalidThumbhash.mediaId), invalidThumbhashState);
+
+    const invalidMetadata = await createUploadingMedia();
+    const invalidMetadataState = await readMediaState(invalidMetadata.mediaId);
+    thumbhashHeader = 'dGh1bWJoYXNo';
+    headResponseContentType = 'image/gif';
+    await assert.rejects(
+      prepareMediaUploadActivity(invalidMetadata),
+      hasFailureType('NexusMediaUploadSourceError'),
+    );
+    assert.deepEqual(await readMediaState(invalidMetadata.mediaId), invalidMetadataState);
+    headResponseContentType = 'image/jpeg';
+
+    const metadataUpload = await createUploadingMedia();
+    const metadataInput = { ...metadataUpload, publicationMetadata };
+    const metadataUuid = metadataUpload.storageReference.slice('nexus:v1:'.length);
+    const metadataUploadId = `u_${metadataUuid}`;
+    const metadataPrepared = {
+      id: metadataUploadId,
+      sourceKey: `uploads/${metadataUploadId}/${metadataUuid}`,
+      contentType: 'image/jpeg',
+      publicationMetadata,
+    };
+    const metadataStateBeforePrepare = await readMediaState(metadataUpload.mediaId);
+    assert.deepEqual(await prepareMediaUploadActivity(metadataInput), metadataPrepared);
+    const frozenMetadataState = await readMediaState(metadataUpload.mediaId);
+    assert.deepEqual(frozenMetadataState, {
+      ...metadataStateBeforePrepare,
+      publicationMetadata,
+      thumbhash: thumbhashHeader,
+    });
+    assert.deepEqual(await prepareMediaUploadActivity(metadataInput), metadataPrepared);
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+
+    const checkedRights = {
+      personal: MediaUsePermission.EDIT,
+      noncommercial: MediaUsePermission.ORIGINAL,
+      commercial: MediaUsePermission.DENY,
+    } as const;
+    await assert.rejects(
+      prepareMediaUploadActivity({
+        ...metadataUpload,
+        publicationMetadata: { ...publicationMetadata, rights: checkedRights },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+
+    const rightsMetadata = {
+      ...publicationMetadata,
+      rights: checkedRights,
+    };
+    const rightsUpload = await createUploadingMedia();
+    const rightsInput = { ...rightsUpload, publicationMetadata: rightsMetadata };
+    const preparedRights = await prepareMediaUploadActivity(rightsInput);
+    assert.deepEqual(preparedRights.publicationMetadata, rightsMetadata);
+    const frozenRightsState = await readMediaState(rightsUpload.mediaId);
+    const changedRights = {
+      ...checkedRights,
+      noncommercial: MediaUsePermission.EDIT,
+    } as const;
+    await assert.rejects(
+      prepareMediaUploadActivity({
+        ...rightsInput,
+        publicationMetadata: { ...rightsMetadata, rights: changedRights },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(rightsUpload.mediaId), frozenRightsState);
+    await assert.rejects(
+      prepareMediaUploadActivity({
+        ...rightsUpload,
+        publicationMetadata,
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(rightsUpload.mediaId), frozenRightsState);
+
+    const expectedPublicationMetadata = {
+      credit: `${publicationMetadata.attributionName} (${publicationMetadata.attributionUrl})`,
+    };
+    const publicationResult = {
+      id: metadataUploadId,
+      url: 'https://media.example/metadata.webp',
+      mediaType: 'image/webp',
+      metadata: expectedPublicationMetadata,
+    };
+    const publicationFinalizeInput = {
+      ...metadataInput,
+      remoteUploadId: metadataUploadId,
+      expectedPublicationMetadata,
+      result: publicationResult,
+    };
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...publicationFinalizeInput,
+        result: {
+          id: metadataUploadId,
+          url: publicationResult.url,
+          mediaType: publicationResult.mediaType,
+        },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...publicationFinalizeInput,
+        result: {
+          ...publicationResult,
+          metadata: { ...expectedPublicationMetadata, credit: 'Different credit' },
+        },
+      }),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), frozenMetadataState);
+
+    const changedStoredMetadata = {
+      ...publicationMetadata,
+      attributionName: 'Changed Creator',
+    };
+    await db
+      .update(Media)
+      .set({ publicationMetadata: changedStoredMetadata })
+      .where(eq(Media.id, metadataUpload.mediaId));
+    await assert.rejects(
+      finalizeMediaUploadActivity(publicationFinalizeInput),
+      hasFailureType('MediaUploadMetadataConflict'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), {
+      ...frozenMetadataState,
+      publicationMetadata: changedStoredMetadata,
+    });
+    await db.update(Media).set({ publicationMetadata }).where(eq(Media.id, metadataUpload.mediaId));
+
+    assert.deepEqual(
+      await finalizeMediaUploadActivity(publicationFinalizeInput),
+      publicationResult,
+    );
+    const metadataReadyState = await readMediaState(metadataUpload.mediaId);
+    assert.equal(metadataReadyState.state, MediaState.READY);
+    assert.equal(metadataReadyState.url, publicationResult.url);
+    assert.deepEqual(metadataReadyState.publicationMetadata, publicationMetadata);
+    assert.ok(metadataReadyState.readyAt);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity(publicationFinalizeInput),
+      publicationResult,
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), metadataReadyState);
+    await assert.rejects(
+      finalizeMediaUploadActivity({
+        ...publicationFinalizeInput,
+        result: { ...publicationResult, url: 'https://media.example/different.webp' },
+      }),
+      hasFailureType('MediaUploadSessionInvalid'),
+    );
+    assert.deepEqual(await readMediaState(metadataUpload.mediaId), metadataReadyState);
+
+    const storedThumbhash = await createUploadingMedia();
+    const existingThumbhash = 'ZXhpc3Rpbmc=';
+    await db
+      .update(Media)
+      .set({ thumbhash: existingThumbhash })
+      .where(eq(Media.id, storedThumbhash.mediaId));
+    const storedThumbhashState = await readMediaState(storedThumbhash.mediaId);
+    const storedThumbhashVersion = await readMediaRowVersion(storedThumbhash.mediaId);
+    const storedUuid = storedThumbhash.storageReference.slice('nexus:v1:'.length);
+    const storedUploadId = `u_${storedUuid}`;
+    assert.deepEqual(await prepareMediaUploadActivity(storedThumbhash), {
+      id: storedUploadId,
+      sourceKey: `uploads/${storedUploadId}/${storedUuid}`,
+      contentType: 'image/jpeg',
+    });
+    assert.deepEqual(await readMediaState(storedThumbhash.mediaId), storedThumbhashState);
+    assert.deepEqual(await readMediaRowVersion(storedThumbhash.mediaId), storedThumbhashVersion);
 
     const ready = await createUploadingMedia();
     await db
@@ -2613,22 +3074,24 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
       .where(eq(Media.id, ready.mediaId));
     const readyState = await readMediaState(ready.mediaId);
     await assert.rejects(
-      prepareMediaUploadActivity(ready),
+      prepareMediaUploadActivity({ ...ready, publicationMetadata }),
       hasFailureType('MediaUploadSessionInvalid'),
     );
     assert.deepEqual(await readMediaState(ready.mediaId), readyState);
 
     const invalidSource = await createUploadingMedia('nexus:v1:invalid');
     const invalidSourceState = await readMediaState(invalidSource.mediaId);
+    const requestsBeforeInvalidSource = requests.length;
     await assert.rejects(
-      prepareMediaUploadActivity(invalidSource),
+      prepareMediaUploadActivity({ ...invalidSource, publicationMetadata }),
       hasFailureType('NexusMediaUploadSourceError'),
     );
     assert.deepEqual(await readMediaState(invalidSource.mediaId), invalidSourceState);
-    assert.equal(requests.length, 1);
+    assert.equal(requests.length, requestsBeforeInvalidSource);
 
     const transientFailure = await createUploadingMedia();
     const transientFailureState = await readMediaState(transientFailure.mediaId);
+    const transientRequestIndex = requests.length;
     headResponseStatus = 503;
     await assert.rejects(
       prepareMediaUploadActivity(transientFailure),
@@ -2638,7 +3101,7 @@ test('Media Upload preparation은 소유자와 상태를 검증하고 staging so
         error.message === 'Media Storage Service rejected upload metadata (503)',
     );
     const transientUuid = transientFailure.storageReference.slice('nexus:v1:'.length);
-    assert.deepEqual(requests[1], {
+    assert.deepEqual(requests[transientRequestIndex], {
       authorization: 'Bearer test-api-key',
       method: 'HEAD',
       url: `/v1/uploads/u_${transientUuid}?staging=true`,
@@ -2697,6 +3160,7 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       readonly remoteUploadId: string;
       readonly result: MediaUploadWorkflowResult;
     } = {
+      applyAiProhibitFilter: true,
       mediaId,
       accountId: fixture.account.id,
       remoteUploadId,
@@ -2722,16 +3186,18 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     );
 
     const stillUploading = await db
-      .select({ state: Media.state })
+      .select({ aiProhibitFilterApplied: Media.aiProhibitFilterApplied, state: Media.state })
       .from(Media)
       .where(eq(Media.id, mediaId))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(stillUploading.state, MediaState.UPLOADING);
+    assert.equal(stillUploading.aiProhibitFilterApplied, null);
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
     const firstReady = await db
       .select({
+        aiProhibitFilterApplied: Media.aiProhibitFilterApplied,
         readyAt: Media.readyAt,
         state: Media.state,
       })
@@ -2741,10 +3207,16 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       .then(firstOrThrow);
     assert.equal(firstReady.state, MediaState.READY);
     assert.ok(firstReady.readyAt);
+    assert.equal(firstReady.aiProhibitFilterApplied, true);
 
     assert.deepEqual(await finalizeMediaUploadActivity(input), result);
+    assert.deepEqual(
+      await finalizeMediaUploadActivity({ ...input, applyAiProhibitFilter: false }),
+      result,
+    );
     const retriedReady = await db
       .select({
+        aiProhibitFilterApplied: Media.aiProhibitFilterApplied,
         readyAt: Media.readyAt,
         state: Media.state,
       })
@@ -2754,6 +3226,7 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       .then(firstOrThrow);
     assert.equal(retriedReady.state, MediaState.READY);
     assert.equal(retriedReady.readyAt?.toString(), firstReady.readyAt.toString());
+    assert.equal(retriedReady.aiProhibitFilterApplied, true);
     await assert.rejects(
       finalizeMediaUploadActivity({ ...input, remoteUploadId: `u_${crypto.randomUUID()}` }),
       expectNonRetryableFailure,
@@ -2774,12 +3247,13 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     };
     assert.deepEqual(await finalizeMediaUploadActivity(nightshadeInput), nightshadeResult);
     const nightshadeReady = await db
-      .select({ state: Media.state })
+      .select({ aiProhibitFilterApplied: Media.aiProhibitFilterApplied, state: Media.state })
       .from(Media)
       .where(eq(Media.id, nightshade.mediaId))
       .limit(1)
       .then(firstOrThrow);
     assert.equal(nightshadeReady.state, MediaState.READY);
+    assert.equal(nightshadeReady.aiProhibitFilterApplied, null);
     assert.deepEqual(
       await finalizeMediaUploadActivity({ ...nightshadeInput, applyNightshade: false }),
       nightshadeResult,
@@ -2805,7 +3279,12 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
       [concurrentResult, concurrentResult],
     );
     const converged = await db
-      .select({ readyAt: Media.readyAt, state: Media.state, url: Media.url })
+      .select({
+        aiProhibitFilterApplied: Media.aiProhibitFilterApplied,
+        readyAt: Media.readyAt,
+        state: Media.state,
+        url: Media.url,
+      })
       .from(Media)
       .where(eq(Media.id, concurrent.mediaId))
       .limit(1)
@@ -2813,6 +3292,28 @@ test('Media Upload finalization은 세션을 검증하고 중복 및 동시 완�
     assert.equal(converged.state, MediaState.READY);
     assert.equal(converged.url, concurrentResult.url);
     assert.ok(converged.readyAt);
+    assert.equal(converged.aiProhibitFilterApplied, null);
+
+    const unfiltered = await createUploadingMedia();
+    const unfilteredResult: MediaUploadWorkflowResult = {
+      ...result,
+      id: unfiltered.remoteUploadId,
+      url: 'https://media.example/unfiltered.webp',
+    };
+    await finalizeMediaUploadActivity({
+      ...unfiltered,
+      accountId: fixture.account.id,
+      applyAiProhibitFilter: false,
+      remoteUploadId: unfiltered.remoteUploadId,
+      result: unfilteredResult,
+    });
+    const unfilteredReady = await db
+      .select({ aiProhibitFilterApplied: Media.aiProhibitFilterApplied })
+      .from(Media)
+      .where(eq(Media.id, unfiltered.mediaId))
+      .limit(1)
+      .then(firstOrThrow);
+    assert.equal(unfilteredReady.aiProhibitFilterApplied, false);
   } finally {
     if (mediaIds.length > 0) {
       await db.delete(Media).where(inArray(Media.id, mediaIds));

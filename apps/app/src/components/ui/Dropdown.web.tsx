@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { spacing } from '@/theme/tokens';
 import { OverlayPortal } from './OverlayPortal';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { DropdownProps } from './Dropdown';
 
 export function Dropdown({
@@ -57,11 +58,15 @@ export function Dropdown({
           ? rect.top + height > bottomEdge
             ? rect.bottom - height
             : rect.top
-          : verticalPlacement === 'after'
-            ? rect.bottom + spacing.sm
-            : verticalPlacement === 'end'
-              ? rect.bottom - height
-              : rect.top - anchorInset;
+          : verticalPlacement === 'auto'
+            ? rect.bottom + spacing.sm + height <= bottomEdge - viewportInset
+              ? rect.bottom + spacing.sm
+              : rect.top - spacing.sm - height
+            : verticalPlacement === 'after'
+              ? rect.bottom + spacing.sm
+              : verticalPlacement === 'end'
+                ? rect.bottom - height
+                : rect.top - anchorInset;
       const availableHeight = Math.max(0, Math.min(maxHeight, bottomEdge - topEdge - inset * 2));
       const top = Math.max(
         topEdge + inset,
@@ -157,6 +162,13 @@ export function Dropdown({
     <OverlayPortal>
       <View
         ref={contentRef}
+        {...{
+          onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.stopPropagation();
+            }
+          },
+        }}
         {...{ dataSet: { dropdownOpen: active ? 'true' : undefined } }}
         testID={testID}
         style={[

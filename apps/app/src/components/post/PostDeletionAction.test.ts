@@ -8,8 +8,8 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
-import createPostMutation from './__generated__/PostComposerCreatePostMutation.graphql';
 import deletePostMutation from './__generated__/PostDeletionActionDeletePostMutation.graphql';
+import postRequestCardRefetchQuery from './__generated__/PostRequestCardRefetchQuery.graphql';
 
 const parentId = 'post-parent';
 const postId = 'post-author-owned';
@@ -76,17 +76,17 @@ describe('PostDeletionAction Relay cache contract', () => {
     assert.equal(actor.getStore().getSource().get(postId), null);
   });
 
-  it('normalizes the server-confirmed Parent count after Reply creation in only the request actor Store', () => {
+  it('normalizes a published reply Parent count from its request into only the actor Store', () => {
     const actorA = createEnvironment(0);
     const actorB = createEnvironment(0);
-    const operation = createOperationDescriptor(getRequest(createPostMutation), {
-      connections: [],
-      input: {},
-      prependToHome: false,
+    const operation = createOperationDescriptor(getRequest(postRequestCardRefetchQuery), {
+      id: 'post-request-node',
     });
 
     actorA.commitPayload(operation, {
-      createPost: {
+      node: {
+        __typename: 'PostRequest',
+        id: 'post-request-node',
         post: {
           id: 'post-created-reply',
           replyParent: { id: parentId, replyCount: 1 },

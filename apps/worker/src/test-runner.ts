@@ -53,7 +53,7 @@ function runTestGroup(group: TestGroup): Promise<void> {
     return Promise.resolve();
   }
 
-  const args = ['--import', 'tsx'];
+  const args = ['--experimental-test-module-mocks', '--import', 'tsx'];
   const environment = { ...process.env };
 
   if (group === 'database') {

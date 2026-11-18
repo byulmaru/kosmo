@@ -1,3 +1,4 @@
+import { MediaUsePermission } from '@kosmo/core/media-metadata';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useArgs } from 'storybook/preview-api';
@@ -5,6 +6,7 @@ import { expect, fireEvent, fn, userEvent, waitFor, within } from 'storybook/tes
 import { FeatureFlagsContext } from '@/components/FeatureFlagsContext';
 import { ComposerMediaEditor } from '@/components/post/ComposerMediaEditor';
 import ogImage from '../../../public/og-default.png?url';
+import type { MediaPublicationRights } from '@kosmo/core/media-metadata';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import type { PropsWithChildren } from 'react';
 import type { ComposerMediaEditorProps } from '@/components/post/ComposerMediaEditor';
@@ -12,7 +14,7 @@ import type { ComposerMediaItem } from '@/components/post/PostComposerMediaContr
 
 export const editorMedia: readonly ComposerMediaItem[] = [
   {
-    applyNightshade: false,
+    applyAiProhibitFilter: false,
     altText: '노을빛 밤하늘 아래 모인 사람들',
     asset: { height: 390, uri: ogImage, width: 560 },
     key: 'media-1',
@@ -20,7 +22,7 @@ export const editorMedia: readonly ComposerMediaItem[] = [
     state: 'ready',
   },
   {
-    applyNightshade: false,
+    applyAiProhibitFilter: false,
     altText: '',
     asset: { height: 390, uri: ogImage, width: 560 },
     key: 'media-2',
@@ -34,7 +36,8 @@ const meta = {
     media: editorMedia,
     mobileState: undefined,
     onAltTextChange: fn(),
-    onApplyNightshadeChange: fn(),
+    onApplyAiProhibitFilterChange: fn(),
+    onRightsChange: fn(),
     onBack: fn(),
     onClose: fn(),
     onDone: fn(),
@@ -52,10 +55,11 @@ const meta = {
     media: { control: 'object' },
     mobileState: {
       control: 'select',
-      options: ['default', 'alt', 'altKeyboard', 'sensitive', 'nightshade'],
+      options: ['default', 'alt', 'altKeyboard', 'sensitive', 'nightshade', 'rights'],
     },
     onAltTextChange: { action: 'altTextChange', control: false },
-    onApplyNightshadeChange: { action: 'applyNightshadeChange', control: false },
+    onApplyAiProhibitFilterChange: { action: 'applyAiProhibitFilterChange', control: false },
+    onRightsChange: { action: 'rightsChange', control: false },
     onBack: { action: 'back', control: false },
     onClose: { action: 'close', control: false },
     onDone: { action: 'done', control: false },
@@ -70,7 +74,7 @@ const meta = {
       control: 'boolean',
       name: '미래 이미지 편집 미리보기',
     },
-    tool: { control: 'inline-radio', options: ['alt', 'sensitive', 'nightshade'] },
+    tool: { control: 'inline-radio', options: ['alt', 'sensitive', 'nightshade', 'rights'] },
   },
   component: ComposerMediaEditor,
   excludeStories: [
@@ -81,6 +85,8 @@ const meta = {
     'MobileSensitiveGeometryContract',
     'MobileNightshadeGeometryContract',
     'MobileToolInteractionContract',
+    'RightsInteractionContract',
+    'MobileRightsInteractionContract',
     'FeatureFlagOffContract',
     'MobileFeatureFlagOffContract',
     'StaleFeatureFlagDropContract',
@@ -206,6 +212,22 @@ export const MobileNightshade: Story = {
   render: (args) => <InteractiveEditor {...args} />,
 };
 
+export const Rights: Story = {
+  args: { tool: 'rights' },
+  render: (args) => <WebEditorStory {...args} />,
+};
+
+export const MobileRights: Story = {
+  args: {
+    mobileState: 'rights',
+    presentation: 'mobile',
+    tool: 'rights',
+  },
+  globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
+  parameters: { layout: 'fullscreen' },
+  render: (args) => <InteractiveEditor {...args} />,
+};
+
 function InteractiveEditor(props: InteractiveEditorProps) {
   const { updateArgs, ...editorProps } = props;
   const [media, setMedia] = useState(props.media);
@@ -231,10 +253,18 @@ function InteractiveEditor(props: InteractiveEditorProps) {
         setMedia(nextMedia);
         updateArgs?.({ media: nextMedia });
       }}
-      onApplyNightshadeChange={(key, value) => {
-        props.onApplyNightshadeChange(key, value);
+      onApplyAiProhibitFilterChange={(key, value) => {
+        props.onApplyAiProhibitFilterChange(key, value);
         const nextMedia = media.map((item) =>
-          item.key === key ? { ...item, applyNightshade: value } : item,
+          item.key === key ? { ...item, applyAiProhibitFilter: value } : item,
+        );
+        setMedia(nextMedia);
+        updateArgs?.({ media: nextMedia });
+      }}
+      onRightsChange={(key, rights) => {
+        props.onRightsChange(key, rights);
+        const nextMedia = media.map((item) =>
+          item.key === key ? { ...item, rights: rights ? { ...rights } : undefined } : item,
         );
         setMedia(nextMedia);
         updateArgs?.({ media: nextMedia });
@@ -311,7 +341,7 @@ function ViewportAwareEditor({ mobile, ...props }: InteractiveEditorProps & { mo
 export const InteractionContract: Story = {
   play: async ({ args, canvasElement }) => {
     args.onAltTextChange.mockClear();
-    args.onApplyNightshadeChange.mockClear();
+    args.onApplyAiProhibitFilterChange.mockClear();
     args.onBack.mockClear();
     args.onClose.mockClear();
     args.onDone.mockClear();
@@ -364,17 +394,21 @@ export const InteractionContract: Story = {
     await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지 필터(베타)' }));
     expect(args.onToolChange).toHaveBeenLastCalledWith('nightshade');
     const secondImageNightshade = canvas.getByRole('switch', {
-      name: '첨부 이미지 2 Nightshade 적용',
+      name: '첨부 이미지 2 AI 학습 방지 필터 적용',
     });
     expect(secondImageNightshade).not.toBeChecked();
     await userEvent.click(secondImageNightshade);
-    expect(args.onApplyNightshadeChange).toHaveBeenLastCalledWith('media-2', true);
+    expect(args.onApplyAiProhibitFilterChange).toHaveBeenLastCalledWith('media-2', true);
     expect(secondImageNightshade).toBeChecked();
 
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 선택' }));
-    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).not.toBeChecked();
+    expect(
+      canvas.getByRole('switch', { name: '첨부 이미지 1 AI 학습 방지 필터 적용' }),
+    ).not.toBeChecked();
     await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 선택' }));
-    expect(canvas.getByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeChecked();
+    expect(
+      canvas.getByRole('switch', { name: '첨부 이미지 2 AI 학습 방지 필터 적용' }),
+    ).toBeChecked();
 
     await userEvent.click(canvas.getByRole('button', { name: '완료' }));
     expect(args.onDone).toHaveBeenCalledOnce();
@@ -384,6 +418,139 @@ export const InteractionContract: Story = {
     expect(args.onClose).toHaveBeenCalledOnce();
   },
   render: (args) => <WebEditorStory {...args} />,
+};
+
+export const RightsInteractionContract: Story = {
+  args: { tool: 'rights' },
+  play: async ({ args, canvasElement }) => {
+    args.onRightsChange.mockClear();
+    const canvas = within(canvasElement);
+    const deniedRights: MediaPublicationRights = {
+      personal: MediaUsePermission.DENY,
+      noncommercial: MediaUsePermission.DENY,
+      commercial: MediaUsePermission.DENY,
+    };
+    const personal = () => within(canvas.getByRole('radiogroup', { name: '개인적 이용' }));
+    const noncommercial = () => within(canvas.getByRole('radiogroup', { name: '비상업적 이용' }));
+    const commercial = () => within(canvas.getByRole('radiogroup', { name: '상업적 이용' }));
+
+    await userEvent.click(canvas.getByRole('tab', { name: '대체 텍스트' }));
+    await userEvent.type(canvas.getByRole('textbox', { name: '이미지 설명' }), ' 추가 설명');
+    await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지 필터(베타)' }));
+    await userEvent.click(
+      canvas.getByRole('switch', { name: '첨부 이미지 1 AI 학습 방지 필터 적용' }),
+    );
+    await userEvent.click(canvas.getByRole('tab', { name: '이용조건' }));
+
+    const rightsSwitch = canvas.getByRole('switch', { name: '라이센스 설정' });
+    expect(rightsSwitch).not.toBeChecked();
+    expect(canvas.queryByRole('radiogroup', { name: '개인적 이용' })).toBeNull();
+    await userEvent.click(rightsSwitch);
+
+    expect(args.onRightsChange).toHaveBeenLastCalledWith('media-1', deniedRights);
+    expect(canvas.getByText('저작권을 보유한 이미지에만 설정하세요.')).toBeVisible();
+    expect(canvas.getByRole('link', { name: '이용조건 보기' }).getAttribute('href')).toContain(
+      '/terms/image-use/v1?personal=DENY&noncommercial=DENY&commercial=DENY',
+    );
+    expect(personal().getByRole('radio', { name: '사용 금지' })).toBeChecked();
+    expect(noncommercial().getByRole('radio', { name: '무수정 사용' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(commercial().getByRole('radio', { name: '수정 가능' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+
+    await userEvent.click(personal().getByRole('radio', { name: '수정 가능' }));
+    expect(args.onRightsChange).toHaveBeenLastCalledWith('media-1', {
+      ...deniedRights,
+      personal: MediaUsePermission.EDIT,
+    });
+    await userEvent.click(noncommercial().getByRole('radio', { name: '무수정 사용' }));
+    await userEvent.click(commercial().getByRole('radio', { name: '무수정 사용' }));
+
+    expect(personal().getByRole('radio', { name: '수정 가능' })).toBeChecked();
+    expect(noncommercial().getByRole('radio', { name: '무수정 사용' })).toBeChecked();
+    expect(commercial().getByRole('radio', { name: '무수정 사용' })).toBeChecked();
+    expect(personal().getByRole('radio', { name: '사용 금지' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(noncommercial().getByRole('radio', { name: '사용 금지' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(commercial().getByRole('radio', { name: '수정 가능' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(canvas.getByRole('link', { name: '이용조건 보기' }).getAttribute('href')).toContain(
+      '/terms/image-use/v1?personal=EDIT&noncommercial=ORIGINAL&commercial=ORIGINAL',
+    );
+
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 2 선택' }));
+    const secondImageRightsSwitch = canvas.getByRole('switch', { name: '라이센스 설정' });
+    expect(secondImageRightsSwitch).not.toBeChecked();
+    await userEvent.click(secondImageRightsSwitch);
+    expect(args.onRightsChange).toHaveBeenLastCalledWith('media-2', deniedRights);
+    await userEvent.click(canvas.getByRole('button', { name: '첨부 이미지 1 선택' }));
+    await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지 필터(베타)' }));
+    expect(
+      canvas.getByRole('switch', { name: '첨부 이미지 1 AI 학습 방지 필터 적용' }),
+    ).toBeChecked();
+    await userEvent.click(canvas.getByRole('tab', { name: '대체 텍스트' }));
+    expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toHaveValue(
+      '노을빛 밤하늘 아래 모인 사람들 추가 설명',
+    );
+    await userEvent.click(canvas.getByRole('tab', { name: '이용조건' }));
+    expect(personal().getByRole('radio', { name: '수정 가능' })).toBeChecked();
+
+    await userEvent.click(canvas.getByRole('switch', { name: '라이센스 설정' }));
+    expect(canvas.queryByRole('radiogroup', { name: '개인적 이용' })).toBeNull();
+    expect(canvas.queryByRole('link', { name: '이용조건 보기' })).toBeNull();
+    expect(args.onRightsChange).toHaveBeenLastCalledWith('media-1', undefined);
+    await userEvent.click(canvas.getByRole('switch', { name: '라이센스 설정' }));
+    expect(personal().getByRole('radio', { name: '사용 금지' })).toBeChecked();
+  },
+  render: (args) => <WebEditorStory {...args} />,
+};
+
+export const MobileRightsInteractionContract: Story = {
+  ...MobileDefault,
+  play: async ({ args, canvasElement }) => {
+    args.onRightsChange.mockClear();
+    const canvas = within(canvasElement);
+    const deniedRights: MediaPublicationRights = {
+      personal: MediaUsePermission.DENY,
+      noncommercial: MediaUsePermission.DENY,
+      commercial: MediaUsePermission.DENY,
+    };
+
+    await userEvent.click(canvas.getByRole('button', { name: '이용조건' }));
+    const rightsSwitch = canvas.getByRole('switch', { name: '라이센스 설정' });
+    expect(rightsSwitch).not.toBeChecked();
+    await userEvent.click(rightsSwitch);
+
+    expect(args.onRightsChange).toHaveBeenLastCalledWith('media-1', deniedRights);
+    expect(canvas.getByRole('radiogroup', { name: '개인적 이용' })).toBeVisible();
+    expect(canvas.getByRole('link', { name: '이용조건 보기' })).toBeVisible();
+
+    const rightsRows = ['개인적 이용', '비상업적 이용', '상업적 이용'].map((name) =>
+      within(canvas.getByRole('radiogroup', { name })).getAllByRole('radio'),
+    );
+    expect(rightsRows.map((row) => row.length)).toEqual([3, 3, 3]);
+    const rowRects = rightsRows.map((row) => row.map((option) => option.getBoundingClientRect()));
+    for (let column = 0; column < 3; column += 1) {
+      const lefts = rowRects.map((row) => row[column]!.left);
+      expect(Math.max(...lefts) - Math.min(...lefts)).toBeLessThan(1);
+    }
+    for (const row of rowRects) {
+      const tops = row.map(({ top }) => top);
+      expect(Math.max(...tops) - Math.min(...tops)).toBeLessThan(1);
+    }
+    expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
+  },
 };
 
 export const AltTextCodePointLimitContract: Story = {
@@ -472,7 +639,9 @@ export const MobileNightshadeGeometryContract: Story = {
     expect(canvas.getByTestId('mobile-composer-media-editor-tool-sheet')).toHaveStyle({
       height: '184px',
     });
-    expect(canvas.getByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).not.toBeChecked();
+    expect(
+      canvas.getByRole('switch', { name: '첨부 이미지 1 AI 학습 방지 필터 적용' }),
+    ).not.toBeChecked();
   },
 };
 
@@ -480,7 +649,7 @@ export const MobileToolInteractionContract: Story = {
   ...MobileDefault,
   play: async ({ args, canvasElement }) => {
     args.onPreviewPress?.mockClear();
-    args.onApplyNightshadeChange.mockClear();
+    args.onApplyAiProhibitFilterChange.mockClear();
     args.onToolChange.mockClear();
     const canvas = within(canvasElement);
 
@@ -513,11 +682,11 @@ export const MobileToolInteractionContract: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'AI 학습 방지 필터(베타)' }));
     expect(args.onToolChange).toHaveBeenLastCalledWith('nightshade');
     const nightshadeSwitch = canvas.getByRole('switch', {
-      name: '첨부 이미지 1 Nightshade 적용',
+      name: '첨부 이미지 1 AI 학습 방지 필터 적용',
     });
     expect(nightshadeSwitch).not.toBeChecked();
     await userEvent.click(nightshadeSwitch);
-    expect(args.onApplyNightshadeChange).toHaveBeenLastCalledWith('media-1', true);
+    expect(args.onApplyAiProhibitFilterChange).toHaveBeenLastCalledWith('media-1', true);
     expect(nightshadeSwitch).toBeChecked();
   },
 };
@@ -527,7 +696,9 @@ export const FeatureFlagOffContract: Story = {
     const canvas = within(canvasElement);
 
     expect(canvas.queryByRole('tab', { name: 'AI 학습 방지 필터(베타)' })).toBeNull();
-    expect(canvas.queryByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).toBeNull();
+    expect(
+      canvas.queryByRole('switch', { name: '첨부 이미지 1 AI 학습 방지 필터 적용' }),
+    ).toBeNull();
     expect(canvas.getByRole('tab', { name: '대체 텍스트' })).toBeVisible();
     expect(canvas.getByRole('tab', { name: '민감도' })).toBeVisible();
 
@@ -557,7 +728,9 @@ export const MobileFeatureFlagOffContract: Story = {
 
     expect(canvas.queryByRole('button', { name: 'AI 학습 방지 필터(베타)' })).toBeNull();
     expect(canvas.queryByTestId('mobile-composer-media-editor-tool-sheet')).toBeNull();
-    expect(canvas.queryByRole('switch', { name: '첨부 이미지 1 Nightshade 적용' })).toBeNull();
+    expect(
+      canvas.queryByRole('switch', { name: '첨부 이미지 1 AI 학습 방지 필터 적용' }),
+    ).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '대체 텍스트 편집' }));
     expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toBeVisible();
 
@@ -578,14 +751,16 @@ export const StaleFeatureFlagDropContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const nightshadeSwitch = canvas.getByRole('switch', {
-      name: '첨부 이미지 2 Nightshade 적용',
+      name: '첨부 이미지 2 AI 학습 방지 필터 적용',
     });
 
     await userEvent.click(nightshadeSwitch);
     expect(nightshadeSwitch).toBeChecked();
     await userEvent.click(canvas.getByRole('button', { name: 'Nightshade 플래그 끄기' }));
     expect(canvas.queryByRole('tab', { name: 'AI 학습 방지 필터(베타)' })).toBeNull();
-    expect(canvas.queryByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeNull();
+    expect(
+      canvas.queryByRole('switch', { name: '첨부 이미지 2 AI 학습 방지 필터 적용' }),
+    ).toBeNull();
     expect(canvas.getByRole('tab', { name: '대체 텍스트' })).toHaveAttribute(
       'aria-selected',
       'true',
@@ -594,7 +769,9 @@ export const StaleFeatureFlagDropContract: Story = {
 
     await userEvent.click(canvas.getByRole('button', { name: 'Nightshade 플래그 켜기' }));
     await userEvent.click(canvas.getByRole('tab', { name: 'AI 학습 방지 필터(베타)' }));
-    expect(canvas.getByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeChecked();
+    expect(
+      canvas.getByRole('switch', { name: '첨부 이미지 2 AI 학습 방지 필터 적용' }),
+    ).toBeChecked();
   },
   render: (args) => (
     <NightshadeFlagToggleFixture>
@@ -615,14 +792,16 @@ export const MobileStaleFeatureFlagDropContract: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const nightshadeSwitch = canvas.getByRole('switch', {
-      name: '첨부 이미지 2 Nightshade 적용',
+      name: '첨부 이미지 2 AI 학습 방지 필터 적용',
     });
 
     await userEvent.click(nightshadeSwitch);
     expect(nightshadeSwitch).toBeChecked();
     await userEvent.click(canvas.getByRole('button', { name: 'Nightshade 플래그 끄기' }));
     expect(canvas.queryByRole('button', { name: 'AI 학습 방지 필터(베타)' })).toBeNull();
-    expect(canvas.queryByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeNull();
+    expect(
+      canvas.queryByRole('switch', { name: '첨부 이미지 2 AI 학습 방지 필터 적용' }),
+    ).toBeNull();
     expect(canvas.queryByTestId('mobile-composer-media-editor-tool-sheet')).toBeNull();
     expect(canvas.getByRole('button', { name: '대체 텍스트 편집' })).toBeVisible();
     expect(canvas.getByRole('button', { name: '민감도 편집' })).toBeVisible();
@@ -631,7 +810,9 @@ export const MobileStaleFeatureFlagDropContract: Story = {
     expect(canvas.getByRole('textbox', { name: '이미지 설명' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Nightshade 플래그 켜기' }));
     await userEvent.click(canvas.getByRole('button', { name: 'AI 학습 방지 필터(베타)' }));
-    expect(canvas.getByRole('switch', { name: '첨부 이미지 2 Nightshade 적용' })).toBeChecked();
+    expect(
+      canvas.getByRole('switch', { name: '첨부 이미지 2 AI 학습 방지 필터 적용' }),
+    ).toBeChecked();
   },
   render: (args) => (
     <NightshadeFlagToggleFixture>

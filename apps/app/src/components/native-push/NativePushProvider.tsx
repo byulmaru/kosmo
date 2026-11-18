@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { graphql, useMutation } from 'react-relay';
 import { getPublicConfig } from '@/config/public';
+import { captureHandledError } from '@/observability/sentry';
 import { useSession } from '@/session/SessionProvider';
 import {
   deletePushInstallationId,
@@ -274,8 +275,9 @@ export function NativePushProvider({ children }: PropsWithChildren) {
       void syncMessagingPermission(messagingResources, readBrowserNotificationPermission()).catch(
         () => undefined,
       );
-    })().catch(() => {
+    })().catch((error: unknown) => {
       if (active) {
+        captureHandledError(error);
         setSupport('unavailable');
       }
     });
@@ -316,8 +318,23 @@ export function NativePushProvider({ children }: PropsWithChildren) {
     [unregisterInstallation],
   );
 
+  const requestPermission = useCallback(() => {
+    let permissionRequest: Promise<NotificationPermission>;
+    try {
+      permissionRequest = Notification.requestPermission();
+    } catch (error) {
+      captureHandledError(error);
+      throw error;
+    }
+
+    return permissionRequest.then(syncPermission, (error: unknown) => {
+      captureHandledError(error);
+      throw error;
+    });
+  }, [syncPermission]);
+
   return (
-    <WebPushPermissionContext.Provider value={{ permission, support, syncPermission }}>
+    <WebPushPermissionContext.Provider value={{ permission, support, requestPermission }}>
       {children}
     </WebPushPermissionContext.Provider>
   );
@@ -327,10 +344,15 @@ async function syncMessagingPermission(
   resources: WebPushResources,
   permission: NotificationPermission,
 ): Promise<void> {
-  if (permission === 'granted') {
-    await resources.register();
-  } else if (permission === 'denied') {
-    await resources.unregister();
+  try {
+    if (permission === 'granted') {
+      await resources.register();
+    } else if (permission === 'denied') {
+      await resources.unregister();
+    }
+  } catch (error) {
+    captureHandledError(error);
+    throw error;
   }
 }
 

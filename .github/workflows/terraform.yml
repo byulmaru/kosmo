@@ -31,6 +31,8 @@ env:
   AWS_REGION: ap-northeast-2
   TF_IN_AUTOMATION: 'true'
   TF_PLAN_ARTIFACT: terraform-plan
+  TF_REGISTRY_CLIENT_TIMEOUT: '60'
+  TF_REGISTRY_DISCOVERY_RETRY: '3'
   TF_ROOT: apps/terraform
   TF_STATE_BUCKET: byulmaru-terraform-state
   TF_STATE_KEY: kosmo/terraform.tfstate
@@ -304,7 +306,7 @@ jobs:
           terraform_version: '1.15.6'
 
       - name: Setup AWS CLI
-        uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
+        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
         with:
           version: '2026.9.2'
           tool_versions: |

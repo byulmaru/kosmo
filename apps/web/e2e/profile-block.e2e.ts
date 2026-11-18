@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   Bookmarks,
   db,
@@ -112,7 +113,11 @@ test('UI Block 성공은 양방향 Follow·Request cleanup을 완료하고 보�
   const before = await preservedState();
   await setE2ESessionCookie(context, owner.token);
   await page.goto(`/@${target.profile!.handle}`);
-  await expect(page.getByText('E2E target revealed content', { exact: true })).toBeVisible();
+  const targetPostRow = page.getByTestId('post-list-standard-row').filter({ visible: true });
+  const targetPostContent = targetPostRow.getByText('E2E target revealed content', {
+    exact: true,
+  });
+  await expect(targetPostContent).toBeVisible();
   await blockFromProfile(page);
 
   // Inspect captured cleanup and preserved rows after confirmed UI success.
@@ -155,9 +160,9 @@ test('UI Block 성공은 양방향 Follow·Request cleanup을 완료하고 보�
     node: { id: toGlobalId('Post', targetPost.id) },
   });
   await expect(page.getByText('차단한 프로필의 게시물입니다', { exact: true })).toBeVisible();
-  await expect(page.getByText('E2E target revealed content', { exact: true })).toHaveCount(0);
+  await expect(targetPostContent).toHaveCount(0);
   await page.getByRole('button', { name: '게시물 보기', exact: true }).click();
-  await expect(page.getByText('E2E target revealed content', { exact: true })).toBeVisible();
+  await expect(targetPostContent).toBeVisible();
   await page.reload();
   await expect(page.getByText('차단한 프로필의 게시물입니다', { exact: true })).toBeVisible();
 
@@ -214,7 +219,7 @@ test('UI Block 성공은 양방향 Follow·Request cleanup을 완료하고 보�
   expect(await preservedState()).toEqual(before);
   await page.goto(`/@${target.profile!.handle}`);
   await expect(page.getByRole('button', { name: '팔로우', exact: true })).toBeVisible();
-  await expect(page.getByText('E2E target revealed content', { exact: true })).toBeVisible();
+  await expect(targetPostContent).toBeVisible();
 });
 
 test('Remote Target의 직접 route·Settings 차단 상태는 selected Profile 전환과 해제에 따라 격리된다', async ({
@@ -288,6 +293,7 @@ test('Block 실패 후 재시도와 상호 차단에서 자신의 exact 관계�
     await route.fallback();
   });
   await page.goto(`/@${target.profile!.handle}`);
+  await expect(page.getByText('Mutual block content', { exact: true })).toBeVisible();
   const cancelled = await openBlockConfirmation(page);
   await expect(cancelled.getByRole('button', { name: '취소', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
@@ -551,7 +557,7 @@ for (const targetKind of ['Local', 'Remote'] as const) {
         'addReaction(input: { postId: $post, type: "🎉" }) { reaction { id } }',
         'repostPost(input: { sourceId: $post }) { repost { id } }',
         'createPost(input: { bodyText: "blocked reply", visibility: PUBLIC, replyParentId: $post }) { post { id } }',
-        'createPost(input: { bodyText: "blocked quote", visibility: PUBLIC, repostSourceId: $post }) { post { id } }',
+        `createPost(input: { admissionId: "${Date.now()}:${randomUUID()}", bodyText: "blocked quote", visibility: PUBLIC, repostSourceId: $post }) { post { id } }`,
       ];
       for (const mutation of mutations) {
         const isFollow = mutation.startsWith('followProfile');

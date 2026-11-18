@@ -101,6 +101,18 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   Read를 시작하며 이동이 Read 결과를 기다리게 하지 않는다. Push tap은 동일한 목적지 규칙을 따르지만 Read
   State를 변경하지 않는다.
 
+## 실시간 신규 Notification과 미확인 수 · PROD-1320
+
+- 로그인한 계정은 `Subscription.notifications`에서 신규 Notification을 best-effort로 받는다. 선택된 Profile의
+  social 알림만 전달하고, Account Operational 알림은 선택 Profile과 무관하게 전달한다. `NotificationAdded`는
+  알림이 현재도 조회 가능하면 Notification과 현재 선택 Profile을 제공한다. 클라이언트는 로드된 선택 Profile의
+  목록 connection에 새 항목을 prepend하고 해당 Profile의 절대 `unreadNotificationCount`를 적용한다.
+- 실시간 이벤트는 읽음·삭제 이벤트를 포함하지 않는다. Redis Pub/Sub가 연결되지 않았을 때 놓친 신규 이벤트는
+  재생·catch-up·이벤트별 조회로 보정하지 않는다. 따라서 놓친 이벤트 뒤에는 다음 일반 목록·count 조회까지
+  목록 또는 미확인 수가 오래된 상태일 수 있다.
+- 기존 Push 전달과 읽음 처리 동작은 유지한다. 이 구독은 기존 Session 시작 확인과 Session/Profile 종료 처리를
+  공유한다.
+
 ## Native FCM push 권한 요청과 잠금 화면 미리보기 · PROD-875
 
 - 로그인한 Native 앱은 OS 알림 권한이 미결정이면 권한을 요청한다. 신규 설치에서는 최초 로그인 때 요청하며,
@@ -205,8 +217,12 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
 ## Web Push 권한과 표시 · PROD-1215
 
 - Web Push는 지원 조건을 충족하는 Android·Desktop browser/PWA와 iOS/iPadOS 홈 화면 앱에서 제공한다.
-- Web에서는 앱 시작·로그인 때 권한을 자동 요청하지 않는다. 사용자가 앱 설정의 알림 action을 직접 활성화할 때만
-  OS 권한 요청을 시작한다.
+- Web에서는 앱 시작·로그인 때 권한을 자동 요청하지 않는다. 사용자가 앱 설정의 알림 action을 활성화하거나
+  Home 알림 배너의 `켜기`를 누를 때만 OS 권한 요청을 시작한다.
+- Home 알림 배너는 로그인한 사용자가 선택된 Profile의 Home을 보고 있고, 브라우저가 Web Push를 지원하며 권한이
+  미결정인 경우에만 표시한다. 권한이 허용되거나 거부된 경우, 지원하지 않는 browser와 Native에서는 표시하지 않는다.
+- Home 알림 배너를 닫으면 해당 브라우저에서는 다시 표시하지 않으며, reload·로그인·선택 Profile 전환 뒤에도 유지한다.
+  앱 설정의 알림 action은 계속 사용할 수 있다.
 - Foreground와 background 모두 OS 알림을 표시하며 custom in-app Push banner를 추가하지 않는다. 알림 대상,
   본문 privacy, 만료와 이동은 [Push 정책](../domain/decisions/0029-native-push-notification-policy.md)을 따른다.
 
@@ -243,6 +259,13 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   미리보기를 표시한다. `PostMediaImage`의 로딩·실패 처리를 재사용한다. CW가 있으면 경고만 표시하고
   본문·썸네일을 숨긴다. sensitive media는 썸네일을 숨긴다. 접근할 수 없는 Post는 `preview=null`로
   전달한다. 표시 영역은 기존 `PostContentPrivacyBoundary`를 사용한다.
+- 첫 미디어의 `aiProhibitFilterApplied`가 strict `true`이면 썸네일에 passive `Shield` badge를 표시하고
+  알림 link name에 `학습방지 필터 적용됨`을 포함한다. Badge는 모든 플랫폼의 accessibility tree에서 숨기며
+  별도 focus stop이나 활성화 동작을 만들지 않는다. Web에서는 hover하면 공용 [Tooltip](./tooltips.md)이
+  `AI 학습방지 필터가 적용되었어요. 이 표시는 나에게만 보여요.`를 별도의 정보 surface로 표시한다. 이 문구는 accessibility-hidden badge의
+  시각적 내용이 아니다. Native에서는 badge가 pointer 입력을 가로막지 않는다.
+  `false`, `null`, 누락 값에서는 badge와 툴팁을 생략하며 기존 사진별 행위자 Profile 이동과 사진 외 게시글
+  이동을 유지한다.
 - 한 줄 미리보기는 `contentM`의 16px/24px를 사용한다. Figma의 MCP 매칭용 대체 폰트를
   가져오지 않고 프로덕션 UI의 SUIT와 본문의 Pretendard를 유지한다.
 - 미리보기의 하단 여백은 썸네일 유무와 무관하게 일반 행과 같은 8px이다.

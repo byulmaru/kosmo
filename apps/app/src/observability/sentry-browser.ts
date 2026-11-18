@@ -39,18 +39,20 @@ export const captureReactError = (cause: unknown, info: ErrorInfo): void => {
   }
 };
 
-export const captureHandledError = (error: Error, context?: HandledErrorContext): void => {
+export const captureHandledError = (error: unknown, context?: HandledErrorContext): void => {
   if (!enabled) {
     return;
   }
 
   try {
+    const capturedError = error instanceof Error ? error : new Error('Unexpected error');
+
     Sentry.withScope((scope) => {
       if (context) {
         scope.setExtras(context);
       }
 
-      Sentry.captureException(error, {
+      Sentry.captureException(capturedError, {
         mechanism: { handled: true, type: 'auto.function.handled_error' },
       });
     });

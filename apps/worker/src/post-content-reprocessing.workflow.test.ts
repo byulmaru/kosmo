@@ -3,9 +3,8 @@ import { test } from 'node:test';
 import { reprocessLocalPostContentsWorkflow } from '@kosmo/core/temporal/post-content-reprocessing';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
 import { Context } from '@temporalio/activity';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type {
   PostContentReprocessingStatus,
   ReprocessLocalPostContentInput,
@@ -13,7 +12,6 @@ import type {
 } from '@kosmo/core/temporal/workflows';
 import type * as activities from './activities';
 
-const workflowsPath = new URL('./workflows/index.ts', import.meta.url).pathname;
 const id = (value: number): string => '00000000-0000-4000-8000-' + String(value).padStart(12, '0');
 const emptyCounts = () => ({ updated: 0, wouldUpdate: 0, unchanged: 0, skipped: 0 });
 
@@ -49,13 +47,12 @@ test(
       reprocessLocalPostContentsWorkflow.workflowIdFromArgs({ postIds: largePostIds }).length < 128,
     );
 
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const worker = await Worker.create({
-      workflowsPath,
+      ...testWorkflowSource,
       connection: environment.nativeConnection,
+      namespace: environment.namespace,
       taskQueue,
       activities: {
         reprocessLocalPostContentActivity: async (input) => {
@@ -131,9 +128,7 @@ test(
   'selected post IDs continue in pages of 50 and retry a failed Activity',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
     const taskQueue = KOSMO_TASK_QUEUE + '-post-content-reprocessing-pages-' + process.pid;
@@ -150,8 +145,9 @@ test(
     let maxActiveActivities = 0;
     let failedPost = false;
     const worker = await Worker.create({
-      workflowsPath,
+      ...testWorkflowSource,
       connection: environment.nativeConnection,
+      namespace: environment.namespace,
       taskQueue,
       activities: {
         reprocessLocalPostContentActivity: async ({ postId, dryRun }) => {
@@ -222,9 +218,7 @@ test(
   'selected post ID reprocessing resumes after a Worker restart without replaying completed Activity results',
   { timeout: 120_000 },
   async () => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     const taskQueue = KOSMO_TASK_QUEUE + '-post-content-reprocessing-restart-' + process.pid;
     const postIds = Array.from({ length: 52 }, (_, index) => id(2_100 + index));
     const attempts: ReprocessLocalPostContentInput[] = [];
@@ -259,8 +253,9 @@ test(
     } satisfies Pick<typeof activities, 'reprocessLocalPostContentActivity'>;
     const createWorker = () =>
       Worker.create({
-        workflowsPath,
+        ...testWorkflowSource,
         connection: environment.nativeConnection,
+        namespace: environment.namespace,
         taskQueue,
         activities: activityImplementations,
         shutdownForceTime: 10_000,

@@ -18,6 +18,7 @@ const mockModule = (specifier: string, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
 
 mockModule('expo-router', {
+  useIsFocused: () => true,
   useLocalSearchParams: () => ({ postId: 'post-current', profileHandle: '@kosmo' }),
   usePathname: () => '/@kosmo/post-current',
   useRouter: () => ({ back: () => undefined, replace: () => undefined }),
@@ -47,6 +48,8 @@ mockModule('react-native', {
   View: 'View',
   useWindowDimensions: () => ({ height: 800, width: 1200 }),
 });
+mockModule('@/session/SessionProvider', { useSession: () => ({ status: 'valid' }) });
+mockModule('@/components/shell/NavigationDrawerTrigger', { NavigationDrawerTrigger: () => null });
 mockModule('@/components/PageHeader', {
   PageHeader: ({ children, ...props }: PropsWithChildren<Record<string, unknown>>) =>
     createElement('PageHeader', props, children),

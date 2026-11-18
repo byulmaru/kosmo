@@ -1,5 +1,6 @@
 import './field';
 import './mutation';
+import './subscription';
 
 export {
   FollowNotification,

@@ -49,6 +49,7 @@ let handleInboundAcceptFollow: typeof InboundAcceptFollow.handleInboundAcceptFol
 let handleInboundUndo: typeof InboundFollow.handleInboundUndo;
 let handleInboundReject: typeof InboundReject.handleInboundReject;
 let materializeRemoteProfileActor: typeof Materialization.materializeRemoteProfileActor;
+let RemoteActorDiscoveryUnavailableError: typeof Materialization.RemoteActorDiscoveryUnavailableError;
 let localInstanceId: string;
 
 const mockRemoteProfileLookup = (lookupObject: (identifier: string | URL) => Promise<unknown>) =>
@@ -92,7 +93,8 @@ describe('inbound Accept, Reject, and Undo', () => {
     ({ handleInboundAcceptFollow } = await import('./inbound-accept-follow'));
     ({ handleInboundUndo } = await import('./inbound-follow'));
     ({ handleInboundReject } = await import('./inbound-reject'));
-    ({ materializeRemoteProfileActor } = await import('./remote-actor-materialization'));
+    ({ materializeRemoteProfileActor, RemoteActorDiscoveryUnavailableError } =
+      await import('./remote-actor-materialization'));
     ({ federation } = await import('./federation'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
@@ -853,7 +855,11 @@ describe('inbound Accept, Reject, and Undo', () => {
             new URL(`https://${name}-unavailable.example/activities/response`),
             Temporal.Instant.from('2026-09-29T00:01:01Z'),
           ),
-          (error: unknown) => error === lookupFailure,
+          (error: unknown) => {
+            assert.ok(error instanceof RemoteActorDiscoveryUnavailableError);
+            assert.equal(error.cause, lookupFailure);
+            return true;
+          },
         );
       } finally {
         unavailableWorkflow.mock.restore();

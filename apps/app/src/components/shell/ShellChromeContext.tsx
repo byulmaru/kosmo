@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo } from 'react';
 import type { PropsWithChildren, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
+import type { SettingsNavigationList_profile$key } from '@/components/settings/__generated__/SettingsNavigationList_profile.graphql';
 import type { TabReselectionDestination, TabReselectionHandler } from './tabReselection';
 
 export type { TabReselectionDestination, TabReselectionHandler } from './tabReselection';
@@ -10,8 +11,10 @@ export type HomeReselectionHandler = () => void;
 type ShellChromeActions = {
   navigationDrawerOpen: boolean;
   navigationDrawerTriggerRef?: RefObject<NativeView | null>;
+  openComposer?: () => void;
   openNavigationDrawer: () => void;
   openProfileSwitcher: () => void;
+  selectedProfile?: SettingsNavigationList_profile$key | null;
   registerHomeReselection: (handler: HomeReselectionHandler) => () => void;
   registerTabReselection?: (
     destination: TabReselectionDestination,
@@ -29,8 +32,10 @@ export function ShellChromeProvider({
   children,
   navigationDrawerOpen,
   navigationDrawerTriggerRef,
+  openComposer,
   openNavigationDrawer,
   openProfileSwitcher,
+  selectedProfile = null,
   registerHomeReselection,
   registerTabReselection,
   reselectTab,
@@ -40,8 +45,10 @@ export function ShellChromeProvider({
     () => ({
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
+      openComposer,
       openNavigationDrawer,
       openProfileSwitcher,
+      selectedProfile,
       registerHomeReselection,
       registerTabReselection,
       reselectTab,
@@ -50,8 +57,10 @@ export function ShellChromeProvider({
     [
       navigationDrawerOpen,
       navigationDrawerTriggerRef,
+      openComposer,
       openNavigationDrawer,
       openProfileSwitcher,
+      selectedProfile,
       registerHomeReselection,
       registerTabReselection,
       reselectTab,

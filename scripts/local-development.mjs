@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const rootDirectory = fileURLToPath(new URL('..', import.meta.url));
 const postgresCompose = 'docker-compose.postgres.local.yml';
 const queueDatabaseUrl = 'postgres://kosmo_fedify_queue@127.0.0.1:54328/kosmo_fedify_queue';
+const localRedisUrl = 'redis://127.0.0.1:63798';
 const temporalHealthUrl = 'http://127.0.0.1:8083/health';
 
 const bootstrapSql = String.raw`
@@ -133,6 +134,7 @@ export function buildApplicationEnvironment(environment) {
       'LOCAL_POSTGRES_ADMIN_PASSWORD',
       'LOCAL_POSTGRES_OWNER_PASSWORD',
     ]),
+    REDIS_URL: environment.REDIS_URL ?? localRedisUrl,
     TEMPORAL_ADDRESS: '127.0.0.1:7233',
     TEMPORAL_NAMESPACE: 'default',
   };
@@ -201,7 +203,12 @@ function compose(args, options) {
 
 function startPostgres(environment) {
   requireValue(environment, 'LOCAL_POSTGRES_ADMIN_PASSWORD');
-  compose(['up', '-d', '--wait'], { env: environment });
+  compose(['up', '-d', '--wait', 'postgres'], { env: environment });
+  try {
+    compose(['up', '-d', 'redis'], { env: environment });
+  } catch {
+    console.warn('Local Redis could not be started; application startup will continue.');
+  }
 }
 
 function prepare(environment) {

@@ -1,19 +1,31 @@
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { POST_CREATE_WORKFLOW_TYPE } from '@kosmo/core/temporal/post-create';
+import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
+import {
+  POST_REQUEST_QUOTE_ADMIT_UPDATE,
+  POST_REQUEST_WORKFLOW_TYPE,
+  PostRequestStatus,
+  postRequestWorkflow,
+} from '@kosmo/core/temporal/post-request';
 import { WorkflowFailedError, WorkflowNotFoundError } from '@temporalio/client';
 import type { PostCreateWorkflowResult } from '@kosmo/core/temporal/post-create';
+import type { PostRequestState } from '@kosmo/core/temporal/post-request';
 
 type TrackedLocalPostCreateWorkflow = {
   executionFailed?: boolean;
-  result?: PostCreateWorkflowResult;
+  result?: PostCreateWorkflowResult | PostRequestState;
   workflowId: string;
 };
 
 const localPostCreateWorkflows: TrackedLocalPostCreateWorkflow[] = [];
 
 export const trackLocalPostCreateWorkflows = (): (() => void) => {
-  const original = temporalClient.workflow.execute;
-  const execute = original.bind(temporalClient.workflow);
+  const originalExecute = temporalClient.workflow.execute;
+  const originalStart = temporalClient.workflow.start;
+  const originalUpdate = temporalClient.workflow.executeUpdateWithStart;
+  const update = originalUpdate.bind(temporalClient.workflow);
+  const execute = originalExecute.bind(temporalClient.workflow);
+  const start = originalStart.bind(temporalClient.workflow);
 
   temporalClient.workflow.execute = async (...args) => {
     const [workflow, options] = args;
@@ -34,8 +46,38 @@ export const trackLocalPostCreateWorkflows = (): (() => void) => {
     }
   };
 
+  temporalClient.workflow.start = async (...args) => {
+    const [workflow, options] = args;
+    const workflowArgs = options.args?.[0] as { input?: { origin?: unknown } } | undefined;
+    if (workflow !== POST_REQUEST_WORKFLOW_TYPE || workflowArgs?.input?.origin !== 'LOCAL') {
+      return start(...args);
+    }
+
+    const tracked: TrackedLocalPostCreateWorkflow = { workflowId: options.workflowId };
+    localPostCreateWorkflows.push(tracked);
+    try {
+      return await start(...args);
+    } catch (error) {
+      tracked.executionFailed = true;
+      throw error;
+    }
+  };
+
+  temporalClient.workflow.executeUpdateWithStart = async (...args) => {
+    const result = await update(...args);
+    if (args[0] === POST_REQUEST_QUOTE_ADMIT_UPDATE) {
+      const request = result as PostRequestState;
+      localPostCreateWorkflows.push({
+        workflowId: postRequestWorkflow.workflowIdFromArgs(request.snapshot),
+      });
+    }
+    return result;
+  };
+
   return () => {
-    temporalClient.workflow.execute = original;
+    temporalClient.workflow.executeUpdateWithStart = originalUpdate;
+    temporalClient.workflow.execute = originalExecute;
+    temporalClient.workflow.start = originalStart;
   };
 };
 
@@ -69,7 +111,7 @@ export const waitForLocalPostCreateWorkflows = async (): Promise<void> => {
         }
 
         try {
-          result = (await handle.result()) as PostCreateWorkflowResult;
+          result = (await handle.result()) as PostCreateWorkflowResult | PostRequestState;
           tracked.result = result;
         } catch (error) {
           if (!tracked.executionFailed || !(error instanceof WorkflowFailedError)) {
@@ -80,11 +122,17 @@ export const waitForLocalPostCreateWorkflows = async (): Promise<void> => {
       }
     }
 
-    if (result?.status !== 'created') {
+    const postId =
+      result?.status === 'created'
+        ? result.postId
+        : result?.status === PostRequestStatus.PUBLISHED
+          ? result.result?.postId
+          : undefined;
+    if (postId === undefined) {
       continue;
     }
 
-    const handle = temporalClient.workflow.getHandle(`post-create-effects:${result.postId}`);
+    const handle = temporalClient.workflow.getHandle(`post-create-effects:${postId}`);
     let description = await handle.describe();
     while (description.status.name === 'RUNNING') {
       if (Date.now() >= deadline) {
@@ -95,6 +143,28 @@ export const waitForLocalPostCreateWorkflows = async (): Promise<void> => {
     }
 
     await handle.result();
+
+    if (result && 'snapshot' in result && result.snapshot.input.admissionId !== undefined) {
+      const owner = temporalClient.workflow.getHandle(
+        postQuoteOwnerWorkflow.workflowIdFromArgs({ postId }),
+      );
+      try {
+        await owner.signal('finishQuoteOwner');
+        let description = await owner.describe();
+        while (description.status.name === 'RUNNING') {
+          if (Date.now() >= deadline) {
+            throw new Error('Timed out waiting for Quote owner Workflow to finish');
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          description = await owner.describe();
+        }
+        await owner.result();
+      } catch (error) {
+        if (!(error instanceof WorkflowNotFoundError)) {
+          throw error;
+        }
+      }
+    }
   }
 
   localPostCreateWorkflows.length = 0;

@@ -81,6 +81,7 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 | [Profile Block](./objects/profile-block.md)                           | Profile 간 상호작용 차단                        | [Profile](./objects/profile.md)                                                                                                           |
 | [Word Mute Rule](./objects/word-mute-rule.md)                         | 단어 기반 개인 노출 제어                        | [Profile](./objects/profile.md)                                                                                                           |
 | [Hashtag Mute Rule](./objects/hashtag-mute-rule.md)                   | Hashtag 기반 개인 노출 제어                     | [Profile](./objects/profile.md), [Hashtag](./objects/hashtag.md)                                                                          |
+| [Natural Language Mute Rule](./objects/natural-language-mute-rule.md) | 자연어 조건 기반 Home 개인 노출 제어            | [Profile](./objects/profile.md)                                                                                                           |
 | [Profile Domain Block](./objects/profile-domain-block.md)             | Profile 개인 원격 Instance 차단                 | [Profile](./objects/profile.md), [Instance](./objects/instance.md)                                                                        |
 | [Post Notification Mute](./objects/post-notification-mute.md)         | Profile별 Post thread 알림 억제                 | [Profile](./objects/profile.md), [Post](./objects/post.md)                                                                                |
 | [Instance](./objects/instance.md)                                     | Profile 소속 서버 식별과 서버 상태              | [Profile](./objects/profile.md)                                                                                                           |
@@ -135,6 +136,7 @@ Account 요청에서 Profile이 주체인 행동의 `Account.Active`는 해당 P
 - [ADR 0030: Post Content Mention Identity and Body Conversion Boundary](./decisions/0030-post-content-mention-identity.md)
 - [ADR 0030: Content Report Submission](./decisions/0030-content-report-submission.md)
 - [ADR 0031: Profile Block의 ActivityPub 연합](./decisions/0031-profile-block-federation.md)
+- [ADR 0032: Native 초기 로딩 중 잠금·복귀 복구](./decisions/0032-native-startup-recovery.md)
 - [2026-06-28 DDD 명세 점검 기록](./records/2026-06-28-ddd-spec-audit.md)
 - [2026-06-29 결정 반영 기록](./records/2026-06-29-decision-round.md)
 - [2026-06-29 PR 리뷰 반영 기록](./records/2026-06-29-pr-review-followup.md)

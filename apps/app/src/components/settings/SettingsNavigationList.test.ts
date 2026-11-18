@@ -2,14 +2,30 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { cloneElement, createElement } from 'react';
+import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType, ReactElement } from 'react';
+import {
+  createOperationDescriptor,
+  Environment,
+  getRequest,
+  Network,
+  Observable,
+  RecordSource,
+  Store,
+} from 'relay-runtime';
+import UniversalShellQueryArtifact from '../shell/__generated__/UniversalShellQuery.graphql';
+import { ShellChromeProvider } from '../shell/ShellChromeContext';
+import { getSettingsMenuSelection } from './settingsNavigation';
+import type { ComponentType, ReactElement, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
+import type { GraphQLResponse } from 'relay-runtime';
+import type { UniversalShellQuery$data } from '../shell/__generated__/UniversalShellQuery.graphql';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const require = createRequire(import.meta.url);
 let platform: 'android' | 'ios' | 'web' = 'web';
+let navigationPath = '/settings';
 let openSettingsCalls = 0;
 let openSettingsFailure = false;
 let permission: { granted: boolean; status?: 'denied' | 'granted' | 'undetermined' } = {
@@ -18,7 +34,6 @@ let permission: { granted: boolean; status?: 'denied' | 'granted' | 'undetermine
 };
 let permissionStatusCalls = 0;
 let requestPermissionAndSyncCalls = 0;
-let migrationEnabled = false;
 let webPushConfigAvailable = false;
 let webPushPermissionContextAvailable = false;
 let browserPushSupport:
@@ -30,6 +45,7 @@ let browserPushSupport:
 let browserNotificationPermission: NotificationPermission = 'default';
 let requestedBrowserNotificationPermission: NotificationPermission = 'granted';
 let browserNotificationRequestPromise: Promise<NotificationPermission> | null = null;
+let browserNotificationRequestThrows = false;
 let browserNotificationRequestCalls = 0;
 let syncWebPermissionCalls: NotificationPermission[] = [];
 let requestPermissionAndSync: () => Promise<void> = async () => {
@@ -37,6 +53,22 @@ let requestPermissionAndSync: () => Promise<void> = async () => {
 };
 const toastCalls: Array<{ message: string; tone: string }> = [];
 const originalNotificationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Notification');
+let openProfileSwitcherCalls = 0;
+
+mock.module('react-relay', {
+  exports: {
+    ...ReactRelay,
+    graphql: (parts: TemplateStringsArray) => {
+      const name = parts.join('').match(/(?:fragment|query|mutation) (\w+)/)?.[1];
+      assert.ok(name);
+      const generatedPath =
+        name === 'ProfileListItemRow_profile'
+          ? `../profile/__generated__/${name}.graphql.ts`
+          : `./__generated__/${name}.graphql.ts`;
+      return require(generatedPath).default;
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 
 mock.module('expo-router', {
   exports: {
@@ -69,12 +101,27 @@ mock.module('react-native', {
       },
     },
     ActivityIndicator: 'ActivityIndicator',
+    Animated: {
+      View: 'AnimatedView',
+      createAnimatedComponent: <P>(component: ComponentType<P>) => component,
+    },
     Platform: {
       get OS() {
         return platform;
       },
     },
-    Pressable: 'Pressable',
+    Pressable: ({
+      children,
+      ...props
+    }: {
+      children?: ReactNode | ((state: { hovered: boolean; pressed: boolean }) => ReactNode);
+      [key: string]: unknown;
+    }) =>
+      createElement(
+        'Pressable',
+        props,
+        typeof children === 'function' ? children({ hovered: false, pressed: false }) : children,
+      ),
     StyleSheet: {
       create: <T>(styles: T) => styles,
       flatten: (style: unknown) =>
@@ -84,6 +131,11 @@ mock.module('react-native', {
     View: 'View',
   },
 } as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/useAnimatedColorTransition.ts', import.meta.url), {
+  exports: {
+    useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../native-push/nativePushClient.ts', import.meta.url), {
   exports: {
     getNativeNotificationPermissionStatus: () => {
@@ -91,9 +143,6 @@ mock.module(new URL('../native-push/nativePushClient.ts', import.meta.url), {
       return Promise.resolve(permission);
     },
   },
-} as unknown as Parameters<typeof mock.module>[1]);
-mock.module(new URL('../FeatureFlagsContext.tsx', import.meta.url), {
-  exports: { useFeatureFlag: (key: string) => key === 'profile-migration' && migrationEnabled },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../native-push/nativePushPermissionContext.ts', import.meta.url), {
   exports: {
@@ -109,27 +158,82 @@ mock.module(new URL('../native-push/webPushPermissionContext.ts', import.meta.ur
       return {
         permission: browserNotificationPermission,
         support: browserPushSupport,
-        syncPermission: async (permission: NotificationPermission) => {
-          syncWebPermissionCalls.push(permission);
-          browserNotificationPermission = permission;
-        },
+        requestPermission: () =>
+          Notification.requestPermission().then((permission) => {
+            syncWebPermissionCalls.push(permission);
+            browserNotificationPermission = permission;
+          }),
       };
     },
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(require.resolve('lucide-react-native'), {
-  exports: { ChevronRightIcon: 'ChevronRightIcon' },
+  exports: {
+    ChevronDownIcon: 'ChevronDownIcon',
+    ChevronRightIcon: 'ChevronRightIcon',
+  },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   exports: {
-    NavigationLink: ({ children, href }: { children: ReactElement; href: string }) =>
-      createElement('NavigationLink', { href }, cloneElement(children, { href } as never)),
+    NavigationLink: ({
+      children,
+      href,
+      onNavigate,
+    }: {
+      children: ReactElement<{
+        onClick?: (event: unknown) => void;
+        onPress?: (event: unknown) => void;
+      }>;
+      href: string;
+      onNavigate?: () => void;
+    }) => {
+      const onActivate = (event: unknown) => {
+        if (platform === 'web') {
+          children.props.onClick?.(event);
+        } else {
+          children.props.onPress?.(event);
+        }
+        onNavigate?.();
+        navigationPath = href;
+      };
+
+      return createElement(
+        'NavigationLink',
+        { href },
+        cloneElement(
+          children,
+          platform === 'web'
+            ? ({ href, onClick: onActivate } as never)
+            : ({ href, onPress: onActivate } as never),
+        ),
+      );
+    },
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/Button.tsx', import.meta.url), {
+  exports: {
+    Button: ({ children, ...props }: Record<string, unknown>) =>
+      createElement('Pressable', { accessibilityRole: 'button', ...props }, children as ReactNode),
+  },
+} as unknown as Parameters<typeof mock.module>[1]);
+mock.module(new URL('../ui/Avatar.tsx', import.meta.url), {
+  exports: {
+    Avatar: (props: Record<string, unknown>) => createElement('Avatar', props),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('./SettingsItem.tsx', import.meta.url), {
   exports: {
     SettingsItem: (props: Record<string, unknown>) =>
       createElement('SettingsItem', props, createElement('Text', null, props.label as string)),
+    SettingsItemContent: (props: Record<string, unknown>) =>
+      createElement(
+        'View',
+        null,
+        props.leading as ReactNode,
+        createElement('Text', null, props.label as string),
+        props.description ? createElement('Text', null, props.description as string) : null,
+        props.trailing as ReactNode,
+      ),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 mock.module(new URL('../ui/LoadingIndicator.tsx', import.meta.url), {
@@ -148,6 +252,8 @@ mock.module(new URL('../../theme/ThemeProvider.tsx', import.meta.url), {
       text: '#111111',
       textSecondary: '#666666',
       foregroundSecondary: 'foreground-secondary',
+      foregroundPrimary: '#111111',
+      borderDefault: '#dddddd',
     }),
   },
 } as unknown as Parameters<typeof mock.module>[1]);
@@ -163,46 +269,31 @@ mock.module(new URL('../ui/ToastProvider.tsx', import.meta.url), {
 } as unknown as Parameters<typeof mock.module>[1]);
 
 let SettingsNavigationList: ComponentType<{
+  density?: 'default' | 'compact';
   pathname?: string;
   selected?:
     | 'profile'
     | 'profile-migration'
-    | 'following-import'
     | 'mute-and-block'
     | 'theme'
+    | 'natural-language-mute'
     | 'info'
     | 'account-deletion';
 }>;
-let SettingsMuteAndBlockNavigation: ComponentType<{
-  selected?: 'blocked-profiles' | 'muted-profiles';
-}>;
 let renderer: ReactTestRenderer | null = null;
+let environment: Environment | null = null;
+let selectedProfile: NonNullable<
+  NonNullable<UniversalShellQuery$data['currentSession']>['selectedProfile']
+> | null = null;
+let shellChromeAvailable = false;
 
 before(async () => {
   ({ SettingsNavigationList } = await import('./SettingsNavigationList'));
-  ({ SettingsMuteAndBlockNavigation } = await import('./SettingsMuteAndBlockNavigation'));
-});
-
-describe('SettingsMuteAndBlockNavigation', () => {
-  it('기존 뮤트와 차단 관리 destination을 이 순서로 직접 연결한다', async () => {
-    await act(async () => {
-      renderer = create(createElement(SettingsMuteAndBlockNavigation));
-    });
-    assert.ok(renderer);
-
-    const links = rendered('Pressable');
-    assert.deepEqual(
-      links.map((link) => ({ label: link.props.accessibilityLabel, href: link.props.href })),
-      [
-        { label: '뮤트한 프로필 관리 열기', href: '/settings/muted-profiles' },
-        { label: '차단한 프로필 관리 열기', href: '/settings/blocked-profiles' },
-      ],
-    );
-  });
 });
 
 afterEach(async () => {
   platform = 'web';
+  navigationPath = '/settings';
   openSettingsCalls = 0;
   openSettingsFailure = false;
   permission = { granted: true, status: 'granted' };
@@ -211,13 +302,13 @@ afterEach(async () => {
   requestPermissionAndSync = async () => {
     requestPermissionAndSyncCalls += 1;
   };
-  migrationEnabled = false;
   webPushConfigAvailable = false;
   webPushPermissionContextAvailable = false;
   browserPushSupport = 'supported';
   browserNotificationPermission = 'default';
   requestedBrowserNotificationPermission = 'granted';
   browserNotificationRequestPromise = null;
+  browserNotificationRequestThrows = false;
   browserNotificationRequestCalls = 0;
   syncWebPermissionCalls = [];
   if (originalNotificationDescriptor) {
@@ -226,6 +317,10 @@ afterEach(async () => {
     Reflect.deleteProperty(globalThis, 'Notification');
   }
   toastCalls.length = 0;
+  openProfileSwitcherCalls = 0;
+  environment = null;
+  selectedProfile = null;
+  shellChromeAvailable = false;
   if (renderer) {
     await act(async () => renderer?.unmount());
     renderer = null;
@@ -233,51 +328,117 @@ afterEach(async () => {
 });
 
 describe('SettingsNavigationList', () => {
-  it('실제 데이터가 연결된 설정 진입점만 제공한다', async () => {
-    migrationEnabled = true;
+  it('그룹의 각 direct destination으로 이동하면 현재 route가 표시된다', async () => {
+    await renderAtPath('/settings');
+
+    assert.deepEqual(
+      rendered('Text')
+        .filter((node) => node.props.accessibilityRole === 'header')
+        .map((node) => node.children[0]),
+      ['프로필', '앱', '계정'],
+    );
+    const destinations = rendered('Pressable')
+      .filter((node) =>
+        typeof node.props.href === 'string' ? node.props.href.startsWith('/settings/') : false,
+      )
+      .map((node) => node.props.href);
+    assert.deepEqual(destinations, [
+      '/settings/profile',
+      '/settings/mute-and-block',
+      '/settings/profile-migration',
+      '/settings/natural-language-mute',
+      '/settings/theme',
+      '/settings/account-deletion',
+      '/settings/info',
+    ]);
+
+    for (const href of destinations) {
+      assert.equal(typeof href, 'string');
+      const destination = rendered('Pressable').find((node) => node.props.href === href);
+      assert.ok(destination, `Missing direct destination ${href}`);
+      assert.equal(destination.props.accessibilityRole, 'link');
+
+      const activate = platform === 'web' ? destination.props.onClick : destination.props.onPress;
+      assert.equal(typeof activate, 'function');
+      await act(async () => activate());
+      assert.equal(navigationPath, href);
+      await rerenderAtPath(navigationPath);
+
+      const activeDestination = rendered('Pressable').find((node) => node.props.href === href);
+      assert.ok(activeDestination);
+      assert.equal(activeDestination.props['aria-current'], 'page');
+      assert.deepEqual(activeDestination.props.accessibilityState, { selected: true });
+
+      navigationPath = '/settings';
+      await rerenderAtPath(navigationPath);
+    }
+  });
+
+  it('compact density를 모든 navigation row와 Native notification item에 전달한다', async () => {
+    platform = 'ios';
+    await render({ density: 'compact' });
+
+    const items = rendered('SettingsItem');
+    assert.ok(items.length > 0);
+    assert.equal(
+      items.every((item) => item.props.density === 'compact'),
+      true,
+    );
+    const notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'native-notification-settings',
+    );
+    assert.ok(notification);
+    assert.equal(items.find((item) => item.props.label === '알림 설정')?.props.density, 'compact');
+  });
+
+  it('Byulmaru ID는 기존 canonical external link와 새 탭 동작을 유지한다', async () => {
     await render();
 
-    const links = rendered('Pressable');
-    assert.equal(
-      links[0].props.accessibilityLabel,
-      'Byulmaru ID Account Settings 외부 서비스로 이동',
+    const account = rendered('Pressable').find(
+      (node) => node.props.testID === 'byulmaru-id-account-settings-entry',
     );
-    assert.equal(links[0].props.href, 'https://id.byulmaru.co');
-    assert.deepEqual(links[0].props.hrefAttrs, {
+    assert.ok(account);
+    assert.equal(account.props.accessibilityLabel, '별마루 ID 계정 설정 외부 서비스로 이동');
+    assert.equal(account.props.href, 'https://id.byulmaru.co');
+    assert.deepEqual(account.props.hrefAttrs, {
       rel: 'noopener noreferrer',
       target: '_blank',
     });
-    assert.equal(links[1].props.accessibilityLabel, '프로필 설정 열기');
-    assert.equal(links[1].props.href, '/settings/profile');
-    assert.equal(links[2].props.accessibilityLabel, '다른 서비스에서 이전 설정 열기');
-    assert.equal(links[2].props.href, '/settings/profile-migration');
-    assert.equal(links[3].props.accessibilityLabel, '팔로잉 가져오기 설정 열기');
-    assert.equal(links[3].props.href, '/settings/following-import');
-    assert.equal(links[4].props.accessibilityLabel, '뮤트 및 차단 설정 열기');
-    assert.equal(links[4].props.href, '/settings/mute-and-block');
-    assert.equal(links[5].props.accessibilityLabel, '테마 설정 열기, 시스템');
-    assert.equal(links[5].props.href, '/settings/theme');
-    assert.equal(links[6].props.accessibilityLabel, '정보 설정 열기');
-    assert.equal(links[6].props.href, '/settings/info');
-    assert.equal(links[7].props.accessibilityLabel, '코스모 탈퇴 설정 열기');
-    assert.equal(links[7].props.href, '/settings/account-deletion');
-    assert.equal(
-      links.some((node) => node.props.testID === 'native-notification-settings'),
-      false,
-    );
   });
 
-  it('migration feature flag가 꺼져 있으면 Settings root에 진입점을 노출하지 않는다', async () => {
-    await render();
+  it('UniversalShell Relay fragment identity를 표시하고 기존 Profile picker를 연다', async () => {
+    await renderWithSelectedProfile();
 
+    const picker = rendered('Pressable').find(
+      (node) =>
+        node.props.accessibilityRole === 'button' &&
+        node.findAll((child) => (child.type as unknown) === 'Avatar').length === 1,
+    );
+    assert.ok(picker);
+    assert.match(
+      String(picker.props.accessibilityLabel),
+      /현재 Profile.*@current.*다른 Profile 선택/,
+    );
+    assert.equal(picker.props.accessibilityRole, 'button');
+    assert.deepEqual(
+      picker.findAll((node) => (node.type as unknown) === 'Text').map((node) => node.children[0]),
+      ['현재 Profile', '@current'],
+    );
+    const chevron = picker.findAll((node) => (node.type as unknown) === 'ChevronDownIcon')[0];
+    assert.ok(chevron);
+    const hiddenDecoration = picker.findAll(
+      (node) =>
+        (node.type as unknown) === 'View' && node.props.accessibilityElementsHidden === true,
+    )[0];
+    assert.ok(hiddenDecoration);
+    assert.equal(hiddenDecoration.props.pointerEvents, 'none');
     assert.equal(
-      rendered('Pressable').some((node) => node.props.href === '/settings/profile-migration'),
+      rendered('Text').some((node) => node.children[0] === 'Profile 전환'),
       false,
     );
-    assert.equal(
-      rendered('Pressable').some((node) => node.props.href === '/settings/following-import'),
-      false,
-    );
+
+    await act(async () => picker.props.onPress());
+    assert.equal(openProfileSwitcherCalls, 1);
   });
 
   it('Web Push config가 없으면 provider 없이 설정 목록을 렌더링한다', async () => {
@@ -316,6 +477,38 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(syncWebPermissionCalls, ['granted']);
     assert.equal(requestPermissionAndSyncCalls, 0);
     assert.deepEqual(toastCalls, []);
+  });
+
+  it('브라우저 권한 요청이 동기적으로 실패하면 재시도 안내를 표시한다', async () => {
+    webPushConfigAvailable = true;
+    webPushPermissionContextAvailable = true;
+    browserNotificationRequestThrows = true;
+    exposeBrowserNotification();
+    await render();
+
+    let notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'web-notification-settings',
+    );
+    assert.ok(notification);
+
+    await act(async () => notification?.props.onPress());
+    assert.equal(browserNotificationRequestCalls, 1);
+    assert.deepEqual(syncWebPermissionCalls, []);
+    assert.deepEqual(toastCalls, [
+      {
+        message: '브라우저 알림 권한을 요청하지 못했어요. 잠시 후 다시 시도해 주세요.',
+        tone: 'danger',
+      },
+    ]);
+
+    browserNotificationRequestThrows = false;
+    notification = rendered('Pressable').find(
+      (node) => node.props.testID === 'web-notification-settings',
+    );
+    assert.ok(notification);
+    await act(async () => notification?.props.onPress());
+    assert.equal(browserNotificationRequestCalls, 2);
+    assert.deepEqual(syncWebPermissionCalls, ['granted']);
   });
 
   it('허용된 권한 상태에서는 동기화를 재시도할 수 있다', async () => {
@@ -383,19 +576,13 @@ describe('SettingsNavigationList', () => {
     await render();
 
     const rows = rendered('Pressable');
-    const muteIndex = rows.findIndex(
-      (node) => node.props.accessibilityLabel === '뮤트 및 차단 설정 열기',
-    );
     const notificationIndex = rows.findIndex(
       (node) => node.props.testID === 'native-notification-settings',
     );
-    const infoIndex = rows.findIndex((node) => node.props.accessibilityLabel === '정보 설정 열기');
     const notification = rows[notificationIndex];
 
-    assert.equal(notificationIndex, muteIndex + 1);
     const themeIndex = rows.findIndex((node) => node.props.href === '/settings/theme');
-    assert.equal(themeIndex, notificationIndex + 1);
-    assert.equal(infoIndex, themeIndex + 1);
+    assert.equal(notificationIndex, themeIndex + 1);
     assert.equal(notification?.props.accessibilityLabel, 'OS 알림 설정 열기');
     assert.equal(notification?.props.accessibilityRole, 'button');
     const notificationItem = rendered('SettingsItem').find(
@@ -544,13 +731,13 @@ describe('SettingsNavigationList', () => {
       selected: 'profile',
     });
 
-    const internal = rendered('Pressable')[1];
+    const internal = rendered('Pressable').find((node) => node.props.href === '/settings/profile');
+    assert.ok(internal);
     assert.equal(internal.props['aria-current'], 'page');
     assert.deepEqual(internal.props.accessibilityState, { selected: true });
   });
 
-  it('migration route는 feature flag가 켜졌을 때 현재·선택 상태를 표시한다', async () => {
-    migrationEnabled = true;
+  it('migration route는 현재·선택 상태를 표시한다', async () => {
     await render({ pathname: '/settings/profile-migration', selected: 'profile-migration' });
 
     const migration = rendered('Pressable').find(
@@ -561,22 +748,24 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(migration.props.accessibilityState, { selected: true });
   });
 
-  it('following import route는 같은 feature flag 아래 현재·선택 상태를 표시한다', async () => {
-    migrationEnabled = true;
-    await render({ pathname: '/settings/following-import', selected: 'following-import' });
+  it('legacy following import path는 canonical migration row의 현재·선택 상태를 사용한다', async () => {
+    await render({ pathname: '/settings/following-import', selected: 'profile-migration' });
 
-    const followingImport = rendered('Pressable').find(
-      (link) => link.props.href === '/settings/following-import',
+    const migration = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/profile-migration',
     );
-    assert.ok(followingImport);
-    assert.equal(followingImport.props['aria-current'], 'page');
-    assert.deepEqual(followingImport.props.accessibilityState, { selected: true });
+    assert.ok(migration);
+    assert.equal(migration.props['aria-current'], 'page');
+    assert.deepEqual(migration.props.accessibilityState, { selected: true });
   });
 
   it('root detail을 visual selected로 표시해도 root path에서는 current page가 아니다', async () => {
     await render({ pathname: '/settings', selected: 'profile' });
 
-    const profileSettings = rendered('Pressable')[1];
+    const profileSettings = rendered('Pressable').find(
+      (node) => node.props.href === '/settings/profile',
+    );
+    assert.ok(profileSettings);
     assert.equal(profileSettings.props['aria-current'], undefined);
     assert.deepEqual(profileSettings.props.accessibilityState, { selected: true });
   });
@@ -584,7 +773,10 @@ describe('SettingsNavigationList', () => {
   it('차단 프로필 route에서도 뮤트 및 차단 category는 선택 상태만 유지한다', async () => {
     await render({ pathname: '/settings/blocked-profiles', selected: 'mute-and-block' });
 
-    const muteAndBlock = rendered('Pressable')[2];
+    const muteAndBlock = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/mute-and-block',
+    );
+    assert.ok(muteAndBlock);
     assert.equal(muteAndBlock.props['aria-current'], undefined);
     assert.deepEqual(muteAndBlock.props.accessibilityState, { selected: true });
   });
@@ -592,7 +784,7 @@ describe('SettingsNavigationList', () => {
   it('테마 경로의 메뉴는 현재 페이지와 선택 상태를 표시한다', async () => {
     await render({ pathname: '/settings/theme', selected: 'theme' });
     const theme = rendered('Pressable').find((link) => link.props.href === '/settings/theme')!;
-    assert.equal(theme.props.accessibilityLabel, '테마 설정 열기, 시스템');
+    assert.equal(theme.props.accessibilityLabel, '화면 설정 열기, 시스템');
     assert.equal(theme.props['aria-current'], 'page');
     assert.deepEqual(theme.props.accessibilityState, { selected: true });
   });
@@ -605,11 +797,13 @@ describe('SettingsNavigationList', () => {
     assert.deepEqual(info.props.accessibilityState, { selected: true });
   });
 
-  it('코스모 탈퇴는 마지막 root destination으로 current 상태를 전달한다', async () => {
+  it('코스모 탈퇴 destination은 현재 페이지와 선택 상태를 표시한다', async () => {
     await render({ pathname: '/settings/account-deletion', selected: 'account-deletion' });
 
-    const links = rendered('Pressable');
-    const deletion = links[links.length - 1];
+    const deletion = rendered('Pressable').find(
+      (link) => link.props.href === '/settings/account-deletion',
+    );
+    assert.ok(deletion);
     assert.equal(deletion.props['aria-current'], 'page');
     assert.deepEqual(deletion.props.accessibilityState, { selected: true });
   });
@@ -617,21 +811,102 @@ describe('SettingsNavigationList', () => {
 
 async function render(
   props: {
+    density?: 'default' | 'compact';
     pathname?: string;
     selected?:
       | 'profile'
       | 'profile-migration'
-      | 'following-import'
       | 'mute-and-block'
       | 'theme'
+      | 'natural-language-mute'
       | 'info'
       | 'account-deletion';
   } = {},
 ) {
+  environment ??= createTestEnvironment();
   await act(async () => {
-    renderer = create(createElement(SettingsNavigationList, props));
+    renderer = create(createNavigationTree(props));
   });
   assert.ok(renderer);
+}
+
+async function renderAtPath(pathname: string) {
+  navigationPath = pathname;
+  await render({ pathname, selected: getSettingsMenuSelection(pathname) });
+}
+
+async function rerenderAtPath(pathname: string) {
+  navigationPath = pathname;
+  assert.ok(renderer);
+  await act(async () => {
+    renderer?.update(
+      createNavigationTree({ pathname, selected: getSettingsMenuSelection(pathname) }),
+    );
+  });
+}
+
+async function renderWithSelectedProfile() {
+  environment = createTestEnvironment();
+  const shellQuery = createOperationDescriptor(getRequest(UniversalShellQueryArtifact), {});
+  environment.commitPayload(shellQuery, {
+    currentSession: {
+      id: 'session:settings-navigation',
+      selectedProfile: {
+        __typename: 'Profile',
+        avatar: null,
+        displayName: '현재 Profile',
+        id: 'profile:settings-navigation',
+        relativeHandle: '@current',
+      },
+    },
+    me: { profiles: [] },
+  });
+
+  // Read the fragment reference produced by the real UniversalShell query and Relay Store.
+  selectedProfile =
+    (environment.lookup(shellQuery.fragment).data as UniversalShellQuery$data).currentSession
+      ?.selectedProfile ?? null;
+  assert.ok(selectedProfile);
+  shellChromeAvailable = true;
+  await render({ pathname: '/settings' });
+}
+
+function createTestEnvironment() {
+  return new Environment({
+    network: Network.create(() => Observable.create<GraphQLResponse>(() => undefined)),
+    store: new Store(new RecordSource()),
+  });
+}
+
+function createNavigationTree(props: {
+  density?: 'default' | 'compact';
+  pathname?: string;
+  selected?:
+    | 'profile'
+    | 'profile-migration'
+    | 'mute-and-block'
+    | 'theme'
+    | 'natural-language-mute'
+    | 'info'
+    | 'account-deletion';
+}) {
+  const navigation = createElement(SettingsNavigationList, props);
+  const content = shellChromeAvailable
+    ? createElement(ShellChromeProvider, {
+        navigationDrawerOpen: false,
+        openNavigationDrawer: () => undefined,
+        openProfileSwitcher: () => {
+          openProfileSwitcherCalls += 1;
+        },
+        registerHomeReselection: () => () => undefined,
+        reselectHome: () => undefined,
+        selectedProfile,
+        children: navigation,
+      })
+    : navigation;
+
+  assert.ok(environment);
+  return createElement(ReactRelay.RelayEnvironmentProvider, { children: content, environment });
 }
 
 function exposeBrowserNotification() {
@@ -643,6 +918,9 @@ function exposeBrowserNotification() {
       },
       requestPermission: () => {
         browserNotificationRequestCalls += 1;
+        if (browserNotificationRequestThrows) {
+          throw new Error('permission request failed');
+        }
         return (
           browserNotificationRequestPromise ??
           Promise.resolve(requestedBrowserNotificationPermission)

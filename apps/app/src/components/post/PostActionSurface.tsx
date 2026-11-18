@@ -40,6 +40,7 @@ const postActionSurfaceFragment = graphql`
     ...ProfilePinAction_post @alias(as: "profilePin")
     profile {
       id
+      displayName
       relativeHandle
       ...ContentReportOverlay_blockProfile
       viewerState {
@@ -102,7 +103,9 @@ export function PostActionSurface({
   ];
 
   const canMute =
-    authentication.selectedProfileId && authentication.selectedProfileId !== target.profile.id;
+    authentication.selectedProfileId &&
+    authentication.selectedProfileId !== target.profile.id &&
+    target.profile.displayName != null;
 
   const renderActions = (more?: MoreActionConfig) => (
     <PostActionBackgroundPressContext.Provider value={onActionBarBackgroundPress}>

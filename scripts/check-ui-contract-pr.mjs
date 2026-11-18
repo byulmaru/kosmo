@@ -1142,6 +1142,8 @@ function sourceImportsValue(source, filePath, packagePrefix) {
 
 function bodyFieldIsMeaningful(body, label) {
   const withoutComments = String(body ?? '').replace(/<!--[\s\S]*?-->/g, '');
+  // label only comes from the fixed CUSTOM_ICON_BODY_LABELS, never from PR input.
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
   const pattern = new RegExp(
     `(?:^|\\n)[ \\t]*(?:[-*][ \\t]*)?${label}[ \\t]*[:：][ \\t]*([^\\n]*)`,
   );
