@@ -45,7 +45,6 @@ const PostLayoutFragment = graphql`
         url
       }
       id
-      handle
       relativeHandle
       displayName
       ...ProfileNameBlock_profile
@@ -204,7 +203,7 @@ export function PostLayout({
           >
             <Avatar
               imageUri={post.profile.avatar?.url}
-              label={post.profile.displayName || post.profile.handle}
+              label={post.profile.displayName || post.profile.relativeHandle}
               size={compact ? 40 : 48}
             />
           </Pressable>

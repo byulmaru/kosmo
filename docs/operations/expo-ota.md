@@ -11,6 +11,10 @@ JavaScript/assets-only OTA는 현재 세대를 유지한다. Native compatibilit
 새 Android/iOS Store binary를 만든 뒤 그 세대에 호환되는 OTA만 publish한다. 새 binary와 증가한 세대
 없이 호환되지 않는 OTA를 publish하지 않으며, `EXPO_UPDATES_FINGERPRINT_OVERRIDE`는 사용하지 않는다.
 
+`expo-store-review`는 현재 `0.4` 런타임을 유지하는 선택적 native module이다. 새 Store binary에
+module이 포함되며, 기존 module 미포함 `0.4` binary도 같은 JavaScript OTA를 받을 수 있지만 module이
+없으면 rating 요청을 건너뛴다. OTA만으로 native module을 설치하거나 rating 기능을 활성화하지 않는다.
+
 PROD-812의 `userInterfaceStyle: automatic`은 새 Native binary에 포함되어야 한다. 테마의 `시스템`
 선택을 Light 고정인 기존 `0.3` binary에 OTA로 전달하지 않도록 `0.4`로 분리하며, Android/iOS 새 binary와
 OS 모드 전환 검증을 완료한 뒤 해당 세대를 출시한다. 이 source 변경 자체는 Store 배포 완료를 뜻하지 않는다.

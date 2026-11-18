@@ -4,6 +4,7 @@ import {
   ApplicationFailure,
   condition,
   defineUpdate,
+  patched,
   proxyActivities,
   setHandler,
 } from '@temporalio/workflow';
@@ -30,6 +31,7 @@ const profileBlockInputSchema = z.strictObject({
 
 const {
   executeProfileBlockTransitionActivity,
+  invalidateHomeTimelinesActivity,
   sendProfileBlockActivity,
   sendProfileUnfollowActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
@@ -121,7 +123,15 @@ export async function profileBlockWorkflow(input: ProfileBlockInput): Promise<vo
   if (!execution.ok) {
     throw profileBlockTransitionFailure(execution.error);
   }
+  const homeTimelineInvalidationEnabled = patched('profile-block-home-invalidation-v1');
   const effects = [
+    ...(homeTimelineInvalidationEnabled && execution.result.created
+      ? [
+          invalidateHomeTimelinesActivity({
+            profileIds: [workflowInput.ownerProfileId, workflowInput.targetProfileId],
+          }),
+        ]
+      : []),
     ...execution.unfollowInputs.map((input) => sendProfileUnfollowActivity(input)),
     ...((transitionOrigin ?? input.origin) === 'LOCAL' && execution.result.created
       ? [sendProfileBlockActivity(execution.result.profileBlockId)]

@@ -59,6 +59,10 @@ const PostMediaViewerFragment = graphql`
       media {
         id
         altText
+        aiProhibitFilterApplied
+        rights {
+          licenseUrl
+        }
         url
       }
     }
@@ -114,6 +118,7 @@ export function PostMediaViewer({
   const moveByRef = useRef<((delta: number) => void) | null>(null);
   const [currentIndex, setCurrentIndex] = useState(selectedIndex);
   const [expanded, setExpanded] = useState(false);
+  const [shown, setShown] = useState(false);
   const [lastContentId, setLastContentId] = useState<string | null>(null);
   const wide = Platform.OS === 'web' && width >= breakpoints.compact;
   const safeAreaStyle = useSafeAreaPadding();
@@ -124,6 +129,23 @@ export function PostMediaViewer({
   useEffect(() => {
     setCurrentIndex(selectedIndex);
   }, [selectedIndex]);
+
+  useEffect(() => {
+    if (!shown) {
+      return;
+    }
+    // Modal's child focus-trap effects must commit before focusing its content.
+    const focusFrame = requestAnimationFrame(() => {
+      if (
+        Platform.OS === 'web' &&
+        containsTarget(dialogRef, globalThis.document?.activeElement ?? null)
+      ) {
+        return;
+      }
+      focusPostMediaViewerTarget(closeRef);
+    });
+    return () => globalThis.cancelAnimationFrame?.(focusFrame);
+  }, [shown]);
 
   const syncContentId = useCallback(
     (contentId: string | null) => {
@@ -156,11 +178,6 @@ export function PostMediaViewer({
     }),
     [currentIndex, expanded, lastContentId, requestClose, selectedIndex, syncContentId],
   );
-
-  useEffect(() => {
-    const focusFrame = requestAnimationFrame(() => focusPostMediaViewerTarget(closeRef));
-    return () => globalThis.cancelAnimationFrame?.(focusFrame);
-  }, []);
 
   const handlePlatformRequestClose = useCallback(() => {
     if (Platform.OS === 'web' && ignoreNextPlatformClose.current) {
@@ -209,6 +226,7 @@ export function PostMediaViewer({
       animationType="fade"
       navigationBarTranslucent
       onRequestClose={handlePlatformRequestClose}
+      onShow={() => setShown(true)}
       presentationStyle="overFullScreen"
       statusBarTranslucent
       transparent
@@ -227,6 +245,7 @@ export function PostMediaViewer({
           accessibilityViewIsModal
           onAccessibilityEscape={requestClose}
           ref={dialogRef}
+          tabIndex={-1}
           style={[styles.dialog, Platform.OS === 'web' ? null : safeAreaStyle]}
           testID="post-media-viewer-dialog"
         >
@@ -264,9 +283,11 @@ export function PostMediaViewerContent({ actionBar, post: postKey, wideDetail }:
   const content = post.content;
   const media = useMemo<readonly PostMediaItem[]>(
     () =>
-      content?.media?.map(({ altText, id, url }) => ({
+      content?.media?.map(({ aiProhibitFilterApplied, altText, id, rights, url }) => ({
         altText: altText ?? null,
+        aiProhibitFilterApplied,
         id,
+        licenseUrl: rights?.licenseUrl ?? null,
         url: url ?? null,
       })) ?? [],
     [content?.media],
@@ -545,7 +566,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function containsTarget(dialog: RefObject<NativeView | null>, target: EventTarget | null): boolean {
   const element = dialog.current as unknown as { contains?: (node: EventTarget | null) => boolean };
-  return element.contains?.(target) ?? false;
+  return element?.contains?.(target) ?? false;
 }
 
 function stableCloseVisualStyle(state: PressableStateCallbackType): ViewStyle[] {

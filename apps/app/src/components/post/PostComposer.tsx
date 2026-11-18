@@ -749,13 +749,11 @@ export function MobileFullscreenComposerShellCandidate({
   const hasTrailingContent = (children !== undefined && children !== null) || hasMedia;
   const hasParent = beforeEditor !== undefined && beforeEditor !== null;
   const isReplyShell = mode === 'reply' && hasParent;
-  const shouldAutoSizeBody = Platform.OS === 'web' && (hasTrailingContent || mode === 'reply');
+  const shouldAutoSizeBody = Platform.OS === 'web';
   const bodyUsesTrailingContentLayout =
     hasTrailingContent || (shouldAutoSizeBody && bodyContentHeight > 0);
-  const webReplyShellStyle =
-    Platform.OS === 'web' && mode === 'reply'
-      ? ({ overflow: 'clip' } as unknown as ViewStyle)
-      : null;
+  const webShellStyle =
+    Platform.OS === 'web' ? ({ overflow: 'clip' } as unknown as ViewStyle) : null;
   const { controlRef, menuRef, setVisibilityOpen, triggerRef, visibilityOpen } = useVisibilityMenu(
     submitting,
     onVisibilityChange,
@@ -789,9 +787,17 @@ export function MobileFullscreenComposerShellCandidate({
     (body.trim().length === 0 && items.length === 0) ||
     remaining < 0;
   const scrollToBody = () => {
-    if (isReplyShell && parentOffsetRef.current !== null) {
-      scrollRef.current?.scrollTo({ animated: false, y: parentOffsetRef.current });
+    const offset = parentOffsetRef.current;
+    if (!isReplyShell || offset === null) {
+      return;
     }
+    if (Platform.OS === 'web') {
+      const scrollNode = scrollRef.current?.getScrollableNode() as HTMLElement | null;
+      if (!scrollNode || offset > scrollNode.scrollHeight - scrollNode.clientHeight) {
+        return;
+      }
+    }
+    scrollRef.current?.scrollTo({ animated: false, y: offset });
   };
   const scheduleInitialScroll = () => {
     if (initialScrollFrameRef.current !== null) {
@@ -799,9 +805,8 @@ export function MobileFullscreenComposerShellCandidate({
     }
     initialScrollFrameRef.current = requestAnimationFrame(() => {
       initialScrollFrameRef.current = null;
-      const offset = parentOffsetRef.current;
-      if (initialScrollPendingRef.current && offset !== null) {
-        scrollRef.current?.scrollTo({ animated: false, y: offset });
+      if (initialScrollPendingRef.current) {
+        scrollToBody();
       }
     });
   };
@@ -997,7 +1002,7 @@ export function MobileFullscreenComposerShellCandidate({
       style={[
         styles.mobileShell,
         fillContainer ? styles.mobileShellFill : null,
-        webReplyShellStyle,
+        webShellStyle,
         { backgroundColor: theme.backgroundCanvas },
       ]}
       testID="mobile-fullscreen-composer-candidate"
@@ -1056,7 +1061,7 @@ export function MobileFullscreenComposerShellCandidate({
           if (
             initialScrollPendingRef.current &&
             offset !== null &&
-            Math.abs(event.nativeEvent.contentOffset.y - offset) > 1
+            Math.abs(event.nativeEvent.contentOffset.y - offset) <= 1
           ) {
             initialScrollPendingRef.current = false;
           }

@@ -207,3 +207,24 @@ test('auto placement uses directional insets and keeps a stable gap above or bel
   assert.equal(dataSet().placement, 'top');
   assert.equal(style().top, 156);
 });
+
+test('intrinsic auto content stays below the trigger when its measured height fits', async () => {
+  const data = fixture();
+  data.trigger.getBoundingClientRect = () => ({ left: 40, right: 80, top: 200, bottom: 240 });
+  data.content.getBoundingClientRect = () => ({ width: 120, height: 48 });
+  const props = {
+    accessibilityLabel: 'tooltip',
+    open: true,
+    triggerRef: { current: data.trigger } as never,
+    onRequestClose() {},
+    verticalPlacement: 'auto' as const,
+    children: () => null,
+  };
+  await act(async () => {
+    renderer = create(createElement(Dropdown, props), { createNodeMock: () => data.content });
+  });
+  const view = renderer!.root.findByType('View' as never);
+  const style = Object.assign({}, ...view.props.style);
+  assert.equal(view.props.dataSet.placement, 'bottom');
+  assert.equal(style.top, 248);
+});

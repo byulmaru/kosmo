@@ -41,7 +41,9 @@ metadata:
     app.kubernetes.io/version: {{ .Values.version | quote }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-  replicas: {{ get .Values.worker.replicas .Values.env }}
+  {{- if ne .Values.env "prod" }}
+  replicas: 1
+  {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: worker
@@ -97,6 +99,8 @@ spec:
               value: {{ .Values.temporal.frontendAddress | quote }}
             - name: TEMPORAL_NAMESPACE
               value: {{ include "kosmo.temporalNamespaceName" . | quote }}
+            - name: REDIS_URL
+              value: {{ printf "redis://%s:6379" (include "kosmo.redisName" .) | quote }}
 {{- if eq .Values.env "prod" }}
             - name: POSTHOG_HOST
               value: {{ .Values.worker.posthog.host | quote }}

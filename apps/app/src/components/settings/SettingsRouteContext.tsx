@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 
-export type SettingsDetailHeaderMode = 'back' | 'hidden' | 'plain';
+export type SettingsDetailHeaderMode = 'back' | 'plain';
 
 const SettingsRouteContext = createContext<{
   detailHeaderMode: SettingsDetailHeaderMode;

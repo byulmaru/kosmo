@@ -5,7 +5,6 @@ import { graphql, useLazyLoadQuery, useMutation } from 'react-relay';
 import { deleteSelectedProfile, writeSelectedProfile } from '@/auth/selectedProfileStorage';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import { Button } from '@/components/ui/Button';
 import { StateView } from '@/components/ui/StateView';
 import { useRelayActor } from '@/relay/RelayActorProvider';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -22,9 +21,9 @@ const query = graphql`
   query SettingsProfileDetailQuery {
     currentSession {
       selectedProfile {
+        ...ProfileSettingsScreen_profile
         id
         displayName
-        relativeHandle
         followPolicy
         instance {
           kind
@@ -136,8 +135,15 @@ function SettingsProfileDetailContents() {
     { fetchKey, fetchPolicy: 'network-only' },
   );
   const profile = data.currentSession?.selectedProfile ?? null;
+  const displayName = profile?.displayName;
+  const followPolicy = profile?.followPolicy;
 
-  if (!profile || profile.instance.kind !== 'LOCAL') {
+  if (
+    !profile ||
+    profile.instance?.kind !== 'LOCAL' ||
+    displayName == null ||
+    followPolicy == null
+  ) {
     return (
       <StateView
         actionLabel={shellChrome ? 'Profile 선택하기' : undefined}
@@ -147,24 +153,24 @@ function SettingsProfileDetailContents() {
     );
   }
 
+  const profileForEditor = profile as SettingsProfileEditorProfile;
+
   return (
     <SettingsProfileEditor
-      key={`${profile.id}:${profile.viewerState?.membership?.role ?? 'NONE'}`}
-      openProfileSwitcher={shellChrome?.openProfileSwitcher}
-      profile={profile}
+      key={`${profileForEditor.id}:${profileForEditor.viewerState?.membership?.role ?? 'NONE'}`}
+      profile={profileForEditor}
     />
   );
 }
 
-function SettingsProfileEditor({
-  openProfileSwitcher,
-  profile,
-}: {
-  openProfileSwitcher?: () => void;
-  profile: NonNullable<
-    NonNullable<SettingsProfileDetailQuery['response']['currentSession']>['selectedProfile']
-  >;
-}) {
+type SettingsProfileEditorProfile = NonNullable<
+  NonNullable<SettingsProfileDetailQuery['response']['currentSession']>['selectedProfile']
+> & {
+  displayName: string;
+  followPolicy: string;
+};
+
+function SettingsProfileEditor({ profile }: { profile: SettingsProfileEditorProfile }) {
   const editable = profile.viewerState?.membership?.role === 'OWNER';
   const theme = useTheme();
   const baseline = getPostingSettings(profile);
@@ -244,18 +250,6 @@ function SettingsProfileEditor({
   return (
     <ProfileSettingsScreen
       embedded
-      identityAction={
-        openProfileSwitcher ? (
-          <Button
-            accessibilityLabel="다른 Profile 선택"
-            onPress={openProfileSwitcher}
-            size="compact"
-            tone="secondary"
-          >
-            Profile 전환
-          </Button>
-        ) : null
-      }
       deletion={
         editable
           ? {

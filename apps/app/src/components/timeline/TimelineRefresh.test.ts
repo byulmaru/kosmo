@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { afterEach, before, describe, it, mock } from 'node:test';
+import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
+import { ConnectionHandler, ROOT_ID } from 'relay-runtime';
 import { WebPushPermissionContext } from '@/components/native-push/webPushPermissionContext';
 import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
@@ -16,6 +17,18 @@ const require = createRequire(import.meta.url);
 
 const platform = { OS: 'ios' };
 const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+const originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+const browserWindow = {
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+  scrollTo: () => undefined,
+};
+const browserDocument = {
+  visibilityState: 'visible',
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+};
+const appState = { addEventListener: () => ({ remove: () => undefined }) };
 let activeProfileId = 'profile-a';
 let renderer: ReactTestRenderer | null = null;
 let nativeHomeReselectionHandler: (() => void) | null = null;
@@ -39,12 +52,11 @@ const toasts: Array<{
 let toastCleanupCount = 0;
 
 const environment = {
-  check: () => ({ status: 'missing' }),
   retain: () => ({ dispose: () => undefined }),
 };
 
-function MockPostList({ identityKey }: { identityKey?: string }) {
-  return createElement('TimelineRows', { identityKey });
+function MockPostList({ header, ...props }: { header?: ReactNode; [key: string]: unknown }) {
+  return createElement('TimelineRows', props, header);
 }
 
 function MockBanner() {
@@ -105,6 +117,8 @@ const showToast = (message: string, options: (typeof toasts)[number]['options'])
 
 mockModule('expo-router', {
   Redirect: ({ href }: { href: string }) => createElement('Redirect', { href }),
+  useIsFocused: () => true,
+  useFocusEffect: () => undefined,
 });
 mockModule('lucide-react-native', { Bell: 'Bell', UserRoundPlus: 'UserRoundPlus' });
 mockModule(require.resolve('lucide-react-native'), {
@@ -112,6 +126,7 @@ mockModule(require.resolve('lucide-react-native'), {
   UserRoundPlus: 'UserRoundPlus',
 });
 mockModule('react-native', {
+  AppState: appState,
   Platform: platform,
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
@@ -125,8 +140,11 @@ mockModule('react-relay', {
     options.fetchPolicy === 'store-or-network' ? homeData : localData(),
   useRefetchableFragment: () => [null, localRefetch],
   useRelayEnvironment: () => environment,
+  useSubscription: () => undefined,
 });
 mockModule('relay-runtime', {
+  ConnectionHandler,
+  ROOT_ID,
   createOperationDescriptor: () => ({}),
   fetchQuery: () => ({
     subscribe: (observer: { complete?: () => void; error?: (error: Error) => void }) => {
@@ -137,8 +155,13 @@ mockModule('relay-runtime', {
   getRequest: () => ({}),
 });
 mockModule('@/components/PageHeader', { PageHeader: () => null });
+mockModule('@/components/shell/NavigationDrawerTrigger', { NavigationDrawerTrigger: () => null });
+mockModule('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+});
 mockModule('@/components/post/PostList', { PostList: MockPostList });
 mockModule('@/components/ui/Banner', { Banner: MockBanner });
+mockModule('@/components/post/PostRequestList', { PostRequestListSummary: () => null });
 mockModule('@/observability/UnexpectedErrorContext', {
   useUnexpectedErrorReporter: () => undefined,
 });
@@ -154,7 +177,6 @@ mockModule('@/components/shell/ShellChromeContext', {
 });
 mockModule('@/components/shell/shellLayout', {
   getShellLayout: () => 'mobile',
-  getWebMobileShellHeaderStickyOffset: () => 0,
 });
 mockModule('@/components/TimelineTabs', { TimelineTabs: () => null });
 mockModule('@/components/ui/Button', { Button: () => null });
@@ -178,6 +200,11 @@ before(async () => {
   ({ default: LocalTimelineScreen } = await import('./LocalTimelineScreen'));
 });
 
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: browserWindow });
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: browserDocument });
+});
+
 afterEach(async () => {
   if (renderer) {
     await act(async () => renderer?.unmount());
@@ -194,6 +221,11 @@ afterEach(async () => {
     Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
   } else {
     Reflect.deleteProperty(globalThis, 'window');
+  }
+  if (originalDocumentDescriptor) {
+    Object.defineProperty(globalThis, 'document', originalDocumentDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, 'document');
   }
 });
 
@@ -246,7 +278,7 @@ describe('Timeline refresh', () => {
       if (os === 'web') {
         Object.defineProperty(globalThis, 'window', {
           configurable: true,
-          value: { scrollTo: () => undefined },
+          value: { ...browserWindow, scrollTo: () => undefined },
         });
       }
 

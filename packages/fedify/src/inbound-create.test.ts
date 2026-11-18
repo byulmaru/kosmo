@@ -34,7 +34,10 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '@kosmo/core/enums';
-import { postContentDocumentToText } from '@kosmo/core/post-content/server';
+import {
+  postContentDocumentFromText,
+  postContentDocumentToText,
+} from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { postCreateWorkflow } from '@kosmo/core/temporal/post-create';
 import {
@@ -60,7 +63,6 @@ const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const localProfileId = '019f6f67-1111-7777-8888-123456789abc';
 const remoteActorUri = new URL('https://remote.example/users/alice');
-const remoteKeyUri = new URL('#main-key', remoteActorUri);
 const remoteObjectUri = new URL('https://remote.example/notes/1');
 const receivedAt = Temporal.Instant.from('2026-07-16T00:00:00Z');
 const createObservation = { activityType: 'Create', handler: 'create' } as const;
@@ -395,16 +397,19 @@ describe('inbound Create dispatch', () => {
         left.postContentId.localeCompare(right.postContentId),
       ),
       [
-        { postContentId: original.content.id, profileId: profile.id },
-        { postContentId: createdAfterRefresh.content.id, profileId: profile.id },
-      ].sort((left, right) => left.postContentId.localeCompare(right.postContentId)),
+        {
+          postContentId: createdAfterRefresh.content.id,
+          postId: createdAfterRefresh.content.postId,
+          profileId: profile.id,
+        },
+      ],
     );
     assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
   });
 
-  test('keeps a name-matching untrusted body URL as a safe link and stores the typed relation', async () => {
-    const profile = await createStoredRemoteActor({ profileUrl: null });
+  test('keeps a name-matching untrusted body URL as a safe link without a Mention relation', async () => {
+    await createStoredRemoteActor({ profileUrl: null });
     const untrustedUrl = 'https://evil.example/login';
     const objectUri = new URL('https://remote.example/notes/untrusted-mention-link');
     const note = new Note({
@@ -448,9 +453,7 @@ describe('inbound Create dispatch', () => {
         ],
       },
     ]);
-    assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: profile.id },
-    ]);
+    assert.deepEqual(await db.select().from(PostMentions), []);
     assert.equal(fetchMock.mock.callCount(), 0);
   });
 
@@ -639,7 +642,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: profile.id },
+      { postContentId: content.id, postId: content.postId, profileId: profile.id },
     ]);
   });
 
@@ -696,8 +699,8 @@ describe('inbound Create dispatch', () => {
         left.profileId.localeCompare(right.profileId),
       ),
       [
-        { postContentId: content.id, profileId: alice.id },
-        { postContentId: content.id, profileId: bob.id },
+        { postContentId: content.id, postId: content.postId, profileId: alice.id },
+        { postContentId: content.id, postId: content.postId, profileId: bob.id },
       ].sort((left, right) => left.profileId.localeCompare(right.profileId)),
     );
   });
@@ -722,7 +725,7 @@ describe('inbound Create dispatch', () => {
       instanceKind: InstanceKind.LOCAL,
     });
 
-    const { candidates } = await resolveStoredInboundMentionCandidates([
+    const { activeLocalProfileIds, candidates } = await resolveStoredInboundMentionCandidates([
       remoteActor.href,
       localActor.href,
       otherLocalActor.href,
@@ -744,6 +747,10 @@ describe('inbound Create dispatch', () => {
     expected.sort(([left], [right]) => left.localeCompare(right));
 
     assert.deepEqual(actual, expected);
+    assert.deepEqual(
+      new Set(activeLocalProfileIds),
+      new Set([localProfile.id, otherLocalProfile.id]),
+    );
   });
 
   test('projects a local Profile Mention when the actor URI and human URL use different forms', async () => {
@@ -796,7 +803,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: target.id },
+      { postContentId: content.id, postId: content.postId, profileId: target.id },
     ]);
     assert.equal(remoteProfileWorkflowCallCount(mentionWorkflow.mock.calls), 0);
     mentionWorkflow.mock.restore();
@@ -857,7 +864,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: storedActor.profile.id },
+      { postContentId: content.id, postId: content.postId, profileId: storedActor.profile.id },
     ]);
   });
 
@@ -1127,7 +1134,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: validProfile.id },
+      { postContentId: content.id, postId: content.postId, profileId: validProfile.id },
     ]);
     assert.deepEqual(
       observations
@@ -1230,7 +1237,7 @@ describe('inbound Create dispatch', () => {
     );
     assert.ok(knownProfileId);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: knownProfileId },
+      { postContentId: content.id, postId: content.postId, profileId: knownProfileId },
     ]);
   });
 
@@ -1318,7 +1325,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: knownProfile.id },
+      { postContentId: content.id, postId: content.postId, profileId: knownProfile.id },
     ]);
     assert.equal((await db.select().from(Profiles)).length, profileCount);
     assert.equal((await db.select().from(ActivityPubActors)).length, actorCount);
@@ -1381,7 +1388,7 @@ describe('inbound Create dispatch', () => {
       { altText: 'Mention image', mediaType: 'image/webp', url: mediaUri.href },
     );
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: profile.id },
+      { postContentId: content.id, postId: content.postId, profileId: profile.id },
     ]);
   });
 
@@ -1498,8 +1505,9 @@ describe('inbound Create dispatch', () => {
       context: createContext(),
       note: new Note({
         attribution: remoteActorUri,
-        content: 'Stored-author Followers-only Mention',
+        content: `<p><a href="${recipientActorUri.href}">@hydrated-followers-recipient</a></p>`,
         id: objectUri,
+        mediaType: 'text/html',
         tags: [new Mention({ href: recipientActorUri, name: '@hydrated-followers-recipient' })],
         to: new URL(`${remoteActorUri.href}/followers`),
       }),
@@ -1513,7 +1521,11 @@ describe('inbound Create dispatch', () => {
     assert.equal(materialized.post.profileId, author.id);
     assert.equal(materialized.post.visibility, PostVisibility.FOLLOWERS);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: materialized.content.id, profileId: recipient.id },
+      {
+        postContentId: materialized.content.id,
+        postId: materialized.post.id,
+        profileId: recipient.id,
+      },
     ]);
   });
 
@@ -1554,8 +1566,11 @@ describe('inbound Create dispatch', () => {
         } as unknown as InboxContext<void>,
         note: new Note({
           attribution: remoteActorUri,
-          content: 'Fetched-author Followers-only Mention',
+          content:
+            `<p><a href="${recipientActorUri.href}">` +
+            '@hydrated-unknown-followers-recipient</a></p>',
           id: objectUri,
+          mediaType: 'text/html',
           tags: [
             new Mention({ href: recipientActorUri, name: '@hydrated-unknown-followers-recipient' }),
           ],
@@ -1579,7 +1594,11 @@ describe('inbound Create dispatch', () => {
       assert.equal(workflowLookupObject.mock.callCount(), 1);
       assert.equal(contextLookupObject.mock.callCount(), 0);
       assert.deepEqual(await db.select().from(PostMentions), [
-        { postContentId: materialized.content.id, profileId: recipient.id },
+        {
+          postContentId: materialized.content.id,
+          postId: materialized.post.id,
+          profileId: recipient.id,
+        },
       ]);
     } finally {
       lookupWorkflow.mock.restore();
@@ -1611,8 +1630,11 @@ describe('inbound Create dispatch', () => {
         context: { ...createContext(), lookupObject } as unknown as InboxContext<void>,
         note: new Note({
           attribution: remoteActorUri,
-          content: 'Fetched-author Mention-only Direct',
+          content:
+            `<p>Fetched-author <a href="${recipientActorUri.href}">` +
+            '@hydrated-unknown-direct-recipient</a></p>',
           id: objectUri,
+          mediaType: 'text/html',
           tags: [
             new Mention({ href: recipientActorUri, name: '@hydrated-unknown-direct-recipient' }),
           ],
@@ -1633,7 +1655,11 @@ describe('inbound Create dispatch', () => {
       assert.equal(materialized.post.profileId, storedAuthor.profileId);
       assert.equal(materialized.post.visibility, PostVisibility.DIRECT);
       assert.deepEqual(await db.select().from(PostMentions), [
-        { postContentId: materialized.content.id, profileId: recipient.id },
+        {
+          postContentId: materialized.content.id,
+          postId: materialized.post.id,
+          profileId: recipient.id,
+        },
       ]);
     } finally {
       lookupWorkflow.mock.restore();
@@ -1666,8 +1692,11 @@ describe('inbound Create dispatch', () => {
         note: new Note({
           attachments: [new Image({ url: new URL('ftp://remote.example/media/image.webp') })],
           attribution: remoteActorUri,
-          content: 'Invalid image',
+          content:
+            `<p><a href="${recipientActorUri.href}">` +
+            '@hydrated-invalid-direct-recipient</a></p>',
           id: objectUri,
+          mediaType: 'text/html',
           tags: [
             new Mention({ href: recipientActorUri, name: '@hydrated-invalid-direct-recipient' }),
           ],
@@ -1708,8 +1737,9 @@ describe('inbound Create dispatch', () => {
     const objectUri = new URL('https://objects.example/notes/hydrated-direct');
     const note = new Note({
       attribution: remoteActorUri,
-      content: 'Hydrated Mention-only Direct',
+      content: `<p><a href="${recipientActorUri.href}">@hydrated-direct-recipient</a></p>`,
       id: objectUri,
+      mediaType: 'text/html',
       tags: [new Mention({ href: recipientActorUri, name: '@hydrated-direct-recipient' })],
       to: new URL('https://unrelated.example/users/recipient'),
     });
@@ -1729,11 +1759,20 @@ describe('inbound Create dispatch', () => {
     assert.deepEqual(materialized.content.document.body.content, [
       {
         type: 'paragraph',
-        content: [{ text: 'Hydrated Mention-only Direct', type: 'text' }],
+        content: [
+          {
+            attrs: { handle: '@hydrated-direct-recipient', profileId: recipient.id },
+            type: 'mention',
+          },
+        ],
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: materialized.content.id, profileId: recipient.id },
+      {
+        postContentId: materialized.content.id,
+        postId: materialized.post.id,
+        profileId: recipient.id,
+      },
     ]);
   });
 
@@ -2047,7 +2086,7 @@ describe('inbound Create dispatch', () => {
       },
     ]);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: mentionProfile.id },
+      { postContentId: content.id, postId: content.postId, profileId: mentionProfile.id },
     ]);
   });
 
@@ -2275,6 +2314,155 @@ describe('inbound Create dispatch', () => {
     assert.equal(materialized.post.visibility, PostVisibility.PUBLIC);
     assert.equal(materialized.post.replyParentId, null);
     assert.equal(postContentDocumentToText(materialized.content.document), 'First');
+    assert.equal(await db.$count(PostContents), 1);
+  });
+
+  test('rejects a hydrated duplicate Note URI owned by another same-origin actor', async () => {
+    const owner = await createStoredRemoteActor();
+    const impostorUri = new URL('https://remote.example/users/mallory');
+    await createStoredRemoteActor({
+      actorUri: impostorUri,
+      handle: 'mallory',
+      instanceId: owner.instanceId,
+    });
+    const objectUri = new URL('https://objects.example/notes/other-author');
+    const first = await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'Owner content',
+        id: objectUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+    assert.equal(first.status, 'created');
+
+    assert.deepEqual(
+      await materializeHydratedRemoteNote({
+        context: createContext(),
+        note: new Note({
+          attribution: impostorUri,
+          content: 'Impostor content',
+          id: objectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+      }),
+      { reason: 'invalid_note', status: 'rejected' },
+    );
+
+    const materialized = await getMaterializedPost(objectUri);
+    assert.equal(materialized.post.profileId, owner.id);
+    assert.equal(postContentDocumentToText(materialized.content.document), 'Owner content');
+    assert.equal(await db.$count(ActivityPubPosts), 1);
+    assert.equal(await db.$count(Posts), 1);
+  });
+
+  test('same-author duplicates still validate audience, content, emptiness, and author availability', async () => {
+    const profile = await createStoredRemoteActor();
+    const objectUri = new URL('https://objects.example/notes/validated-duplicate');
+    const original = await materializeHydratedRemoteNote({
+      context: createContext(),
+      note: new Note({
+        attribution: remoteActorUri,
+        content: 'First write',
+        id: objectUri,
+        to: PUBLIC_COLLECTION,
+      }),
+      objectUri,
+      observation: createObservation,
+      receivedAt,
+    });
+
+    assert.ok(original.status === 'created');
+    assert.deepEqual(
+      await materializeHydratedRemoteNote({
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Followers only',
+          id: objectUri,
+          to: new URL('https://remote.example/users/alice/followers'),
+        }),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+      }),
+      { postId: original.postId, status: 'duplicate' },
+    );
+
+    const invalidDuplicates = [
+      {
+        expected: { reason: 'no_active_local_mention', status: 'rejected' },
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Direct without a local Mention',
+          id: objectUri,
+          to: new URL('https://remote.example/users/bob'),
+        }),
+      },
+      {
+        expected: { reason: 'note_content_length_exceeded', status: 'rejected' },
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'x'.repeat(10_001),
+          id: objectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+      },
+      {
+        expected: { reason: 'unsupported_note', status: 'rejected' },
+        note: new Note({
+          attachments: [new URL('https://remote.example/media/iri-only')],
+          attribution: remoteActorUri,
+          id: objectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+      },
+    ];
+
+    for (const { expected, note } of invalidDuplicates) {
+      assert.deepEqual(
+        await materializeHydratedRemoteNote({
+          context: createContext(),
+          note,
+          objectUri,
+          observation: createObservation,
+          receivedAt,
+        }),
+        expected,
+      );
+    }
+
+    await db
+      .update(Profiles)
+      .set({ state: ProfileState.SUSPENDED })
+      .where(eq(Profiles.id, profile.id));
+    assert.deepEqual(
+      await materializeHydratedRemoteNote({
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content: 'Author unavailable',
+          id: objectUri,
+          to: PUBLIC_COLLECTION,
+        }),
+        objectUri,
+        observation: createObservation,
+        receivedAt,
+      }),
+      { reason: 'unusable_author', status: 'rejected' },
+    );
+
+    const materialized = await getMaterializedPost(objectUri);
+    assert.equal(materialized.post.profileId, profile.id);
+    assert.equal(postContentDocumentToText(materialized.content.document), 'First write');
+    assert.equal(materialized.post.visibility, PostVisibility.PUBLIC);
     assert.equal(await db.$count(PostContents), 1);
   });
 
@@ -2553,8 +2741,11 @@ describe('inbound Create dispatch', () => {
       actor: remoteActorUri,
       object: new Note({
         attribution: remoteActorUri,
-        content: 'Mention-only Direct',
+        content:
+          `<p><a href="${recipientActorUri.href}">@direct-recipient</a> ` +
+          `<a href="${remoteMentionActorUri.href}">@direct-target</a></p>`,
         id: objectUri,
+        mediaType: 'text/html',
         tags: [
           new Mention({ href: recipientActorUri, name: '@direct-recipient' }),
           new Mention({ href: remoteMentionActorUri, name: '@direct-target' }),
@@ -2647,8 +2838,9 @@ describe('inbound Create dispatch', () => {
         actor: remoteActorUri,
         object: new Note({
           attribution: remoteActorUri,
-          content: 'Mention-only shared Direct',
+          content: `<p><a href="${recipientActorUri.href}">@direct-recipient</a></p>`,
           id: sharedObjectUri,
+          mediaType: 'text/html',
           tags: [new Mention({ href: recipientActorUri, name: '@direct-recipient' })],
         }),
       }),
@@ -2734,9 +2926,29 @@ describe('inbound Create dispatch', () => {
           tags: [new Mention({ href: suspendedLocalInstanceMentionUri, name: '@suspended-local' })],
         }),
       },
+      {
+        context: createContext(),
+        note: new Note({
+          attribution: remoteActorUri,
+          content:
+            '<p><a href="https://other.example/@direct-address-recipient">@recipient</a></p>',
+          id: new URL('https://remote.example/notes/direct-tag-without-body-identity'),
+          mediaType: 'text/html',
+          tags: [
+            new Mention({ href: recipientActorUri, name: '@direct-address-recipient' }),
+            new Mention({
+              href: new URL('https://unknown-mention.example/users/target'),
+              name: '@unknown-target',
+            }),
+          ],
+        }),
+      },
     ];
 
     const logs: unknown[] = [];
+    const lookupWorkflow = mockRemoteProfileRefresh(async () => {
+      throw new Error('DIRECT rejection must happen before unknown Mention lookup');
+    });
     const restoreReporter = setInboundObservabilityReporter({
       log: (observation) => logs.push(observation),
     });
@@ -2750,7 +2962,9 @@ describe('inbound Create dispatch', () => {
       }
     } finally {
       restoreReporter();
+      lookupWorkflow.mock.restore();
     }
+    assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 0);
 
     assert.deepEqual(
       logs,
@@ -2773,6 +2987,73 @@ describe('inbound Create dispatch', () => {
     assert.equal(await db.$count(PostContents), 0);
     assert.equal(await db.$count(PostMentions), 0);
     assert.equal(await db.$count(Notifications), 0);
+  });
+
+  test('rejects DIRECT when actor materialization makes a local body Mention ambiguous', async () => {
+    await createStoredRemoteActor();
+    const localTarget = await createLocalFollowerProfile('direct-ambiguous-body-target');
+    const localActorUri = new URL(`/ap/actor/${localTarget.id}`, publicOrigin);
+    await ensureDrizzleLocalProfileActor({
+      actorUri: localActorUri,
+      localInstanceId,
+      profileId: localTarget.id,
+    });
+    const unknownActorUri = new URL('https://mentions.example/users/ambiguous');
+    const localHumanUrl = `${publicOrigin}/@${encodeURIComponent(localTarget.handle)}`;
+    const objectUri = new URL('https://remote.example/notes/direct-ambiguous-body-mention');
+    const lookupWorkflow = mockRemoteProfileRefresh(
+      async (actorUri) =>
+        (
+          await createStoredRemoteActor({
+            actorUri: new URL(actorUri),
+            handle: 'ambiguous',
+            profileUrl: localHumanUrl,
+          })
+        ).id,
+    );
+    const observations: unknown[] = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => observations.push(observation),
+    });
+
+    try {
+      await handleInboundCreate(
+        createContext(),
+        new Create({
+          actor: remoteActorUri,
+          object: new Note({
+            attribution: remoteActorUri,
+            content: `<p><a href="${localHumanUrl}">@target</a></p>`,
+            id: objectUri,
+            mediaType: 'text/html',
+            tags: [
+              new Mention({ href: localActorUri, name: '@local-target' }),
+              new Mention({ href: unknownActorUri, name: '@ambiguous' }),
+            ],
+          }),
+        }),
+        receivedAt,
+      );
+    } finally {
+      restoreReporter();
+      lookupWorkflow.mock.restore();
+    }
+
+    assert.equal(remoteProfileWorkflowCallCount(lookupWorkflow.mock.calls), 1);
+    assert.deepEqual(
+      observations.map((observation) => {
+        const { phase, reasonCode, outcome } = observation as {
+          readonly phase: string;
+          readonly reasonCode: string;
+          readonly outcome: string;
+        };
+        return { outcome, phase, reasonCode };
+      }),
+      [{ outcome: 'rejected', phase: 'validation', reasonCode: 'no_active_local_mention' }],
+    );
+    assert.equal(await db.$count(Posts), 0);
+    assert.equal(await db.$count(PostContents), 0);
+    assert.equal(await db.$count(ActivityPubPosts), 0);
   });
 
   test('skips actor-only and foreign-followers-only audiences without side effects', async () => {
@@ -3793,6 +4074,70 @@ describe('inbound Create dispatch', () => {
     );
   });
 
+  test('a signed Create from another same-origin author cannot reuse an existing Note or add its Quote', async () => {
+    const owner = await createStoredRemoteActor();
+    const impostorUri = new URL('https://remote.example/users/mallory');
+    await createStoredRemoteActor({
+      actorUri: impostorUri,
+      handle: 'mallory',
+      instanceId: owner.instanceId,
+    });
+    const objectUri = new URL('https://remote.example/notes/reused-by-impostor');
+    await handleInboundCreate(createContext(), createRemoteCreate({ objectUri }), receivedAt);
+    const original = await getMaterializedPost(objectUri);
+
+    const sourceActorUri = new URL('https://source.example/users/source');
+    await createStoredRemoteActor({
+      actorUri: sourceActorUri,
+      handle: 'source',
+    });
+    const sourceUri = new URL('https://source.example/notes/quote-target');
+    assert.equal(
+      (
+        await materializeHydratedRemoteNote({
+          context: createContext(),
+          note: new Note({
+            attribution: sourceActorUri,
+            content: 'Quote target',
+            id: sourceUri,
+            to: PUBLIC_COLLECTION,
+          }),
+          objectUri: sourceUri,
+          observation: createObservation,
+          receivedAt,
+        })
+      ).status,
+      'created',
+    );
+    const fixture = await createInboxFixture(impostorUri);
+    const response = await fixture.federation.fetch(
+      await fixture.createSignedCreateRequest(
+        '/inbox',
+        objectUri,
+        new URL('https://remote.example/activities/create-impostor'),
+        undefined,
+        PUBLIC_COLLECTION,
+        new Note({
+          attribution: impostorUri,
+          content: 'Impostor quote',
+          id: objectUri,
+          quote: sourceUri,
+          to: PUBLIC_COLLECTION,
+        }),
+      ),
+      { contextData: undefined },
+    );
+    assert.equal(response.status, 202, await response.text());
+
+    const after = await getMaterializedPost(objectUri);
+    assert.equal(after.mapping.postId, original.mapping.postId);
+    assert.equal(after.post.profileId, owner.id);
+    assert.equal(after.post.repostSourceId, null);
+    assert.equal(postContentDocumentToText(after.content.document), 'Hello');
+    assert.equal(after.post.quoteConsentStatus, null);
+    assert.equal(await db.$count(Posts), 2);
+  });
+
   test('commits one Post for concurrent personal and shared deliveries of the same object', async () => {
     const profile = await createStoredRemoteActor();
     const fixture = await createInboxFixture();
@@ -4435,7 +4780,7 @@ describe('inbound Create dispatch', () => {
     );
     assert.equal((await db.select().from(PostContents)).length, 1);
     assert.deepEqual(await db.select().from(PostMentions), [
-      { postContentId: content.id, profileId: profile.id },
+      { postContentId: content.id, postId: content.postId, profileId: profile.id },
     ]);
     const firstHashtag = await db
       .select()
@@ -4525,6 +4870,125 @@ describe('inbound Create dispatch', () => {
     assert.equal((await db.select().from(ActivityPubPosts)).length, 1);
     assert.equal((await db.select().from(Posts).where(eq(Posts.profileId, profile.id))).length, 1);
     assert.equal((await db.select().from(PostContents)).length, 1);
+  });
+
+  test('rejects a different author that wins the Note URI before the unified Create persists', async () => {
+    const alice = await createStoredRemoteActor();
+    const mallory = await createStoredRemoteActor({
+      actorUri: new URL('https://remote.example/users/mallory'),
+      handle: 'mallory',
+      instanceId: alice.instanceId,
+    });
+    const objectUri = new URL('https://remote.example/notes/unified-create-author-race');
+    const observations: Array<{ reasonCode: string }> = [];
+    const restoreReporter = setInboundObservabilityReporter({
+      log: (observation) => observations.push(observation),
+    });
+    const executeWorkflow = mock.method(
+      temporalClient.workflow,
+      'execute',
+      async (workflow: unknown, options: unknown) => {
+        if (workflow === postCreateWorkflow.workflow) {
+          const winner = await createPost({
+            document: postContentDocumentFromText('Winning author content'),
+            mentionProfileIds: [],
+            objectUri: objectUri.href,
+            origin: 'ACTIVITYPUB',
+            profileId: mallory.id,
+            publishedAt: receivedAt,
+            receivedAt,
+            visibility: PostVisibility.PUBLIC,
+          });
+          assert.equal(winner.created, true);
+        }
+        return nativeWorkflowExecute(workflow as never, options as never);
+      },
+    );
+    try {
+      await handleInboundCreate(createContext(), createRemoteCreate({ objectUri }), receivedAt);
+      assert.equal(executeWorkflow.mock.callCount(), 1);
+      assert.ok(observations.some(({ reasonCode }) => reasonCode === 'stored_author_mismatch'));
+      const winner = await getMaterializedPost(objectUri);
+      assert.equal(winner.post.profileId, mallory.id);
+      assert.equal(postContentDocumentToText(winner.content.document), 'Winning author content');
+      assert.equal(winner.post.repostSourceId, null);
+      assert.equal(await db.$count(ActivityPubPosts), 1);
+      assert.equal(await db.$count(Posts), 1);
+    } finally {
+      executeWorkflow.mock.restore();
+      restoreReporter();
+    }
+  });
+
+  test('rechecks the author that wins a concurrent hydrated Note URI conflict', async () => {
+    const alice = await createStoredRemoteActor();
+    const malloryUri = new URL('https://remote.example/users/mallory');
+    const mallory = await createStoredRemoteActor({
+      actorUri: malloryUri,
+      handle: 'mallory',
+      instanceId: alice.instanceId,
+    });
+    const objectUri = new URL('https://remote.example/notes/concurrent-author-race');
+    await pg`create sequence inbound_note_author_attempts`;
+    await pg`
+      create function synchronize_inbound_note_author() returns trigger
+      language plpgsql as $function$
+      declare
+        attempt bigint;
+      begin
+        attempt := nextval('inbound_note_author_attempts');
+        if attempt <= 2 then
+          while (select last_value from inbound_note_author_attempts) < 2 loop
+            perform pg_sleep(0.01);
+          end loop;
+        end if;
+        return new;
+      end
+      $function$
+    `;
+    await pg`
+      create trigger synchronize_inbound_note_author
+      before insert on activitypub_post
+      for each row execute function synchronize_inbound_note_author()
+    `;
+
+    try {
+      const authors = [
+        { profile: alice, uri: remoteActorUri, content: 'Alice note' },
+        { profile: mallory, uri: malloryUri, content: 'Mallory note' },
+      ] as const;
+      const results = await Promise.all(
+        authors.map(({ uri, content }) =>
+          materializeHydratedRemoteNote({
+            context: createContext(),
+            note: new Note({ attribution: uri, content, id: objectUri, to: PUBLIC_COLLECTION }),
+            objectUri,
+            observation: createObservation,
+            receivedAt,
+          }),
+        ),
+      );
+      const winnerIndex = results.findIndex((result) => result.status === 'created');
+      assert.notEqual(winnerIndex, -1);
+      assert.equal(results[1 - winnerIndex]?.status, 'rejected');
+      const [{ attempts }] = await pg<
+        { attempts: number }[]
+      >`select last_value::integer as attempts from inbound_note_author_attempts`;
+      assert.equal(attempts, 2);
+
+      const materialized = await getMaterializedPost(objectUri);
+      assert.equal(materialized.post.profileId, authors[winnerIndex]!.profile.id);
+      assert.equal(
+        postContentDocumentToText(materialized.content.document),
+        authors[winnerIndex]!.content,
+      );
+      assert.equal(await db.$count(ActivityPubPosts), 1);
+      assert.equal(await db.$count(Posts), 1);
+    } finally {
+      await pg`drop trigger synchronize_inbound_note_author on activitypub_post`;
+      await pg`drop function synchronize_inbound_note_author()`;
+      await pg`drop sequence inbound_note_author_attempts`;
+    }
   });
 
   test('rolls back a partial materialization and allows retry', async () => {
@@ -4726,17 +5190,18 @@ const getMaterializedPost = async (objectUri: URL) => {
   return { content, mapping, post };
 };
 
-const createInboxFixture = async () => {
+const createInboxFixture = async (actorUri = remoteActorUri) => {
+  const actorKeyUri = new URL('#main-key', actorUri);
   const remoteKeyPair = await generateCryptoKeyPair('RSASSA-PKCS1-v1_5');
   const remoteKey = new CryptographicKey({
-    id: remoteKeyUri,
-    owner: remoteActorUri,
+    id: actorKeyUri,
+    owner: actorUri,
     publicKey: remoteKeyPair.publicKey,
   });
-  const remoteActor = new Person({ id: remoteActorUri, publicKey: remoteKey });
+  const remoteActor = new Person({ id: actorUri, publicKey: remoteKey });
   const documents = new Map<string, unknown>([
-    [remoteActorUri.href, await remoteActor.toJsonLd({ format: 'expand' })],
-    [remoteKeyUri.href, await remoteKey.toJsonLd({ format: 'expand' })],
+    [actorUri.href, await remoteActor.toJsonLd({ format: 'expand' })],
+    [actorKeyUri.href, await remoteKey.toJsonLd({ format: 'expand' })],
   ]);
   const documentLoader: DocumentLoader = async (url) => {
     const document = documents.get(url);
@@ -4769,23 +5234,26 @@ const createInboxFixture = async () => {
     activityId: URL | null,
     replyTarget?: URL,
     audience: URL | URL[] = PUBLIC_COLLECTION,
+    noteOverride?: Note,
   ) => {
-    const note = new Note({
-      attribution: remoteActorUri,
-      content: 'Hello',
-      id: objectUri,
-      ...(replyTarget ? { replyTarget } : {}),
-      ...(Array.isArray(audience) ? { tos: audience } : { to: audience }),
-    });
+    const note =
+      noteOverride ??
+      new Note({
+        attribution: actorUri,
+        content: 'Hello',
+        id: objectUri,
+        ...(replyTarget ? { replyTarget } : {}),
+        ...(Array.isArray(audience) ? { tos: audience } : { to: audience }),
+      });
     documents.set(objectUri.href, await note.toJsonLd({ format: 'expand' }));
-    const activity = new Create({ actor: remoteActorUri, id: activityId, object: note });
+    const activity = new Create({ actor: actorUri, id: activityId, object: note });
     const request = new Request(new URL(path, 'https://kos.moe'), {
       body: JSON.stringify(await activity.toJsonLd({ contextLoader })),
       headers: { 'content-type': 'application/activity+json' },
       method: 'POST',
     });
 
-    return signRequest(request, remoteKeyPair.privateKey, remoteKeyUri);
+    return signRequest(request, remoteKeyPair.privateKey, actorKeyUri);
   };
 
   return { createSignedCreateRequest, federation };

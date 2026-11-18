@@ -162,6 +162,14 @@ describe('PostHog Web client', () => {
     globals.__KOSMO_CHANNEL__ = 'dev';
 
     analytics.trackAnalytics('profile_created', { selected_profile_id: 'profile-id' });
+    analytics.trackAnalyticsScreen('/home');
+
+    assert.equal(initCalls.length, 0);
+    assert.equal(instances.length, 0);
+  });
+
+  it('웹에서는 native screen capture를 추가하지 않는다', () => {
+    analytics.trackAnalyticsScreen('/home');
 
     assert.equal(initCalls.length, 0);
     assert.equal(instances.length, 0);
@@ -185,6 +193,7 @@ describe('PostHog Web client', () => {
     const instance = instances[0];
     assert.ok(instance);
     const properties = {
+      ai_prohibit_image_count: 2,
       selected_profile_id: 'profile-id',
       visibility: 'DIRECT' as const,
     };

@@ -96,8 +96,18 @@ test('Fedify runtime metrics scrape through Prometheus and stop on shutdown', as
       assert.match(scrape, /fedify_http_server_request_count_total\\{[^}]*http_request_method="GET"[^}]*http_response_status_code="404"[^}]*\\} 1/);
       const queueDepth = scrape.split("\\n").filter((line) => line.startsWith("fedify_queue_depth{"));
       assert.equal(queueDepth.length, 6);
-      assert.ok(queueDepth.some((line) => line.includes('fedify_federation_instance_id="fedify-1"') && line.includes('fedify_queue_depth_state="queued"') && line.endsWith(" 7")));
-      assert.ok(queueDepth.some((line) => line.includes('fedify_federation_instance_id="fedify-2"') && line.includes('fedify_queue_depth_state="delayed"') && line.endsWith(" 2")));
+      const federationInstanceIds = new Set(queueDepth.map((line) => {
+        const federationInstanceId = line.match(/fedify_federation_instance_id="([^"]*)"/)?.[1];
+        assert.ok(federationInstanceId, "Queue depth samples must have nonempty federation instance IDs.");
+        return federationInstanceId;
+      }));
+      assert.equal(federationInstanceIds.size, 2);
+      for (const federationInstanceId of federationInstanceIds) {
+        const instanceLabel = 'fedify_federation_instance_id="' + federationInstanceId + '"';
+        assert.ok(queueDepth.some((line) => line.includes(instanceLabel) && line.includes('fedify_queue_depth_state="queued"') && line.endsWith(" 7")));
+        assert.ok(queueDepth.some((line) => line.includes(instanceLabel) && line.includes('fedify_queue_depth_state="ready"') && line.endsWith(" 5")));
+        assert.ok(queueDepth.some((line) => line.includes(instanceLabel) && line.includes('fedify_queue_depth_state="delayed"') && line.endsWith(" 2")));
+      }
       assert.ok(fedifyMeterProvider);
       fedifyMeterProvider.getMeter("@fedify/fedify", "2.4.0")
         .createCounter("activitypub.delivery.sent", { description: "ActivityPub delivery attempts.", unit: "{attempt}" })

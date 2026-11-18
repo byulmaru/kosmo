@@ -106,6 +106,8 @@ function mediaForCount(count: number): PostMediaItem[] {
   const normalizedCount = Math.max(1, Math.min(mediaUrls.length, Math.trunc(count)));
 
   return mediaUrls.slice(0, normalizedCount).map((url, index) => ({
+    aiProhibitFilterApplied:
+      index === 0 ? true : index === 1 ? false : index === 2 ? null : undefined,
     altText: `스토리 첨부 이미지 ${index + 1}`,
     id: `post-media-viewer-story-${index + 1}`,
     url,

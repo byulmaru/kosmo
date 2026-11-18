@@ -56,11 +56,14 @@ For everyday development, run:
 pnpm dev
 ```
 
-This starts the prepared PostgreSQL, reuses the repository's existing ephemeral
-Temporal development server, then runs API, Web, App, Worker, and the Fedify
-queue consumer. It does not run migrations, bootstrap the Local Instance, reset,
-seed, or delete database data. Run `pnpm local:down` to stop PostgreSQL while
-preserving its named volume. Temporal stops with the development process.
+This starts the prepared PostgreSQL and best-effort local Redis, reuses the
+repository's existing ephemeral Temporal development server, then runs API, Web,
+App, Worker, and the Fedify queue consumer. API and Worker receive the local
+`REDIS_URL`; if Redis is unavailable, their database fallback remains available
+and service startup continues. It does not run migrations, bootstrap the Local
+Instance, reset, seed, or delete database data. Run `pnpm local:down` to stop
+PostgreSQL and Redis while preserving PostgreSQL's named volume. Temporal stops
+with the development process.
 Removing the PostgreSQL volume is an explicit destructive operation and is not
 part of the normal local commands.
 
@@ -121,8 +124,10 @@ contract. Server deployments and tests override these defaults with `PORT`.
 ### Local Runtime Ports And Storage
 
 PostgreSQL listens only on `127.0.0.1:54328` and stores data in the
-`kosmo-local-postgres_postgres-data` named volume. Worker health/readiness uses
-`127.0.0.1:8081`; Fedify consumer health/readiness uses `127.0.0.1:8082`.
+`kosmo-local-postgres_postgres-data` named volume. Redis listens only on
+`127.0.0.1:63798`, keeps no persistent data, and is not required for API or
+Worker startup/readiness. Worker health/readiness uses `127.0.0.1:8081`; Fedify
+consumer health/readiness uses `127.0.0.1:8082`.
 
 Temporal listens on `127.0.0.1:7233`; its coordinator-only health endpoint uses
 `127.0.0.1:8083`. `pnpm dev` reuses
@@ -146,7 +151,13 @@ The test database connection string is defined in `.env.test`:
 DATABASE_URL=postgres://kosmo:kosmo@localhost:54329/kosmo_test
 ```
 
-`db:test:push` applies the migration chain before synchronizing the Drizzle schema, so reset a legacy push-only test database before the first run after this change. `pnpm db:test:reset` recreates only the default `kosmo_test` database while keeping the shared Postgres server running. Use `pnpm db:test:down` to stop the server, or add `-- --volumes --remove-orphans` when the Docker volume must also be removed.
+The test Compose project also provides a dedicated Redis on
+`127.0.0.1:63799`. For local Redis-enabled test runs, start it with
+`docker compose -f docker-compose.test.yml up -d redis` and set
+`KOSMO_TEST_REDIS_URL=redis://127.0.0.1:63799`; CI does this for Core, API, and
+Worker. Tests use unique cache keys and do not flush the test Redis database.
+
+`db:test:push` applies the migration chain before synchronizing the Drizzle schema, so reset a legacy push-only test database before the first run after this change. `pnpm db:test:reset` recreates only the default `kosmo_test` database while keeping the test services running. Use `pnpm db:test:down` to stop the test services, or add `-- --volumes --remove-orphans` when the PostgreSQL Docker volume must also be removed.
 
 ## Web E2E
 

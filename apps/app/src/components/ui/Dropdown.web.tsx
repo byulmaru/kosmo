@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { spacing } from '@/theme/tokens';
 import { OverlayPortal } from './OverlayPortal';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { DropdownProps } from './Dropdown';
 
 export function Dropdown({
@@ -17,13 +18,15 @@ export function Dropdown({
   viewportInset = spacing.sm,
   gap = spacing.sm,
   maxWidth,
-  maxHeight = 430,
+  maxHeight: maxHeightProp,
   placement,
   horizontalPlacement = 'start',
   verticalPlacement = 'after',
 }: DropdownProps) {
   // Geometry and event containment require the actual platform elements.
   const contentRef = useRef<View>(null);
+  const maxHeight = maxHeightProp ?? 430;
+  const intrinsicAutoPlacement = verticalPlacement === 'auto' && maxHeightProp === undefined;
   const [position, setPosition] = useState<{
     left: number;
     maxHeight: number;
@@ -78,7 +81,9 @@ export function Dropdown({
       const desiredHeight = Math.min(maxHeight, availableHeight);
       const below = Math.max(0, bottomEdge - insets.bottom - rect.bottom - gap);
       const above = Math.max(0, rect.top - topEdge - insets.top - gap);
-      const autoBottom = below >= desiredHeight || below >= above;
+      const autoBottom = intrinsicAutoPlacement
+        ? height === 0 || below >= height
+        : below >= desiredHeight || below >= above;
       const autoPlacement = autoBottom ? 'bottom' : 'top';
       const availablePlacementHeight = Math.min(
         desiredHeight,
@@ -165,6 +170,7 @@ export function Dropdown({
     anchorInset,
     gap,
     horizontalPlacement,
+    intrinsicAutoPlacement,
     maxHeight,
     maxWidth,
     minWidth,
@@ -221,6 +227,13 @@ export function Dropdown({
     <OverlayPortal>
       <View
         ref={contentRef}
+        {...{
+          onKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.stopPropagation();
+            }
+          },
+        }}
         {...{
           dataSet: {
             dropdownOpen: active ? 'true' : undefined,

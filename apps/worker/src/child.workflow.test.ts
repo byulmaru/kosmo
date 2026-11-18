@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
-import { temporalTestExecutable } from './temporal-test-executable.js';
+import { createTestWorkflowEnvironment } from './temporal-test-environment.js';
+import type { TestWorkflowEnvironment } from '@temporalio/testing';
 import type { ChildWorkflowInput, ChildWorkflowResult } from './test-fixtures/child-workflow';
 
 const workflowsPath = new URL('./test-fixtures/child-workflow.ts', import.meta.url).pathname;
@@ -23,9 +23,7 @@ test(
   'runChildWorkflow execute mode forwards args and returns the child result',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-child-execute-${process.pid}`;
     const worker = await createWorker(environment, taskQueue);
@@ -55,9 +53,7 @@ test(
   'runChildWorkflow start mode preserves an abandoned child for native handle signaling',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-child-start-${process.pid}`;
     const worker = await createWorker(environment, taskQueue);
@@ -92,9 +88,7 @@ test(
   'runChildWorkflow execute mode propagates a child Workflow failure',
   { timeout: 120_000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: temporalTestExecutable },
-    });
+    const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
     const taskQueue = `${KOSMO_TASK_QUEUE}-child-failure-${process.pid}`;
     const worker = await createWorker(environment, taskQueue);

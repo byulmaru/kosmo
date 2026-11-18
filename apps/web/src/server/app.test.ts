@@ -1,18 +1,25 @@
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
+import { serve } from '@hono/node-server';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { parse } from 'hono/utils/cookie';
 import { Configuration, enableNonRepudiationChecks } from 'openid-client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
+import graphqlRoutes from './routes/graphql';
+import type { ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { federation } from '@kosmo/fedify';
 import type { Hono } from 'hono';
 import type {
   authorizationCodeGrant as oidcAuthorizationCodeGrant,
   discovery as oidcDiscovery,
 } from 'openid-client';
+
+const nativeFetch = globalThis.fetch.bind(globalThis);
 
 const {
   authorizationCodeGrant,
@@ -21,6 +28,7 @@ const {
   createSession,
   discovery,
   federationFetch,
+  postCommit,
   revokeSession,
   setInboundObservabilityReporter,
 } = vi.hoisted(() => ({
@@ -31,10 +39,13 @@ const {
     vi.fn<(identity: { displayName: string; oidcSubject: string }) => Promise<string>>(),
   discovery: vi.fn<typeof oidcDiscovery>(),
   federationFetch: vi.fn<typeof federation.fetch>(),
-  revokeSession:
-    vi.fn<
-      (input: { token?: string }) => Promise<{ status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED' }>
-    >(),
+  postCommit: vi.fn<() => Promise<void>>(),
+  revokeSession: vi.fn<
+    (input: { token?: string }) => Promise<{
+      postCommit: () => Promise<void>;
+      status: 'REVOKED' | 'ALREADY_UNAUTHENTICATED';
+    }>
+  >(),
   setInboundObservabilityReporter: vi.fn(),
 }));
 
@@ -118,7 +129,8 @@ beforeEach(() => {
       }) as unknown as Awaited<ReturnType<typeof oidcAuthorizationCodeGrant>>,
   );
   createSession.mockResolvedValue('kosmo-session-token');
-  revokeSession.mockResolvedValue({ status: 'REVOKED' });
+  postCommit.mockResolvedValue(undefined);
+  revokeSession.mockResolvedValue({ postCommit, status: 'REVOKED' });
   federationFetch.mockImplementation(async (request, options) => {
     if (!options.onNotFound) {
       throw new Error('Missing federation fallback');
@@ -375,6 +387,38 @@ describe('Web logout BFF', () => {
     expect(response.headers.get('set-cookie')).toContain('SameSite=Lax');
     expect(response.headers.get('set-cookie')).toContain('Secure');
     expect(revokeSession).toHaveBeenCalledWith({ token: 'cookie-token' });
+    expect(postCommit).toHaveBeenCalledOnce();
+  });
+
+  test('기다리던 post-commit이 끝난 뒤에 cookie를 제거하고 성공을 반환한다', async () => {
+    const postCommitStarted = Promise.withResolvers<void>();
+    const postCommitRelease = Promise.withResolvers<void>();
+    postCommit.mockImplementationOnce(async () => {
+      postCommitStarted.resolve();
+      await postCommitRelease.promise;
+    });
+    let responseSettled = false;
+
+    const responsePromise = Promise.resolve(
+      app.request('https://kos.moe/logout', {
+        headers: {
+          cookie: 'kosmo_session=cookie-token',
+          origin: 'https://kos.moe',
+        },
+        method: 'POST',
+      }),
+    );
+    void responsePromise.then(() => {
+      responseSettled = true;
+    });
+
+    await postCommitStarted.promise;
+    expect(responseSettled).toBe(false);
+
+    postCommitRelease.resolve();
+    const response = await responsePromise;
+    expect(response.status).toBe(204);
+    expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
   });
 
   test('cookie가 없어도 이미 인증 불가한 성공으로 처리한다', async () => {
@@ -472,6 +516,7 @@ describe('GraphQL proxy', () => {
       name: 'anonymous request',
     },
   ])('forwards a $name', async ({ expectedAuthorization, headers: requestHeaders }) => {
+    const queryBody = '{"query":"{ __typename }"}';
     let body = '';
     fetch = vi.fn<typeof globalThis.fetch>(async (_input, init) => {
       body = await new Response(init?.body).text();
@@ -491,7 +536,7 @@ describe('GraphQL proxy', () => {
       }
     }
     const response = await app.request('/graphql', {
-      body: '{"query":"{ __typename }"}',
+      body: queryBody,
       headers,
       method: 'POST',
     });
@@ -504,11 +549,134 @@ describe('GraphQL proxy', () => {
     expect(forwardedHeaders.get('content-type')).toBe('application/json');
     expect(forwardedHeaders.get('accept')).toBe('application/graphql-response+json');
     expect(forwardedHeaders.get('authorization') ?? undefined).toBe(expectedAuthorization);
-    expect(body).toBe('{"query":"{ __typename }"}');
+    expect(body).toBe(queryBody);
     expect(response.status).toBe(202);
     expect(response.headers.get('x-upstream')).toBe('yes');
     expect(await response.text()).toBe('upstream-body');
   });
+
+  test('cancels an upstream SSE request when a loopback client cancels its response reader', async () => {
+    const event = 'event: next\ndata: {"payload":{"data":{"__typename":"Query"}}}\n\n';
+    const requestBody = '{"query":"subscription { __typename }"}';
+    let upstreamBody = '';
+    let upstreamSignal: AbortSignal | undefined;
+    let upstreamResponse: ServerResponse | undefined;
+    let upstreamResponseClosed = false;
+    let resolveUpstreamResponseClosed!: () => void;
+    const upstreamClosed = new Promise<void>((resolve) => {
+      resolveUpstreamResponseClosed = resolve;
+    });
+    const upstreamServer = createServer((request, response) => {
+      upstreamResponse = response;
+      response.on('close', () => {
+        if (!response.writableEnded) {
+          upstreamResponseClosed = true;
+          resolveUpstreamResponseClosed();
+        }
+      });
+      request.setEncoding('utf8');
+      request.on('data', (chunk: string) => {
+        upstreamBody += chunk;
+      });
+      request.on('end', () => {
+        response.writeHead(200, { 'content-type': 'text/event-stream' });
+        response.write(event);
+      });
+    });
+    let bffServer: ReturnType<typeof serve> | undefined;
+    let clientReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    let closeDeadline: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        upstreamServer.once('error', reject);
+        upstreamServer.listen(0, '127.0.0.1', resolve);
+      });
+      const upstreamAddress = upstreamServer.address();
+      if (!upstreamAddress || typeof upstreamAddress === 'string') {
+        throw new Error('Could not read the upstream test server address.');
+      }
+      const upstreamOrigin = `http://127.0.0.1:${upstreamAddress.port}`;
+      vi.stubEnv('INTERNAL_API_ORIGIN', upstreamOrigin);
+      fetch = vi.fn((input, init) => {
+        upstreamSignal = init?.signal ?? undefined;
+        return nativeFetch(input, init);
+      });
+      vi.stubGlobal('fetch', fetch);
+
+      let resolveBffAddress!: (address: AddressInfo) => void;
+      let rejectBffAddress!: (cause: Error) => void;
+      const bffAddressPromise = new Promise<AddressInfo>((resolve, reject) => {
+        resolveBffAddress = resolve;
+        rejectBffAddress = reject;
+      });
+      bffServer = serve(
+        {
+          fetch: graphqlRoutes.fetch.bind(graphqlRoutes),
+          hostname: '127.0.0.1',
+          overrideGlobalObjects: false,
+          port: 0,
+        },
+        resolveBffAddress,
+      );
+      bffServer.once('error', rejectBffAddress);
+      const bffAddress = await bffAddressPromise;
+      const response = await nativeFetch(`http://127.0.0.1:${bffAddress.port}/graphql`, {
+        body: requestBody,
+        headers: {
+          accept: 'text/event-stream',
+          'content-type': 'application/json',
+        },
+        method: 'POST',
+      });
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('The loopback GraphQL response did not have a body.');
+      }
+      clientReader = reader;
+
+      let eventData = '';
+      const decoder = new TextDecoder();
+      while (!eventData.includes('\n\n')) {
+        const chunk = await reader.read();
+        if (chunk.done) {
+          break;
+        }
+        eventData += decoder.decode(chunk.value, { stream: true });
+      }
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('text/event-stream');
+      expect(eventData).toContain(event);
+      expect(upstreamBody).toBe(requestBody);
+      expect(upstreamSignal).toBeInstanceOf(AbortSignal);
+      expect(upstreamSignal?.aborted).toBe(false);
+
+      await reader.cancel();
+      const upstreamClosedBeforeDeadline = await Promise.race([
+        upstreamClosed.then(() => true),
+        new Promise<boolean>((resolve) => {
+          closeDeadline = setTimeout(() => resolve(false), 1500);
+        }),
+      ]);
+
+      expect(upstreamClosedBeforeDeadline).toBe(true);
+      expect(upstreamResponseClosed).toBe(true);
+      expect(upstreamSignal?.aborted).toBe(true);
+    } finally {
+      if (closeDeadline) {
+        clearTimeout(closeDeadline);
+      }
+      await clientReader?.cancel().catch(() => {});
+      upstreamResponse?.destroy();
+      if (bffServer?.listening) {
+        await new Promise<void>((resolve) => bffServer?.close(() => resolve()));
+      }
+      if (upstreamServer.listening) {
+        await new Promise<void>((resolve) => upstreamServer.close(() => resolve()));
+      }
+    }
+  }, 5000);
 
   test('rejects unsupported methods without calling the API', async () => {
     const response = await app.request('/graphql', {
@@ -587,6 +755,39 @@ describe('runtime routing', () => {
       expect(head.headers.get('content-type')).toContain('text/html');
       expect(await head.text()).toBe('');
     }
+  });
+
+  test('serves valid image-use terms URLs as public SPA documents without navigation headers', async () => {
+    const path = '/terms/image-use/v1?personal=DENY&noncommercial=DENY&commercial=DENY';
+    const headers = { 'user-agent': 'Googlebot/2.1' };
+    const response = await app.request(path, { headers });
+    const head = await app.request(path, { headers, method: 'HEAD' });
+    const nonDocument = await app.request(path, {
+      headers: { accept: 'application/activity+json' },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(response.headers.get('cache-control')).toBe('no-cache');
+    expect(response.headers.get('vary')).toContain('Accept');
+    expect(await response.text()).toBe('<html>expo app</html>');
+    expect(head.status).toBe(200);
+    expect(head.headers.get('content-type')).toContain('text/html');
+    expect(head.headers.get('cache-control')).toBe('no-cache');
+    expect(head.headers.get('vary')).toContain('Accept');
+    expect(await head.text()).toBe('');
+    expect(nonDocument.status).toBe(404);
+    expect(await nonDocument.text()).toBe('404 Not Found');
+  });
+
+  test.each([
+    '/terms/image-use/v1?personal=DENY&noncommercial=DENY&commercial=DENY&extra=value',
+    '/terms/image-use/v1?personal=DENY&personal=DENY&noncommercial=DENY&commercial=DENY',
+  ])('rejects invalid image-use terms URL %s before the SPA fallback', async (path) => {
+    const response = await app.request(path);
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe('유효하지 않은 이미지 이용 조건입니다.');
   });
 
   test.each(['/child-safety', '/privacy/changes/2026-10-13'])(

@@ -109,9 +109,13 @@ mock.module('react-relay', {
 
 mock.module(require.resolve('lucide-react-native'), {
   exports: {
+    AtSignIcon: 'AtSignIcon',
     ChevronLeftIcon: 'ChevronLeftIcon',
     ChevronRightIcon: 'ChevronRightIcon',
+    GlobeIcon: 'GlobeIcon',
+    LockIcon: 'LockIcon',
     MessageCircle: 'MessageCircle',
+    MoonIcon: 'MoonIcon',
     XIcon: 'XIcon',
   },
 } as unknown as Parameters<typeof mock.module>[1]);

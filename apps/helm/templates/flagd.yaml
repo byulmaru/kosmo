@@ -24,17 +24,6 @@ spec:
             - {$ref: isDeveloper}
             - 'on'
             - 'off'
-      profile-migration:
-        state: ENABLED
-        variants:
-          'on': true
-          'off': false
-        defaultVariant: 'off'
-        targeting:
-          if:
-            - {$ref: isDeveloper}
-            - 'on'
-            - 'off'
       profile-tag-mute:
         state: ENABLED
         variants:
@@ -57,7 +46,7 @@ spec:
             - {$ref: isDeveloper}
             - 'on'
             - 'off'
-      post-composer-nightshade:
+      federated-timeline:
         state: ENABLED
         variants:
           'on': true
@@ -68,6 +57,12 @@ spec:
             - {$ref: isDeveloper}
             - 'on'
             - 'off'
+      post-composer-nightshade:
+        state: ENABLED
+        variants:
+          'on': true
+          'off': false
+        defaultVariant: 'on'
     $evaluators:
       isDeveloper:
         in:
