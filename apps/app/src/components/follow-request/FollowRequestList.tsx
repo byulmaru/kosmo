@@ -11,6 +11,7 @@ import type { FollowRequestList_profile$key } from './__generated__/FollowReques
 import type { FollowRequestListNextPageQuery } from './__generated__/FollowRequestListNextPageQuery.graphql';
 
 type FollowRequestListProps = {
+  active?: boolean;
   profile: FollowRequestList_profile$key;
 };
 
@@ -32,7 +33,7 @@ const followRequestListFragment = graphql`
   }
 `;
 
-export function FollowRequestList({ profile }: FollowRequestListProps) {
+export function FollowRequestList({ active = true, profile }: FollowRequestListProps) {
   const theme = useTheme();
   const pagination = usePaginationFragment<
     FollowRequestListNextPageQuery,
@@ -50,6 +51,7 @@ export function FollowRequestList({ profile }: FollowRequestListProps) {
     itemCount: edges.length,
     loadNext: pagination.loadNext,
     pageSize: 20,
+    webDocumentActive: active,
   });
 
   if (!connection) {

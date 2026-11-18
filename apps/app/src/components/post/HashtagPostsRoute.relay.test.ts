@@ -40,11 +40,19 @@ mockModule('react-relay', {
 mockModule('expo-router', {
   useLocalSearchParams: () => routeParams,
   useRouter: () => ({ back: () => undefined, canGoBack: () => false, replace: () => undefined }),
+  useIsFocused: () => true,
 });
-mockModule('lucide-react-native', { ArrowLeftIcon: 'ArrowLeftIcon' });
-mockModule(require.resolve('lucide-react-native'), { ArrowLeftIcon: 'ArrowLeftIcon' });
+mockModule('lucide-react-native', { ArrowLeftIcon: 'ArrowLeftIcon', Menu: 'Menu' });
+mockModule(require.resolve('lucide-react-native'), {
+  ArrowLeftIcon: 'ArrowLeftIcon',
+  Menu: 'Menu',
+});
+mockModule('react-native-safe-area-context', { useSafeAreaInsets: () => ({ top: 0 }) });
+mockModule('@/components/shell/ShellChromeContext', { useShellChrome: () => null });
 mockModule('react-native', {
   Platform: { OS: 'web' },
+  View: 'View',
+  useWindowDimensions: () => ({ width: 1024 }),
   StyleSheet: { create: <T>(styles: T) => styles },
 });
 mockModule('@/components/PageHeader', {
@@ -66,7 +74,7 @@ mockModule('@/observability/UnexpectedErrorContext', {
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({ foregroundPrimary: '#111111' }),
 });
-mockModule('@/theme/tokens', { spacing: { sm: 8 } });
+mockModule('@/theme/tokens', { spacing: { sm: 8 }, breakpoints: { compact: 768, full: 1280 } });
 
 before(async () => {
   ({ default: HashtagPostsScreen } =

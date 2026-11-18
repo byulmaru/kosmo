@@ -94,6 +94,44 @@ jobs:
         run: |
           set -euo pipefail
 
+          wait_log=""
+          print_hpa_conditions_on_failure() {
+            local exit_status=$?
+            local hpa
+            local hpa_json
+            local hpa_conditions
+            local diagnostic_status
+
+            trap - EXIT
+            set +e
+            if (( exit_status != 0 )); then
+              for hpa in kosmo-api kosmo-web; do
+                echo "Live HPA conditions for ${hpa}:"
+                if hpa_json="$(timeout 15s argocd --server "${ARGOCD_SERVER}" --grpc-web app get-resource kosmo-prod \
+                  --group autoscaling \
+                  --kind HorizontalPodAutoscaler \
+                  --resource-name "${hpa}" \
+                  --output json 2>&1)"; then
+                  if hpa_conditions="$(jq -r '(.status.conditions // []) as $conditions | if ($conditions | length) == 0 then "  (no status.conditions)" else $conditions[] | "  type=\(.type // "") status=\(.status // "") reason=\(.reason // "") message=\(.message // "")" end' <<<"${hpa_json}")"; then
+                    printf '%s\n' "${hpa_conditions}"
+                  else
+                    echo "Could not parse live HPA conditions for ${hpa}."
+                  fi
+                else
+                  diagnostic_status=$?
+                  printf 'Could not retrieve live HPA conditions for %s (exit %s):\n%s\n' \
+                    "${hpa}" "${diagnostic_status}" "${hpa_json}"
+                fi
+              done
+            fi
+            if [[ -n "${wait_log}" ]]; then
+              rm -f "${wait_log}" || true
+            fi
+            exit "${exit_status}"
+          }
+          trap print_hpa_conditions_on_failure EXIT
+          wait_log="$(mktemp)"
+
           argocd --server "${ARGOCD_SERVER}" --grpc-web app set kosmo-prod \
             --revision "${TARGET_SHA}" \
             -p "version=${TARGET_SHA}" \
@@ -105,10 +143,47 @@ jobs:
             --revision "${TARGET_SHA}" \
             --prune \
             --timeout 600
-          argocd --server "${ARGOCD_SERVER}" --grpc-web app wait kosmo-prod \
-            --sync \
-            --health \
-            --timeout 600
+
+          health_wait_deadline=$(( $(date +%s) + 600 ))
+          while true; do
+            current_time="$(date +%s)"
+            remaining_seconds=$(( health_wait_deadline - current_time ))
+            if (( remaining_seconds <= 0 )); then
+              echo "::error::Argo CD health wait exceeded its 600-second deadline."
+              exit 1
+            fi
+
+            : >"${wait_log}"
+            if argocd --server "${ARGOCD_SERVER}" --grpc-web app wait kosmo-prod \
+              --sync \
+              --health \
+              --timeout "${remaining_seconds}" 2>&1 | tee "${wait_log}"; then
+              break
+            else
+              wait_pipeline_status=( "${PIPESTATUS[@]}" )
+              wait_status="${wait_pipeline_status[0]}"
+              if (( wait_pipeline_status[1] != 0 )); then
+                wait_status="${wait_pipeline_status[1]}"
+              fi
+            fi
+
+            if (( wait_status != 20 )) || ! grep -Eq "application 'kosmo-prod' health state has transitioned from [^[:space:]]+ to Degraded" "${wait_log}"; then
+              exit "${wait_status}"
+            fi
+
+            current_time="$(date +%s)"
+            remaining_seconds=$(( health_wait_deadline - current_time ))
+            if (( remaining_seconds <= 0 )); then
+              echo "::error::Argo CD health wait exceeded its 600-second deadline."
+              exit 1
+            fi
+
+            sleep_seconds=5
+            if (( remaining_seconds < sleep_seconds )); then
+              sleep_seconds="${remaining_seconds}"
+            fi
+            sleep "${sleep_seconds}"
+          done
 
           app_json="$(argocd --server "${ARGOCD_SERVER}" --grpc-web app get kosmo-prod --output json)"
           actual_source_revision="$(jq -r '.status.sync.revision' <<<"${app_json}")"

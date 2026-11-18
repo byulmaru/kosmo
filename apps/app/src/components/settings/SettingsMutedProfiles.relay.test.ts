@@ -358,7 +358,7 @@ describe('SettingsMutedProfiles with the real ProfileMuteAction', () => {
       });
     });
     rows = all('ProfileRow');
-    assert.equal(rows[0]?.props.avatarLabel, 'target');
+    assert.equal(rows[0]?.props.avatarLabel, '@updated');
     assert.equal(rows[1]?.props.avatarLabel, '같은 이름');
   });
 
@@ -368,8 +368,14 @@ describe('SettingsMutedProfiles with the real ProfileMuteAction', () => {
     await render(environment, onUnmuteSuccess);
     assert.equal(one('StateView').props.loading, true);
 
-    await respond(latestRequest('SettingsMutedProfilesQuery'), firstPage());
+    const page = firstPage();
+    const inactiveTarget =
+      page.currentSession.selectedProfile.profileMutes.edges[0]!.node.targetProfile;
+    Object.assign(inactiveTarget, { avatar: null, displayName: null, viewerState: null });
+    await respond(latestRequest('SettingsMutedProfilesQuery'), page);
     assert.equal(all('ProfileRow').length, 1);
+    assert.equal(all('ProfileRow')[0]?.props.displayName, '@target');
+    assert.equal(button('뮤트 해제').props.accessibilityLabel, '@target 뮤트 해제');
     assert.equal(button('뮤트 해제').props.loading, false);
 
     await act(async () => button('뮤트 해제').props.onPress());
@@ -418,6 +424,53 @@ describe('SettingsMutedProfiles with the real ProfileMuteAction', () => {
     assert.ok(viewerState);
     assert.equal(viewerState.profileMute, null);
     assert.equal(toastCalls.at(-1)?.tone, 'success');
+    assert.equal(onUnmuteSuccess.mock.callCount(), 1);
+  });
+
+  it('뮤트 해제 확인 응답의 viewerState 오류가 있어도 삭제 확인으로 성공 처리한다', async () => {
+    const environment = createEnvironment();
+    const onUnmuteSuccess = mock.fn();
+    await render(environment, onUnmuteSuccess);
+    await respond(latestRequest('SettingsMutedProfilesQuery'), firstPage());
+
+    await act(async () => button('뮤트 해제').props.onPress());
+    await act(async () => one('ConfirmationContent').props.onConfirm());
+
+    const succeeded = latestRequest('ProfileMuteControllerUnmuteMutation');
+    const requestedProfileMuteId = succeeded.variables.id as string;
+    assert.equal(requestedProfileMuteId, profileMuteId);
+    await act(async () => {
+      succeeded.sink.next({
+        data: {
+          unmuteProfile: {
+            profileMuteId: requestedProfileMuteId,
+            deletedProfileMuteId: requestedProfileMuteId,
+            targetProfile: {
+              __typename: 'Profile',
+              id: targetProfileId,
+              viewerState: null,
+            },
+          },
+        },
+        errors: [
+          {
+            message: 'viewerState unavailable',
+            path: ['unmuteProfile', 'targetProfile', 'viewerState'],
+          },
+        ],
+      });
+      succeeded.sink.complete();
+    });
+    await act(async () => Promise.resolve());
+
+    assert.equal(all('ProfileRow').length, 0);
+    const target = environment.getStore().getSource().get(targetProfileId);
+    assert.ok(target);
+    assert.equal(target.viewerState, null);
+    assert.deepEqual(
+      toastCalls.map(({ tone }) => tone),
+      ['success'],
+    );
     assert.equal(onUnmuteSuccess.mock.callCount(), 1);
   });
 });

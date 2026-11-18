@@ -14,7 +14,7 @@ export type InboundMentionCandidate = {
 };
 
 export type StoredInboundMentionCandidates = {
-  readonly hasActiveLocalProfile: boolean;
+  readonly activeLocalProfileIds: string[];
   readonly candidates: InboundMentionCandidate[];
   readonly knownActorHrefs: string[];
 };
@@ -46,7 +46,7 @@ export const resolveStoredInboundMentionCandidates = async (
   targetHrefs: readonly string[],
 ): Promise<StoredInboundMentionCandidates> => {
   if (targetHrefs.length === 0) {
-    return { hasActiveLocalProfile: false, candidates: [], knownActorHrefs: [] };
+    return { activeLocalProfileIds: [], candidates: [], knownActorHrefs: [] };
   }
 
   const profileRows = await db
@@ -68,7 +68,7 @@ export const resolveStoredInboundMentionCandidates = async (
     .where(inArray(ActivityPubActors.uri, [...targetHrefs]));
 
   if (profileRows.length === 0) {
-    return { hasActiveLocalProfile: false, candidates: [], knownActorHrefs: [] };
+    return { activeLocalProfileIds: [], candidates: [], knownActorHrefs: [] };
   }
 
   const configuredLocalInstance = await resolveConfiguredLocalInstance();
@@ -117,12 +117,17 @@ export const resolveStoredInboundMentionCandidates = async (
   });
 
   return {
-    hasActiveLocalProfile: profileRows.some(
-      ({ instanceKind, instanceState, profileState }) =>
-        instanceKind === InstanceKind.LOCAL &&
-        instanceState === InstanceState.ACTIVE &&
-        profileState === ProfileState.ACTIVE,
-    ),
+    activeLocalProfileIds: [
+      ...new Set(
+        profileRows.flatMap(({ instanceKind, instanceState, profileId, profileState }) =>
+          instanceKind === InstanceKind.LOCAL &&
+          instanceState === InstanceState.ACTIVE &&
+          profileState === ProfileState.ACTIVE
+            ? [profileId]
+            : [],
+        ),
+      ),
+    ],
     candidates,
     knownActorHrefs: profileRows.map(({ actorHref }) => actorHref),
   };

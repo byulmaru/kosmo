@@ -10,11 +10,23 @@
 - security scanner나 CI step에 `continue-on-error`를 쓰는 경우, 후속 step에서 실패 여부를 명시적으로 판정해 workflow가 조용히 성공하지 않게 한다.
 - dependency, tooling, CI 명령이 바뀌면 변경 이유와 platform 제약을 리뷰에서 확인한다.
 
+## Mise Cache Warming
+
+- `.github/workflows/mise-cache.yml`은 mise 설정 또는 현재 consumer workflow 변경을 main에 push했을 때 세 profile을 데우며, 수동 실행도 지원한다. Profile은 Test의 ARM64 기본 설정, Lint의 x64 기본 설정, Semgrep의 x64 inline Python 3.12 설정과 맞춘다.
+- `jdx/mise-action` 기본 캐시를 사용한다. PR과 merge queue workflow는 GitHub Actions의 기본 branch 캐시를 읽을 수 있으므로 공유용 수동 warmup은 main ref에서 실행한다. 캐시는 키마다 불변이며, 설정이나 실행 환경에 맞는 기본 키만 재사용된다. 캐시 hit는 보장되지 않고 tool 다운로드의 HTTP 장애도 막지 않는다.
+- consumer의 mise action 버전이나 inline 설정이 바뀌면 해당 workflow를 warmup path filter에 포함하고 일치하는 profile을 유지한다.
+
 ## Expo, Relay, Web BFF
 
 - `apps/api`의 `lint:schema`는 runtime GraphQL schema를 사전식으로 정렬한 결과와 committed
   `schema.graphql`이 완전히 같은지 검사한다. `apps/api`의 aggregate `test`가 이를 먼저 실행하므로 schema를
   변경하면 generated SDL도 같은 변경에서 정렬해야 CI를 통과한다.
+- `pnpm --filter @kosmo/app licenses:generate`는 Relay나 Expo export 없이 pnpm production license report의
+  전체 `@kosmo/app` production package 버전을 사용한다. export에 들어가지 않는 production dependency도
+  포함하며, 이것은 실제 bundle 구성 목록을 뜻하지 않는다. production dependency가 바뀐 뒤 수동으로
+  실행한다. 생성 중 원본·NOTICE·supplement 텍스트를 확인하고, 검증된 upstream supplemental text는 source
+  commit을 확인해 `apps/app/licenses/`에 기록한다. 자동 freshness check는 없다. License data는 앱에서
+  offline으로 읽는다.
 - `apps/app`의 `prepare`, `dev`, `check`, `build`는 필요한 Relay generated artifact보다 먼저 `relay-compiler`를 실행한다. `__generated__`는 commit하지 않으므로 clean checkout과 CI에서도 compiler 선행을 생략하지 않는다.
 - universal client 검증은 `pnpm --filter @kosmo/app relay`, `check`, `export:web`을 분리해 실패 경계를 확인한다. `export:web`은 이전 환경의 `EXPO_PUBLIC_*` inline 값을 Metro cache에서 재사용하지 않도록 `expo export --clear`를 사용한다. Expo web export 산출물은 `apps/app/dist`이며 UI source를 소유하지 않는 `apps/web` Hono BFF가 이를 제공한다.
 - BFF 검증은 federation-first 전역 전달과 공식 미처리 callback, federation 표현의 404 보존, `/health`, browser 로그인/callback, cookie/Bearer GraphQL proxy, WebFinger/ActivityPub 응답, SPA deep-link fallback을 포함한다. Native session exchange는 API GraphQL mutation의 별도 API E2E로 검증한다. Expo export 성공만으로 server origin 계약이 검증됐다고 보지 않는다.

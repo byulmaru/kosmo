@@ -47,12 +47,12 @@ Kosmo 도메인의 핵심 보편 언어를 다음처럼 확정한다.
 
 ## Post Visibility 값
 
-| 값                 | 의미                                                                 |
-| ------------------ | -------------------------------------------------------------------- |
-| Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다          |
-| Unlisted           | 모든 viewer가 볼 수 있지만 검색/Hashtag Post List 후보가 되지 않는다 |
-| Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다       |
-| Mentioned Profiles | 작성자와 멘션된 Profile만 볼 수 있다                                 |
+| 값                 | 의미                                                                        |
+| ------------------ | --------------------------------------------------------------------------- |
+| Public             | 모든 viewer가 볼 수 있고 검색/Hashtag Post List 후보가 된다                 |
+| Unlisted           | 모든 viewer가 볼 수 있고 Hashtag Post List 후보가 되지만 검색 후보는 아니다 |
+| Followers Only     | 작성자, 작성자를 팔로우한 Profile, 멘션된 Profile이 볼 수 있다              |
+| Mentioned Profiles | 작성자와 멘션된 Profile만 볼 수 있다                                        |
 
 ## 문서 반영
 

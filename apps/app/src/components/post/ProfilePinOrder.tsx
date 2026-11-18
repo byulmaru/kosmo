@@ -41,7 +41,7 @@ export function useProfilePinOrder(profileKey: ProfilePinOrder_profile$key | nul
     const posts = profile?.pinnedPosts ?? [];
     const index = posts.findIndex((post) => post?.id === postId);
     const items: ActionMenuItem[] = [];
-    if (profile?.id !== selectedProfileId || profile?.instance.kind !== 'LOCAL' || index < 0) {
+    if (profile?.id !== selectedProfileId || profile?.instance?.kind !== 'LOCAL' || index < 0) {
       return { postId, items, pending: false };
     }
 

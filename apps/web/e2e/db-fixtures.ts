@@ -41,6 +41,7 @@ import {
 } from '@kosmo/core/post-content/server';
 import { temporalClient } from '@kosmo/core/temporal/client';
 import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
+import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { eq } from 'drizzle-orm';
 import { Temporal } from 'temporal-polyfill';
 import type { PostContentMentionReference } from '@kosmo/core/post-content/server';
@@ -154,6 +155,14 @@ async function waitForE2ETemporalWorkflows() {
 
 async function waitForE2EWorkflow({ runId, type, workflowId }: WorkflowInfo) {
   const handle = temporalClient.workflow.getHandle(workflowId, runId);
+
+  if (type === postQuoteOwnerWorkflow.workflow) {
+    // Quote owners stay open after committed commands. Finish through their
+    // normal drain barrier before the next test removes their stored resources.
+    await handle.signal('finishQuoteOwner');
+    await handle.result();
+    return;
+  }
 
   if (type === 'profileBlockWorkflow' || type === 'profileUnblockWorkflow') {
     // These tests verify the committed local transition. Synthetic remote

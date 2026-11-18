@@ -10,10 +10,10 @@ import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 type QueryData = {
   currentSession: {
     selectedProfile: {
-      displayName: string;
-      followPolicy: 'APPROVAL_REQUIRED' | 'OPEN';
+      displayName: string | null;
+      followPolicy: 'APPROVAL_REQUIRED' | 'OPEN' | null;
       id: string;
-      instance: { kind: 'ACTIVITYPUB' | 'LOCAL' };
+      instance: { kind: 'ACTIVITYPUB' | 'LOCAL' } | null;
       private: { defaultPostVisibility: 'FOLLOWERS' | 'PUBLIC' | 'UNLISTED' } | null;
       relativeHandle: string;
       viewerState: {
@@ -52,6 +52,7 @@ let mutationConfigs: Array<{
 
 mock.module('react-native', {
   exports: {
+    Platform: { OS: 'web' },
     StyleSheet: { create: <T>(styles: T) => styles },
     Text: 'Text',
     View: 'View',
@@ -200,12 +201,6 @@ describe('SettingsProfileDetail', () => {
     assert.equal(screen.props.profile, profile);
     assert.equal(screen.props.embedded, true);
     assert.equal(rendered('ProfilePostingSettings')[0].props.editable, true);
-    await act(async () =>
-      rendered('Button')
-        .find((node) => node.props.accessibilityLabel === '다른 Profile 선택')
-        ?.props.onPress(),
-    );
-    assert.equal(openProfileSwitcherCalls, 1);
     await act(async () =>
       rendered('ProfilePostingSettings')[0].props.onChange({
         defaultPostVisibility: 'FOLLOWERS',

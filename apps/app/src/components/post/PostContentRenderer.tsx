@@ -10,6 +10,7 @@ import { PostContentMention } from './PostContentMention';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
 import { PostContentWarning } from './PostContentWarning';
 import { usePostContentWarningReveal } from './PostContentWarningRevealContext';
+import { PostLinkPreviewCard } from './PostLinkPreview';
 import { PostMediaGallery } from './PostMediaGallery';
 import type {
   PostContentBlockNode,
@@ -20,6 +21,7 @@ import type {
 import type { Key, ReactNode } from 'react';
 import type { StyleProp, TextStyle } from 'react-native';
 import type { PostContentMentionProfile } from './PostContentMention';
+import type { PostLinkPreviewData } from './PostLinkPreview';
 import type { PostMediaItem } from './PostMediaGallery';
 import type { PostMediaOpenHandler } from './PostMediaImage';
 
@@ -41,6 +43,7 @@ export function PostContentRenderer({
   contentWarningPresentation = 'default',
   document: value,
   interactive = true,
+  linkPreview,
   media,
   mediaPresentation = 'default',
   mentionedProfiles,
@@ -55,6 +58,7 @@ export function PostContentRenderer({
   contentWarningPresentation?: PostContentWarningPresentation;
   document: unknown;
   interactive?: boolean;
+  linkPreview?: PostLinkPreviewData | null;
   media: ReadonlyArray<PostMediaItem> | null;
   mediaPresentation?: 'default' | 'hidden';
   mentionedProfiles: ReadonlyArray<PostContentMentionProfile>;
@@ -65,12 +69,17 @@ export function PostContentRenderer({
   size?: 'md' | 'lg';
 }) {
   const theme = useTheme();
-  const document = readPostContentDocumentV1(value)?.body ?? null;
+  const contentDocument = readPostContentDocumentV1(value);
+  const document = contentDocument?.body ?? null;
   const isProtected = Boolean(contentWarning);
   const { revealed, toggle } = usePostContentWarningReveal(postId, isProtected);
   const forcedRevealed = contentWarningPresentation === 'revealed';
   const contentVisible = forcedRevealed || !isProtected || revealed;
   const showContentWarning = Boolean(contentWarning) && !forcedRevealed;
+  const hasMedia = Boolean(
+    media?.length || contentDocument?.body.content.some((block) => block.type === 'media'),
+  );
+  const visibleLinkPreview = contentVisible && !hasMedia ? linkPreview : null;
   const bodyStyle = [
     styles.body,
     size === 'lg' ? typography.lg : typography.md,
@@ -112,7 +121,8 @@ export function PostContentRenderer({
   if (
     !showContentWarning &&
     !bodyContent &&
-    (!showMedia || (media !== null && media.length === 0))
+    (!showMedia || (media !== null && media.length === 0)) &&
+    !visibleLinkPreview
   ) {
     return null;
   }
@@ -127,6 +137,9 @@ export function PostContentRenderer({
         />
       ) : null}
       {bodyContent}
+      {visibleLinkPreview ? (
+        <PostLinkPreviewCard interactive={interactive} preview={visibleLinkPreview} />
+      ) : null}
       {contentVisible && showMedia ? (
         <PostMediaGallery
           interactive={interactive}

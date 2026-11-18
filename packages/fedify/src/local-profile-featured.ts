@@ -1,20 +1,13 @@
 import '@kosmo/core/polyfill';
 
-import {
-  db,
-  first,
-  Instances,
-  Posts,
-  ProfilePinnedPosts,
-  profilePinOrderKey,
-  Profiles,
-} from '@kosmo/core/db';
+import { db, first, Instances, Posts, ProfilePinnedPosts, Profiles } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { and, asc, eq, gt, or } from 'drizzle-orm';
 import { authorizeLocalPostNote, dispatchLocalPostNote } from './local-post-note';
 import { isCanonicalLocalProfileId } from './local-profile-actor';
 import type { CollectionDispatcher, RequestContext } from '@fedify/fedify';
 import type { Note } from '@fedify/vocab';
+import type { ProfilePinOrderKey } from '@kosmo/core/db';
 
 const PAGE_SIZE = 50;
 const FIRST_CURSOR = 'v1:first';
@@ -24,7 +17,7 @@ const ORDER_CURSOR_PREFIX = 'v2:after:';
 type FeaturedRow = {
   readonly id: string;
   readonly postId: string;
-  readonly key: Buffer;
+  readonly key: ProfilePinOrderKey;
 };
 
 const isLocalProfile = async (
@@ -57,7 +50,7 @@ const isLocalProfile = async (
   );
 };
 
-type FeaturedCursor = { id: string; key?: Buffer };
+type FeaturedCursor = { id: string; key?: ProfilePinOrderKey };
 
 const loadFeaturedRows = async (
   profileId: string,
@@ -68,7 +61,7 @@ const loadFeaturedRows = async (
     cursor?.key ??
     (cursor
       ? await db
-          .select({ key: profilePinOrderKey })
+          .select({ key: ProfilePinnedPosts.orderKey })
           .from(ProfilePinnedPosts)
           .where(
             and(eq(ProfilePinnedPosts.profileId, profileId), eq(ProfilePinnedPosts.id, cursor.id)),
@@ -78,14 +71,14 @@ const loadFeaturedRows = async (
           .then(
             (row) =>
               row?.key ??
-              Buffer.concat([
+              (Buffer.concat([
                 Buffer.from([0x94, 0x7f, 0xff, 0xff, 0xff, 1]),
                 Buffer.from(cursor.id.replaceAll('-', ''), 'hex'),
-              ]),
+              ]) as ProfilePinOrderKey),
           )
       : undefined);
   return db
-    .select({ id: ProfilePinnedPosts.id, postId: Posts.id, key: profilePinOrderKey })
+    .select({ id: ProfilePinnedPosts.id, postId: Posts.id, key: ProfilePinnedPosts.orderKey })
     .from(ProfilePinnedPosts)
     .innerJoin(Posts, eq(Posts.id, ProfilePinnedPosts.postId))
     .where(
@@ -94,13 +87,13 @@ const loadFeaturedRows = async (
         eq(Posts.profileId, profileId),
         key && cursor
           ? or(
-              gt(profilePinOrderKey, key),
-              and(eq(profilePinOrderKey, key), gt(ProfilePinnedPosts.id, cursor.id)),
+              gt(ProfilePinnedPosts.orderKey, key),
+              and(eq(ProfilePinnedPosts.orderKey, key), gt(ProfilePinnedPosts.id, cursor.id)),
             )
           : undefined,
       ),
     )
-    .orderBy(asc(profilePinOrderKey), asc(ProfilePinnedPosts.id))
+    .orderBy(asc(ProfilePinnedPosts.orderKey), asc(ProfilePinnedPosts.id))
     .limit(PAGE_SIZE + 1);
 };
 
@@ -119,7 +112,7 @@ const parseCursor = (cursor: string | null): FeaturedCursor | undefined | null =
     ) {
       return null;
     }
-    return { id, key: Buffer.from(hex, 'hex') };
+    return { id, key: Buffer.from(hex, 'hex') as ProfilePinOrderKey };
   }
   if (!cursor.startsWith(CURSOR_PREFIX)) {
     return null;
@@ -134,8 +127,8 @@ const toCursor = (row: FeaturedCursor): string =>
 const visibleFeaturedItems = async (
   context: RequestContext<void>,
   rows: readonly FeaturedRow[],
-): Promise<{ readonly id: string; readonly key: Buffer; readonly item: Note }[]> => {
-  const items: { id: string; key: Buffer; item: Note }[] = [];
+): Promise<{ readonly id: string; readonly key: ProfilePinOrderKey; readonly item: Note }[]> => {
+  const items: { id: string; key: ProfilePinOrderKey; item: Note }[] = [];
   for (const row of rows) {
     if (!(await authorizeLocalPostNote(context, { id: row.postId }))) {
       continue;
@@ -163,7 +156,7 @@ export const dispatchLocalProfileFeatured: CollectionDispatcher<
     return null;
   }
 
-  const visible: { id: string; key: Buffer; item: Note }[] = [];
+  const visible: { id: string; key: ProfilePinOrderKey; item: Note }[] = [];
   let nextAfterId = afterId;
   let hasMoreRaw = false;
   while (visible.length <= PAGE_SIZE) {

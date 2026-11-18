@@ -121,11 +121,11 @@ describe('Relay environment diagnostics', () => {
         })),
         [
           {
-            fieldPath: 'currentSession.selectedProfile.handle',
+            fieldPath: 'currentSession.selectedProfile.relativeHandle',
             owner: 'ProfileSwitcher_query',
           },
           {
-            fieldPath: 'currentSession.selectedProfile.relativeHandle',
+            fieldPath: 'currentSession.selectedProfile.handle',
             owner: 'ProfileSwitcher_query',
           },
           {

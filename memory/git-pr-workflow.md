@@ -85,7 +85,7 @@
 - PR은 `gh stack submit`으로 생성하거나 갱신한다. 2-layer 이상이면 이 명령이 원격 Stack 객체도
   함께 생성하거나 갱신해야 한다.
   - 기본은 대화형 editor에서 PR별 한국어 제목, 본문, Draft/Ready 상태, 포함 범위를 확인한다.
-  - 검증이 끝난 PR은 repository Ready 정책에 맞게 Ready로 제출한다.
+  - PR 범위의 구현·문서와 필수 CI 검증을 끝낸 뒤 repository Ready 정책에 맞게 Ready로 제출한다.
   - `--open`은 Stack의 새 PR과 기존 PR을 모두 Ready로 바꾸려는 의도가 명확할 때만 쓴다.
   - `--auto`는 editor를 생략하고 자동 제목과 더 넓은 PR 변경을 적용할 수 있으므로 기본값으로
     쓰지 않는다.
@@ -102,6 +102,13 @@
 - `gh stack submit`이 실패하면 원인을 진단해 복구 가능한 문제를 바로잡고 공식 명령으로 재시도한다.
   복구할 수 없으면 부분적으로 생성·수정된 PR, branch push, auto-merge/Draft 상태를 조회해 보고한다.
   `gh pr create`, ordinary unstacked PR fallback, 수동 Stack/base metadata 수정으로 나머지를 만들지 않는다.
+
+## CI And PR Completion
+
+- 구현 요청은 사용자가 명시적으로 PR을 요청하지 않아도 공식 `gh-stack` PR 제출을 기본으로 한다. 명시적인 local-only/no-PR 요청은 따른다. 변경이 검토 가능한 상태가 되면 생성·제출해 CI를 일찍 시작한다.
+- 테스트는 로컬에서 실행하지 않고 CI에서 실행한다. 로컬 테스트 실행을 PR 준비 조건으로 요구하지 않는다. PR 완료 보고와 Ready 전환은 PR 범위의 구현·문서와 필수 CI 검증을 모두 마친 뒤에 한다. 필수 CI는 최신 PR head SHA에서 모두 성공해야 하며, queued·pending·실패·확인 불가 상태에서는 완료로 보고하지 않는다.
+- `gh stack push` 또는 `gh stack submit` 뒤 최신 PR head SHA와 해당 commit의 필수 check 상태를 다시 조회한다. 변경으로 인한 CI 실패는 수정한 뒤 `gh stack push`로 게시하고 새 head SHA의 필수 CI 결과를 확인한다. 필요한 check가 누락·차단되었거나 외부 사유로 확인 불가능하면 최신 SHA와 check 상태를 근거로 완료가 미해결임을 보고하며 통과로 간주하지 않는다.
+- CI 성공은 PR check에 포함된 범위의 증거다. production·remote Sentry·device 동작 검증이나 merge·배포 승인을 뜻하지 않는다.
 
 ## Edit A PR
 

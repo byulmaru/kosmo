@@ -51,7 +51,7 @@ test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 확�
   await setE2ESessionCookie(context, viewer.token);
 
   await page.setViewportSize({ height: 844, width: 390 });
-  await page.goto(`/@${localTarget.handle}`);
+  await gotoProfileForMute(page, localTarget.handle);
   await muteFromProfile(page, localTarget.displayName, { checkFocus: true });
   expect(
     await db.$count(
@@ -97,7 +97,7 @@ test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 확�
   ).toBe(0);
 
   await page.setViewportSize({ height: 844, width: 1024 });
-  await page.goto(`/@${remoteTarget.handle}@${remoteDomain}`);
+  await gotoProfileForMute(page, `${remoteTarget.handle}@${remoteDomain}`);
   await muteFromProfile(page, remoteTarget.displayName);
   await expect(page.getByRole('button', { name: '더보기' })).toBeVisible();
   await page.getByRole('button', { name: '더보기' }).click();
@@ -124,7 +124,7 @@ test('Local·Remote Profile을 UI에서 Mute하고 Profile·Settings에서 확�
   await expect(page.getByRole('button', { name: 'E2E Remote Mute Target 뮤트 해제' })).toHaveCount(
     0,
   );
-  await expect(page.getByTestId('mute-heading-focus')).toBeFocused();
+  await expect(page.getByRole('heading', { name: '뮤트한 프로필', exact: true })).toBeFocused();
   expect(
     await db.$count(
       ProfileMutes,
@@ -160,7 +160,7 @@ test('Mute 확인은 keyboard focus를 보장하고 pending 중 닫힘·중복 �
     await route.fallback();
   });
 
-  await page.goto(`/@${target.handle}`);
+  await gotoProfileForMute(page, target.handle);
   await openMuteConfirmation(page);
   const dialog = page.getByRole('dialog', { name: '이 프로필을 뮤트할까요?' }).last();
   const confirm = dialog.getByRole('button', { name: '뮤트', exact: true });
@@ -220,7 +220,7 @@ test('Mute mutation 실패는 서버 확정 상태를 바꾸지 않고 다시 �
     });
   });
 
-  await page.goto(`/@${target.handle}`);
+  await gotoProfileForMute(page, target.handle);
   await openMuteConfirmation(page);
   const dialog = page.getByRole('dialog', { name: '이 프로필을 뮤트할까요?' }).last();
   await dialog.getByRole('button', { name: '뮤트', exact: true }).click();
@@ -307,10 +307,14 @@ test('Home·Local은 muted outer/source Author의 Post·Quote·Repost를 제외�
   });
 
   await setE2ESessionCookie(context, viewer.token);
-  await page.goto(`/@${mutedSource.handle}`);
-  await muteFromProfile(page, mutedSource.displayName);
-  await page.goto(`/@${mutedOuter.handle}`);
-  await muteFromProfile(page, mutedOuter.displayName);
+  await test.step('Mute Source fixture profile', async () => {
+    await gotoProfileForMute(page, mutedSource.handle);
+    await muteFromProfile(page, mutedSource.displayName);
+  });
+  await test.step('Mute Outer fixture profile', async () => {
+    await gotoProfileForMute(page, mutedOuter.handle);
+    await muteFromProfile(page, mutedOuter.displayName);
+  });
 
   for (const route of ['/home', '/local']) {
     await page.goto(route);
@@ -350,6 +354,9 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
     handle: 'e2e-selected-profile-target',
   });
   const targetPostBody = 'E2E selected profile mute target body';
+  const visibleTargetPostBody = page
+    .getByText(targetPostBody, { exact: true })
+    .filter({ visible: true });
   await createE2EPost({ body: targetPostBody, profileId: target.id });
   await createE2EFollow({
     followerProfileId: owner.profile!.id,
@@ -363,13 +370,17 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
   await setE2ESessionCookie(context, owner.token);
   await page.goto('/home');
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
   await page.getByRole('tablist', { name: '타임라인' }).getByRole('tab', { name: '로컬' }).click();
   await expect(page).toHaveURL(/\/local$/u);
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
+  const profilePostsResponse = waitForGraphQLOperation(page, 'ProfilePostListPageQuery');
   await page
     .getByRole('link', { name: `${target.displayName} @${target.handle}`, exact: true })
     .click();
+  const profilePosts = await profilePostsResponse;
+  await profilePosts.finished();
+  await assertGraphQLSuccess(profilePosts);
   await expect(page).toHaveURL(new RegExp(`/@${target.handle}$`, 'u'));
   await muteFromProfile(page, target.displayName);
   expect(
@@ -384,10 +395,10 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
 
   await navigatePrimary(page, '로컬');
   await expect(page).toHaveURL(/\/local$/u);
-  await expect(page.getByText(targetPostBody, { exact: true })).toHaveCount(0);
+  await expect(visibleTargetPostBody).toHaveCount(0);
   await selectProfileFromSwitcher(page, secondProfile.handle);
   await expect(page).toHaveURL(/\/local$/u);
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
   expect(
     await db.$count(
       ProfileMutes,
@@ -399,10 +410,10 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
   ).toBe(0);
 
   await selectProfileFromSwitcher(page, owner.profile!.handle);
-  await expect(page.getByText(targetPostBody, { exact: true })).toHaveCount(0);
+  await expect(visibleTargetPostBody).toHaveCount(0);
   await navigatePrimary(page, '홈');
   await expect(page).toHaveURL(/\/home$/u);
-  await expect(page.getByText(targetPostBody, { exact: true })).toHaveCount(0);
+  await expect(visibleTargetPostBody).toHaveCount(0);
   await navigatePrimary(page, '설정');
   await expect(page).toHaveURL(/\/settings$/u);
   await page.getByRole('link', { name: '뮤트 및 차단 설정 열기' }).click();
@@ -421,11 +432,11 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
   await navigatePrimary(page, '홈');
   await expect(page).toHaveURL(/\/home$/u);
   await page.reload();
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
   await navigatePrimary(page, '로컬');
   await expect(page).toHaveURL(/\/local$/u);
   await page.reload();
-  await expect(page.getByText(targetPostBody, { exact: true })).toBeVisible();
+  await expect(visibleTargetPostBody).toBeVisible();
   expect(
     await db.$count(
       ProfileMutes,
@@ -607,7 +618,7 @@ test('Mute·unmute 전후 Follow·Reaction·Bookmark·Repost와 Notification rea
 
   const before = await snapshot();
   await setE2ESessionCookie(context, viewer.token);
-  await page.goto(`/@${target.handle}`);
+  await gotoProfileForMute(page, target.handle);
   await muteFromProfile(page, target.displayName);
   const unmuteResponse = waitForGraphQLOperation(page, 'ProfileMuteControllerUnmuteMutation');
   await page.getByRole('button', { name: '뮤트 해제', exact: true }).click();
@@ -623,7 +634,25 @@ async function confirmUnmute(page: Page) {
   await dialog.getByRole('button', { name: '뮤트 해제', exact: true }).click();
 }
 
+async function gotoProfileForMute(page: Page, handle: string) {
+  const profilePostsResponse = waitForGraphQLOperation(page, 'ProfilePostListPageQuery');
+  await page.goto(`/@${handle}`);
+  const response = await profilePostsResponse;
+  await response.finished();
+  await assertGraphQLSuccess(response);
+}
+
+async function assertGraphQLSuccess(response: Awaited<ReturnType<typeof waitForGraphQLOperation>>) {
+  const body = (await response.json()) as { errors?: unknown[] };
+  expect(response.ok(), JSON.stringify(body, null, 2)).toBe(true);
+  expect(body.errors, JSON.stringify(body, null, 2)).toBeUndefined();
+}
+
 async function openMuteConfirmation(page: Page) {
+  await expect(page.getByRole('button', { name: '더보기', exact: true })).toBeVisible();
+  await expect(
+    page.getByText('게시글 목록을 불러오는 중입니다.', { exact: true }).filter({ visible: true }),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: '더보기' }).click();
   await page.getByRole('menu', { name: '더보기' }).getByRole('menuitem', { name: '뮤트' }).click();
   await expect(page.getByRole('dialog', { name: '이 프로필을 뮤트할까요?' }).last()).toBeVisible();
@@ -634,6 +663,7 @@ async function muteFromProfile(
   displayName: string,
   options: { checkFocus?: boolean } = {},
 ) {
+  await expect(page.getByRole('heading', { name: displayName, exact: true })).toBeVisible();
   await openMuteConfirmation(page);
   const dialog = page.getByRole('dialog', { name: '이 프로필을 뮤트할까요?' }).last();
   if (options.checkFocus) {

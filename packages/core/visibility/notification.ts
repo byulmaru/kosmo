@@ -22,7 +22,7 @@ import {
   PostState,
   ProfileState,
 } from '../enums';
-import { visiblePostWhere } from './post';
+import { currentPostMentionWhere, visiblePostWhere } from './post';
 import { visibleProfileWhere } from './profile';
 import { profileBlockVisibilityWhere } from './profile-block';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -505,16 +505,23 @@ export const notificationSourceAvailabilityWhere = (
             exists(
               database
                 .select({ postContentId: PostMentions.postContentId })
-                .from(PostMentions)
+                .from(PostContents)
                 .innerJoin(
-                  PostContents,
+                  PostMentions,
                   and(
-                    eq(PostContents.id, PostMentions.postContentId),
+                    currentPostMentionWhere({
+                      postId: NotificationMentionPosts.id,
+                      postContentId: NotificationMentionPosts.currentContentId,
+                    }),
+                    eq(PostMentions.profileId, Notifications.recipientProfileId),
+                  ),
+                )
+                .where(
+                  and(
                     eq(PostContents.id, NotificationMentionPosts.currentContentId),
                     eq(PostContents.postId, NotificationMentionPosts.id),
                   ),
-                )
-                .where(and(eq(PostMentions.profileId, Notifications.recipientProfileId))),
+                ),
             ),
             // The author-to-recipient direction is in visiblePostWhere; cleanup
             // still checks the inverse without deleting for Recipient downtime.

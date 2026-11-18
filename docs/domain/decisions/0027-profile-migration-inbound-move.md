@@ -28,11 +28,10 @@ identity, `alsoKnownAs` 표현, Local·Remote Follow 정책과 기존 follower �
   완료하며, target 해석·거부와 follower 이전은 admission 뒤 비동기 수행한다.
 - inbound Move는 remote-to-local과 remote-to-remote target을 지원한다. 준비 관계가 있는 target Profile과
   remote-to-remote target은 각각 target Profile에 존재하는 Follow Approval Policy를 따른다.
-- Profile Migration source 지정은 Settings의 `다른 서비스에서 이전`에서 feature flag가 켜져 있을 때만 노출한다. flag가 꺼져
-  있거나 값을 확인할 수 없거나 로딩 중이면 source 준비 control을 노출하지 않는다. source 등록은 현재 선택된
-  Profile을 target으로 사용하며 별도 target Profile ID 입력을 받지 않는다. 현재 context의 `Account.Active`와
-  `Profile.Owner` 권한을 재사용하고 별도 target eligibility를 적용하지 않는다. flag는 UI 노출 조건일 뿐 권한 증거가 아니며,
-  기존 `Account.Active`와 `Profile.Owner` 권한을 유지한다. 같은 source·target pair는 no-op으로 처리하고,
+- Settings의 `다른 서비스에서 이전` entry는 기능 공개 플래그와 관계없이 항상 표시한다. `계정 이전`의 source 준비
+  control은 현재 선택된 Profile을 target으로 사용하며 기존 `Account.Active`와 `Profile.Owner` 권한에 따라 제공한다.
+  별도 target Profile ID 입력이나 target eligibility는 적용하지 않는다. Settings 노출 여부는 권한 증거가 아니다. 같은
+  source·target pair는 no-op으로 처리하고,
   다른 pair와 충돌하는 요청은 거부한다. Profile Owner는 이전 진행 중이거나 완료된 뒤에도 준비 관계를 해제하고 다른
   source를 다시 지정할 수 있다. source 해제는 준비 관계와 파생 alias만 제거하며 이미 이전된 follower 관계나 요청은
   롤백하지 않는다. 준비 관계를 사용하는 Local target의 source-target 검증을 이미 통과한 현재 follower 처리는 끝날 수
@@ -95,3 +94,7 @@ cross-server 순서와 드문 Follow/Unfollow race는 제품 보장으로 승격
   정의한다.
 - [Follow Relationship](../objects/follow-relationship.md)은 새 target 관계 또는 요청 선저장 후 source 관계를
   제거하고, 기존 target 상태에서는 source 관계를 보존하는 Follow 이전과 self-follow 관계의 이전 제외 경계를 정의한다.
+- 2026-11-03 `PROD-1279`는 `profile-migration` 기능 공개 플래그를 Settings 진입점의 visibility gate에서 제거했다.
+  진입점은 항상 표시하고 두 section의 control에는 기존 권한 조건을 유지한다. 같은 destination의 `팔로잉 가져오기`는
+  기존 별도 가져오기 동작을 함께 보여 주며, 이 UI 변경은 이 ADR의 승인 날짜나 Profile Migration source·target 및
+  inbound Move 계약을 변경하지 않는다.

@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
     gap: space[12],
     padding: space[12] - borderWidths[1],
   },
-  indicator: { flexShrink: 0 },
+  indicator: { flexShrink: 0, position: 'relative' },
   feedback: {
     borderRadius: radius[12],
     bottom: 0,

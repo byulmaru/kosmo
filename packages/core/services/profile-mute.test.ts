@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { performance } from 'node:perf_hooks';
 import { after, test } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import {
   AccountProfiles,
@@ -11,6 +13,7 @@ import {
   isUniqueViolation,
   Notifications,
   pg,
+  PostContents,
   Posts,
   ProfileFollowRequests,
   ProfileFollows,
@@ -30,9 +33,29 @@ import {
   ProfileState,
 } from '../enums';
 import { ConflictError, NotFoundError } from '../error';
+import {
+  cacheHomeTimelinePage,
+  invalidateHomeTimelines,
+  readHomeTimelineCache,
+} from '../home-timeline/cache';
+import { postContentDocumentFromText } from '../post-content/server';
+import { runRedisCommand } from '../redis/client';
 import { muteProfile, unmuteProfile } from './profile-mute';
 
-after(async () => pg.end());
+const testRedisUrl = process.env.KOSMO_TEST_REDIS_URL;
+const previousRedisUrl = process.env.REDIS_URL;
+if (testRedisUrl) {
+  process.env.REDIS_URL = testRedisUrl;
+}
+
+after(async () => {
+  await pg.end();
+  if (previousRedisUrl === undefined) {
+    delete process.env.REDIS_URL;
+  } else {
+    process.env.REDIS_URL = previousRedisUrl;
+  }
+});
 
 const profileAccountIds = new Map<string, string>();
 
@@ -89,6 +112,33 @@ const cleanupProfiles = async (profileIds: readonly string[], instanceIds: reado
   for (const profileId of profileIds) {
     profileAccountIds.delete(profileId);
   }
+};
+
+const waitForRedis = async () => {
+  const deadline = performance.now() + 5_000;
+  while (performance.now() < deadline) {
+    const ping = await runRedisCommand((client) => client.ping());
+    if (ping?.value === 'PONG') {
+      return;
+    }
+    await delay(25);
+  }
+  assert.fail('Redis test service did not become ready');
+};
+
+const waitForMissingHomeTimeline = async (profileId: string) => {
+  const deadline = performance.now() + 2_000;
+  while (performance.now() < deadline) {
+    const [ping, cache] = await Promise.all([
+      runRedisCommand((client) => client.ping()),
+      readHomeTimelineCache({ profileId, limit: 10 }),
+    ]);
+    if (ping?.value === 'PONG' && cache === null) {
+      return;
+    }
+    await delay(10);
+  }
+  assert.fail('Home timeline cache was not invalidated');
 };
 
 test('Profile Mute는 Owner·Target과 nullable expiresAt을 저장한다', async () => {
@@ -556,3 +606,94 @@ test('Mute 생성·해제는 기존 관계·상호작용·Notification 상태를
     );
   }
 });
+
+test(
+  'Profile Mute와 해제는 실제 Home 캐시를 갱신하고 중복·무효 변경은 보존한다',
+  { skip: !testRedisUrl },
+  async () => {
+    await waitForRedis();
+    const owner = await createProfile();
+    const target = await createProfile();
+    const postContent = await db
+      .insert(PostContents)
+      .values({ document: postContentDocumentFromText('mute home timeline test') })
+      .returning()
+      .then(firstOrThrow);
+    const post = await db
+      .insert(Posts)
+      .values({
+        currentContentId: postContent.id,
+        profileId: target.profile.id,
+        state: PostState.ACTIVE,
+        visibility: PostVisibility.PUBLIC,
+      })
+      .returning()
+      .then(firstOrThrow);
+    await db
+      .update(PostContents)
+      .set({ postId: post.id })
+      .where(eq(PostContents.id, postContent.id));
+    await db.insert(ProfileFollows).values({
+      followerProfileId: owner.profile.id,
+      followeeProfileId: target.profile.id,
+    });
+
+    try {
+      await cacheHomeTimelinePage({ profileId: owner.profile.id, postIds: [post.id] });
+      assert.deepEqual(
+        (await readHomeTimelineCache({ profileId: owner.profile.id, limit: 10 }))?.entries.map(
+          ({ postId }) => postId,
+        ),
+        [post.id],
+      );
+
+      const mute = await muteProfile({
+        ownerProfileId: owner.profile.id,
+        targetProfileId: target.profile.id,
+      });
+      await waitForMissingHomeTimeline(owner.profile.id);
+
+      assert.equal(
+        (await unmuteProfile({ ownerProfileId: owner.profile.id, profileMuteId: mute.id }))?.id,
+        mute.id,
+      );
+      await waitForMissingHomeTimeline(owner.profile.id);
+      await cacheHomeTimelinePage({ profileId: owner.profile.id, postIds: [post.id] });
+      assert.deepEqual(
+        (await readHomeTimelineCache({ profileId: owner.profile.id, limit: 10 }))?.entries.map(
+          ({ postId }) => postId,
+        ),
+        [post.id],
+      );
+
+      assert.equal(
+        await unmuteProfile({
+          ownerProfileId: owner.profile.id,
+          profileMuteId: crypto.randomUUID(),
+        }),
+        null,
+      );
+      assert.deepEqual(
+        (await readHomeTimelineCache({ profileId: owner.profile.id, limit: 10 }))?.entries.map(
+          ({ postId }) => postId,
+        ),
+        [post.id],
+      );
+    } finally {
+      await invalidateHomeTimelines({ profileIds: [owner.profile.id] });
+      await db.delete(ProfileMutes).where(eq(ProfileMutes.ownerProfileId, owner.profile.id));
+      await db.delete(ProfileFollows).where(eq(ProfileFollows.followerProfileId, owner.profile.id));
+      await db.update(Posts).set({ currentContentId: null }).where(eq(Posts.id, post.id));
+      await db
+        .update(PostContents)
+        .set({ postId: null })
+        .where(eq(PostContents.id, postContent.id));
+      await db.delete(Posts).where(eq(Posts.id, post.id));
+      await db.delete(PostContents).where(eq(PostContents.id, postContent.id));
+      await cleanupProfiles(
+        [owner.profile.id, target.profile.id],
+        [owner.instance.id, target.instance.id],
+      );
+    }
+  },
+);

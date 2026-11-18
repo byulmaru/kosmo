@@ -71,7 +71,7 @@ mockModule('react-native', {
   ActivityIndicator: 'ActivityIndicator',
   Platform: platform,
   Pressable: MockPressable,
-  StyleSheet: { create: <T>(styles: T) => styles },
+  StyleSheet: { create: <T>(styles: T) => styles, flatten: flattenStyle },
   Text: 'Text',
   View: 'View',
   useWindowDimensions: () => ({ height: 800, width: windowWidth }),

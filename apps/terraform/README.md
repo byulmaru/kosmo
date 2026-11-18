@@ -87,6 +87,14 @@ Workflow는 위 identity로 인증한 뒤 Firebase Management API에서 Android 
 두 파일의 원문·data source·Secret Manager version·`local_file`·raw config output을 관리하지 않으며 해당 내용은 state나
 plan에 남기지 않는다.
 
+## Firebase Web Push bootstrap
+
+Terraform은 기존 `byulmaru-kosmo` 프로젝트에 `Kosmo Web` 앱을 등록한다. `terraform output -json firebase_web_app_config`는 앱 ID와 브라우저에 공개되는 Firebase SDK 설정을 반환한다. 이 값은 클라이언트 공개 설정이며 서버 자격 증명은 포함하지 않는다.
+
+VAPID는 SDK 설정과 별개다. Firebase Console의 프로젝트 설정 → Cloud Messaging → Web Push certificates에서 키 쌍을 만들고 앱에는 공개 키만 전달한다. VAPID 비밀 키는 Terraform state, CI, 저장소 또는 클라이언트로 내보내지 않는다.
+
+Web 클라이언트의 푸시 등록은 FID 기반 설치 API와 Worker의 FCM Web Push 발송 경로가 배포된 뒤에만 활성화한다.
+
 ## Firebase Cloud Messaging Worker identity
 
 Terraform은 기존 `byulmaru` EKS cluster의 OIDC issuer를 읽어 `kosmo-dev/kosmo-worker`와

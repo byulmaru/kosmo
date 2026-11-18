@@ -100,4 +100,18 @@ export const useError = (): Plugin<UserContext> => ({
       return;
     },
   }),
+  onSubscribe: () => ({
+    onSubscribeResult: ({ result, setResult }) => {
+      if (isAsyncIterable(result)) {
+        return {
+          onNext: ({ result, setResult }) => {
+            setResult(transformExecutionResult(result));
+          },
+        };
+      }
+
+      setResult(transformExecutionResult(result));
+      return;
+    },
+  }),
 });

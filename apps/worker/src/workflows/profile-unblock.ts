@@ -4,6 +4,7 @@ import {
   ApplicationFailure,
   condition,
   defineUpdate,
+  patched,
   proxyActivities,
   setHandler,
 } from '@temporalio/workflow';
@@ -38,8 +39,11 @@ const profileUnblockInputSchema = z.union([
   activityPubProfileUnblockInputSchema,
 ]);
 
-const { executeProfileUnblockTransitionActivity, sendProfileBlockUndoActivity } =
-  proxyActivities<typeof activities>(workflowActivityOptions);
+const {
+  executeProfileUnblockTransitionActivity,
+  invalidateHomeTimelinesActivity,
+  sendProfileBlockUndoActivity,
+} = proxyActivities<typeof activities>(workflowActivityOptions);
 
 type ProfileUnblockTransitionExecution = Awaited<
   ReturnType<typeof executeProfileUnblockTransitionActivity>
@@ -118,17 +122,27 @@ export async function profileUnblockWorkflow(input: ProfileUnblockInput): Promis
   if (!settled.value.ok) {
     throw profileUnblockTransitionFailure(settled.value.error);
   }
-  if (settled.value.result.removed && transitionOrigin === 'LOCAL') {
-    const { profileBlockId } = settled.value.result;
-    if (profileBlockId === null) {
-      throw new Error('Removed Profile Block relation has no ID');
-    }
-    await settleEffects([
-      sendProfileBlockUndoActivity({
-        ownerProfileId: settled.value.result.ownerProfileId,
-        profileBlockId,
-        targetProfileId: settled.value.result.targetProfileId,
-      }),
-    ]);
+  const homeTimelineInvalidationEnabled = patched('profile-unblock-home-invalidation-v1');
+  const result = settled.value.result;
+  if (result.removed && transitionOrigin === 'LOCAL' && result.profileBlockId === null) {
+    throw new Error('Removed Profile Block relation has no ID');
   }
+  await settleEffects([
+    ...(homeTimelineInvalidationEnabled && result.removed
+      ? [
+          invalidateHomeTimelinesActivity({
+            profileIds: [result.ownerProfileId, result.targetProfileId],
+          }),
+        ]
+      : []),
+    ...(result.removed && transitionOrigin === 'LOCAL' && result.profileBlockId !== null
+      ? [
+          sendProfileBlockUndoActivity({
+            ownerProfileId: result.ownerProfileId,
+            profileBlockId: result.profileBlockId,
+            targetProfileId: result.targetProfileId,
+          }),
+        ]
+      : []),
+  ]);
 }

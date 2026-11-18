@@ -113,6 +113,13 @@ export const MediaState = {
 } as const;
 export type MediaState = keyof typeof MediaState;
 
+export const MediaUsePermission = {
+  DENY: 'DENY',
+  ORIGINAL: 'ORIGINAL',
+  EDIT: 'EDIT',
+} as const;
+export type MediaUsePermission = keyof typeof MediaUsePermission;
+
 export const NotificationKind = {
   FOLLOW: 'FOLLOW',
   FOLLOW_REQUEST: 'FOLLOW_REQUEST',
@@ -176,6 +183,7 @@ export type ProfileState = keyof typeof ProfileState;
 export const PushInstallationPlatform = {
   ANDROID: 'ANDROID',
   IOS: 'IOS',
+  WEB: 'WEB',
 } as const;
 export type PushInstallationPlatform = keyof typeof PushInstallationPlatform;
 

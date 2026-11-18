@@ -22,12 +22,13 @@ import {
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { eq, inArray, ne } from 'drizzle-orm';
 import { setInboundObservabilityReporter, withInboundObservability } from './inbound-observability';
-import type { InboxContext } from '@fedify/fedify';
+import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
 import type { RemoteProfileLookupInput } from '@kosmo/core/temporal/workflows';
 import type * as FederationModule from './federation';
 import type * as InboundFollow from './inbound-follow';
+import type * as Materialization from './remote-actor-materialization';
 
 const publicOrigin = 'http://127.0.0.1:4173';
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
@@ -50,8 +51,10 @@ let ProfileFollows: typeof CoreDb.ProfileFollows;
 let ProfileMedia: typeof CoreDb.ProfileMedia;
 let Profiles: typeof CoreDb.Profiles;
 let federation: typeof FederationModule.federation;
+let createKosmoFederation: typeof FederationModule.createKosmoFederation;
 let handleInboundFollow: typeof InboundFollow.handleInboundFollow;
 let handleInboundUndo: typeof InboundFollow.handleInboundUndo;
+let RemoteActorDiscoveryUnavailableError: typeof Materialization.RemoteActorDiscoveryUnavailableError;
 let localInstanceId: string;
 const recipientAccountIds: string[] = [];
 
@@ -77,7 +80,8 @@ describe('inbound Follow and Undo', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ handleInboundFollow, handleInboundUndo } = await import('./inbound-follow'));
-    ({ federation } = await import('./federation'));
+    ({ createKosmoFederation, federation } = await import('./federation'));
+    ({ RemoteActorDiscoveryUnavailableError } = await import('./remote-actor-materialization'));
     const { localInstance } = await seedDatabase({ publicOrigin });
     localInstanceId = localInstance.id;
   });
@@ -271,28 +275,17 @@ describe('inbound Follow and Undo', () => {
     const remoteActor = new Person({ id: remoteActorUri, publicKey: remoteKey });
     const remoteActorDocument = await remoteActor.toJsonLd({ format: 'expand' });
     const remoteKeyDocument = await remoteKey.toJsonLd({ format: 'expand' });
-    const documentLoader = async (url: string) => {
-      const document =
-        url === remoteActorUri.href
-          ? remoteActorDocument
-          : url === remoteKeyUri.href
-            ? remoteKeyDocument
-            : undefined;
+    const documents = new Map<string, unknown>([
+      [remoteActorUri.href, remoteActorDocument],
+      [remoteKeyUri.href, remoteKeyDocument],
+    ]);
+    const documentLoader: DocumentLoader = async (url) => {
+      const document = documents.get(url);
       if (!document) {
         throw new Error(`Unexpected document URL: ${url}`);
       }
       return { contextUrl: null, document, documentUrl: url };
     };
-    const loaderFactories = federation as unknown as {
-      documentLoaderFactory: () => typeof documentLoader;
-      authenticatedDocumentLoaderFactory: () => typeof documentLoader;
-    };
-    const loaderMock = mock.method(loaderFactories, 'documentLoaderFactory', () => documentLoader);
-    const authenticatedLoaderMock = mock.method(
-      loaderFactories,
-      'authenticatedDocumentLoaderFactory',
-      () => documentLoader,
-    );
     const contextLoader = getDocumentLoader();
     const createSignedRequest = async (activity: Follow | Undo) =>
       signRequest(
@@ -305,62 +298,62 @@ describe('inbound Follow and Undo', () => {
         remoteKeyUri,
       );
 
-    try {
-      const follow = new Follow({
-        actor: remoteActorUri,
-        id: new URL('https://remote.example/activities/production-follow'),
-        object: localActorUri,
-      });
-      const followStartedAt = new Date();
-      const followResponse = await federation.fetch(await createSignedRequest(follow), {
-        contextData: undefined,
-      });
-      assert.equal(followResponse.status, 202, await followResponse.text());
-      await waitForProfileFollowWorkflows({
-        pair: {
-          followerProfileId: fixture.remoteProfile.id,
-          followeeProfileId: fixture.localProfile.id,
-        },
-        startedAt: followStartedAt,
-      });
+    const testFederation = createKosmoFederation({
+      authenticatedDocumentLoaderFactory: () => documentLoader,
+      contextLoaderFactory: () => contextLoader,
+      documentLoaderFactory: () => documentLoader,
+    });
+    const follow = new Follow({
+      actor: remoteActorUri,
+      id: new URL('https://remote.example/activities/production-follow'),
+      object: localActorUri,
+    });
+    const followStartedAt = new Date();
+    const followResponse = await testFederation.fetch(await createSignedRequest(follow), {
+      contextData: undefined,
+    });
+    assert.equal(followResponse.status, 202, await followResponse.text());
+    await waitForProfileFollowWorkflows({
+      pair: {
+        followerProfileId: fixture.remoteProfile.id,
+        followeeProfileId: fixture.localProfile.id,
+      },
+      startedAt: followStartedAt,
+    });
 
-      const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
-      assert.equal(relation.followerProfileId, fixture.remoteProfile.id);
-      assert.equal(relation.followeeProfileId, fixture.localProfile.id);
-      assert.equal(
-        await db
-          .select()
-          .from(Notifications)
-          .where(eq(Notifications.sourceId, relation.id))
-          .then((rows) => rows.length),
-        1,
-      );
+    const relation = await db.select().from(ProfileFollows).limit(1).then(firstOrThrow);
+    assert.equal(relation.followerProfileId, fixture.remoteProfile.id);
+    assert.equal(relation.followeeProfileId, fixture.localProfile.id);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, relation.id))
+        .then((rows) => rows.length),
+      1,
+    );
 
-      const undoResponse = await federation.fetch(
-        await createSignedRequest(
-          new Undo({
-            actor: remoteActorUri,
-            id: new URL('https://remote.example/activities/production-undo'),
-            object: new Follow({ actor: remoteActorUri, object: localActorUri }),
-          }),
-        ),
-        { contextData: undefined },
-      );
-      assert.equal(undoResponse.status, 202, await undoResponse.text());
-      await waitForProfileFollowWorkflows();
-      assert.equal((await db.select().from(ProfileFollows)).length, 0);
-      assert.equal(
-        await db
-          .select()
-          .from(Notifications)
-          .where(eq(Notifications.sourceId, relation.id))
-          .then((rows) => rows.length),
-        0,
-      );
-    } finally {
-      authenticatedLoaderMock.mock.restore();
-      loaderMock.mock.restore();
-    }
+    const undoResponse = await testFederation.fetch(
+      await createSignedRequest(
+        new Undo({
+          actor: remoteActorUri,
+          id: new URL('https://remote.example/activities/production-undo'),
+          object: new Follow({ actor: remoteActorUri, object: localActorUri }),
+        }),
+      ),
+      { contextData: undefined },
+    );
+    assert.equal(undoResponse.status, 202, await undoResponse.text());
+    await waitForProfileFollowWorkflows();
+    assert.equal((await db.select().from(ProfileFollows)).length, 0);
+    assert.equal(
+      await db
+        .select()
+        .from(Notifications)
+        .where(eq(Notifications.sourceId, relation.id))
+        .then((rows) => rows.length),
+      0,
+    );
   });
 
   test('logs malformed federation JSON without capturing it in Sentry', async () => {
@@ -882,7 +875,7 @@ describe('inbound Follow and Undo', () => {
     assert.equal((await db.select().from(ProfileFollows)).length, 0);
   });
 
-  test('propagates a retryable URI Workflow failure unchanged', async () => {
+  test('wraps a retryable URI Workflow failure with its original cause', async () => {
     await createFixture();
     const unknownActorUri = new URL('https://unknown.example/users/mallory');
     const follow = new Follow({ actor: unknownActorUri, object: localActorUri });
@@ -917,7 +910,11 @@ describe('inbound Follow and Undo', () => {
     try {
       await assert.rejects(
         handleInboundFollow(createContext({ recipient: localProfileId }), follow, receivedAt),
-        (error: unknown) => error === lookupFailure,
+        (error: unknown) => {
+          assert.ok(error instanceof RemoteActorDiscoveryUnavailableError);
+          assert.equal(error.cause, lookupFailure);
+          return true;
+        },
       );
     } finally {
       lookupWorkflow.mock.restore();
@@ -1102,11 +1099,13 @@ const createContext = ({
   lookupObject = mock.fn(async () => null),
   lookupWebFinger = mock.fn(async () => null),
   recipient,
+  resolveActorHandle,
   sendActivity = mock.fn(async () => undefined),
 }: {
   lookupObject?: ReturnType<typeof mock.fn>;
   lookupWebFinger?: ReturnType<typeof mock.fn>;
   recipient: string | null;
+  resolveActorHandle?: ReturnType<typeof mock.fn>;
   sendActivity?: ReturnType<typeof mock.fn>;
 }): InboxContext<void> =>
   ({
@@ -1115,5 +1114,6 @@ const createContext = ({
     lookupObject,
     lookupWebFinger,
     recipient,
+    resolveActorHandle,
     sendActivity,
   }) as unknown as InboxContext<void>;

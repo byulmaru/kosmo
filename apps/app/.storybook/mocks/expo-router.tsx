@@ -4,11 +4,12 @@ import {
   Fragment,
   isValidElement,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from 'react';
 import { Platform, Text } from 'react-native';
-import type { PropsWithChildren, ReactNode } from 'react';
+import type { EffectCallback, PropsWithChildren, ReactNode } from 'react';
 
 export type Href = string | { params?: Record<string, string | undefined>; pathname: string };
 
@@ -49,12 +50,14 @@ const RouterContext = createContext<RouterContextValue>({
 export function RouterMockProvider({
   children,
   params = {},
+  onNavigate,
   pathname: initialPathname = '/home',
   segments = [],
   slot,
   slotLabel = '현재 라우트 콘텐츠',
 }: PropsWithChildren<{
   params?: Record<string, string | undefined>;
+  onNavigate?: (href: Href) => void;
   pathname?: string;
   segments?: readonly string[];
   slot?: ReactNode;
@@ -74,15 +77,17 @@ export function RouterMockProvider({
           return paths.at(-1) === next ? paths : [...paths.slice(0, -1), next];
         }),
       segments,
-      setPathname: (href: Href) =>
+      setPathname: (href: Href) => {
+        onNavigate?.(href);
         setHistory((paths) => {
           const next = typeof href === 'string' ? href : href.pathname;
           return paths.at(-1) === next ? paths : [...paths, next];
-        }),
+        });
+      },
       slot,
       slotLabel,
     }),
-    [history, params, pathname, segments, slot, slotLabel],
+    [history, onNavigate, params, pathname, segments, slot, slotLabel],
   );
 
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
@@ -99,6 +104,14 @@ export function useCurrentRouteInfo() {
 
 export function useSegments() {
   return useContext(RouterContext).segments;
+}
+
+export function useIsFocused() {
+  return true;
+}
+
+export function useFocusEffect(effect: EffectCallback) {
+  useEffect(effect, [effect]);
 }
 
 export function useLocalSearchParams<T extends Record<string, string | undefined>>() {

@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { SettingsMuteAndBlockNavigation } from '@/components/settings/SettingsMuteAndBlockNavigation';
 import { returnToSettingsParent } from '@/components/settings/settingsNavigation';
 import { useSettingsDetailHeaderMode } from '@/components/settings/SettingsRouteContext';
+import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { IconButton } from '@/components/ui/IconButton';
 import { RouteScrollContainer } from '@/components/ui/RouteScrollContainer';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -33,9 +34,9 @@ export default function SettingsMuteAndBlockRoute() {
       }}
       webStyle={styles.webRoot}
     >
-      {detailHeaderMode !== 'hidden' ? (
+      <MobileWebRouteChrome>
         <PageHeader leading={backButton} title="뮤트 및 차단" />
-      ) : null}
+      </MobileWebRouteChrome>
       <SettingsMuteAndBlockNavigation />
     </RouteScrollContainer>
   );

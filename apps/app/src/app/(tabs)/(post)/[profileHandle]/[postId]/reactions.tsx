@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect } from 'react';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { normalizeProfileHandle } from '@/components/profile/route';
@@ -47,6 +47,7 @@ const reactionPeopleRouteQuery = graphql`
 `;
 
 export default function ReactionPeopleRoute() {
+  const active = useIsFocused();
   const params = useLocalSearchParams<{
     postId?: string | string[];
     profileHandle?: string | string[];
@@ -78,6 +79,7 @@ export default function ReactionPeopleRoute() {
         title="반응한 프로필을 불러오지 못했어요"
       >
         <ReactionPeopleRouteContent
+          active={active}
           postId={postId}
           requestedType={requestedType}
           routeRelativeHandle={routeRelativeHandle}
@@ -88,10 +90,12 @@ export default function ReactionPeopleRoute() {
 }
 
 function ReactionPeopleRouteContent({
+  active,
   postId,
   requestedType,
   routeRelativeHandle,
 }: {
+  active: boolean;
   postId: string;
   requestedType: string;
   routeRelativeHandle: string;
@@ -155,6 +159,7 @@ function ReactionPeopleRouteContent({
 
   return (
     <ReactionPeopleScreen
+      active={active}
       onTypeChange={(nextType) => router.setParams({ type: nextType })}
       postId={post.id}
       reactionCounts={reactionCounts}

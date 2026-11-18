@@ -105,7 +105,9 @@ export function Coachmark({
   if (visible && !exitPending) {
     setExitPending(true);
   }
-  const targetReady = Boolean(anchorRef.current && anchor && anchor.width > 0 && anchor.height > 0);
+  const targetReady = Boolean(
+    (!visible || anchorRef.current) && anchor && anchor.width > 0 && anchor.height > 0,
+  );
   const overlayMotion = useOverlayMotion(visible && targetReady);
   const modalVisible = overlayMotion.mounted && targetReady;
   const presentationReady = Boolean(modalVisible && overlayMotion.entered && bubble.height > 0);
@@ -253,6 +255,7 @@ export function Coachmark({
                 styles.arrow,
                 {
                   backgroundColor: theme.backgroundElevated,
+                  borderColor: theme.borderDefault,
                   left: position.arrowLeft - ARROW_HALF,
                 },
                 position.placement === 'bottom' ? styles.arrowAbove : styles.arrowBelow,
@@ -437,8 +440,16 @@ const styles = StyleSheet.create({
     width: ARROW_SIZE,
     zIndex: 1,
   },
-  arrowAbove: { top: -ARROW_HALF },
-  arrowBelow: { bottom: -ARROW_HALF },
+  arrowAbove: {
+    borderLeftWidth: borderWidths[1],
+    borderTopWidth: borderWidths[1],
+    top: -ARROW_HALF,
+  },
+  arrowBelow: {
+    borderBottomWidth: borderWidths[1],
+    borderRightWidth: borderWidths[1],
+    bottom: -ARROW_HALF,
+  },
   backdrop: { flex: 1, width: '100%' },
   backdropDismiss: { zIndex: 0 },
   body: { flexGrow: 0, flexShrink: 1, minHeight: 0 },

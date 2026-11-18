@@ -34,7 +34,12 @@ export const parseNexusMediaUploadReference = (
 
 export const headNexusMediaUploadSource = async (
   storageReference: string,
-): Promise<NexusMediaUploadSession & { contentType: NexusMediaUploadContentType }> => {
+): Promise<
+  NexusMediaUploadSession & {
+    contentType: NexusMediaUploadContentType;
+    thumbhash?: string;
+  }
+> => {
   const session = parseNexusMediaUploadReference(storageReference);
   if (!session) {
     throw new ValidationError('Media upload source metadata is invalid');
@@ -93,5 +98,18 @@ export const headNexusMediaUploadSource = async (
     throw new ValidationError('Media upload source has an unsupported content type');
   }
 
-  return { ...session, contentType: validatedContentType };
+  const thumbhashHeader = response.headers.get('x-thumbhash');
+  const thumbhash =
+    thumbhashHeader !== null &&
+    thumbhashHeader.length >= 8 &&
+    thumbhashHeader.length <= 128 &&
+    Buffer.from(thumbhashHeader, 'base64').toString('base64') === thumbhashHeader
+      ? thumbhashHeader
+      : undefined;
+
+  return {
+    ...session,
+    contentType: validatedContentType,
+    ...(thumbhash === undefined ? {} : { thumbhash }),
+  };
 };

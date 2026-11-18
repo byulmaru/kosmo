@@ -13,6 +13,7 @@ import {
   RecordSource,
   Store,
 } from 'relay-runtime';
+import federatedQuery from './__generated__/PostListFederatedNextPageQuery.graphql';
 import hashtagQuery from './__generated__/PostListHashtagNextPageQuery.graphql';
 import homeQuery from './__generated__/PostListHomeNextPageQuery.graphql';
 import localQuery from './__generated__/PostListLocalNextPageQuery.graphql';
@@ -96,11 +97,18 @@ stub('react-native', {
   Platform: { OS: 'web' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
-  StyleSheet: { create: (styles: object) => styles },
+  StyleSheet: {
+    create: (styles: object) => styles,
+    flatten: (styles: unknown) =>
+      Array.isArray(styles) ? Object.assign({}, ...styles.flat(Infinity).filter(Boolean)) : styles,
+  },
   Text: 'Text',
   View: 'View',
   findNodeHandle: () => null,
   useWindowDimensions: () => ({ height: 844, width: 390 }),
+});
+stub('react-native-safe-area-context', {
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 });
 stub('expo-router', {
   Link: ({ children }: { children?: ReactNode }) => createElement(Fragment, null, children),
@@ -108,7 +116,11 @@ stub('expo-router', {
   useRouter: () => ({ push: () => undefined }),
 });
 stub('lucide-react-native', {
+  AtSignIcon: 'AtSignIcon',
+  GlobeIcon: 'GlobeIcon',
+  LockIcon: 'LockIcon',
   MessageCircle: 'MessageCircle',
+  MoonIcon: 'MoonIcon',
   Pin: 'Pin',
   ArrowUp: 'ArrowUp',
   ArrowDown: 'ArrowDown',
@@ -221,7 +233,12 @@ afterEach(async () => {
 const targetId = 'target-a';
 const blockId = 'block-a';
 const hashtagId = 'hashtag-a';
-const queryBySurface = { hashtag: hashtagQuery, home: homeQuery, local: localQuery } as const;
+const queryBySurface = {
+  federated: federatedQuery,
+  hashtag: hashtagQuery,
+  home: homeQuery,
+  local: localQuery,
+} as const;
 type Surface = keyof typeof queryBySurface;
 
 function FeedSurface({
@@ -297,7 +314,11 @@ async function start(surface: Surface, rows = feedRows(), hasNextPage = false) {
           node: { __typename: 'Hashtag', id: hashtagId, name: 'Topic', posts: connection },
         }
       : {
-          [surface === 'home' ? 'homeTimeline' : 'localTimeline']: connection,
+          [surface === 'home'
+            ? 'homeTimeline'
+            : surface === 'local'
+              ? 'localTimeline'
+              : 'federatedTimeline']: connection,
         };
   environment.commitPayload(operation, payload);
   await act(async () => {
@@ -456,7 +477,7 @@ async function blockTarget() {
   });
 }
 
-for (const surface of ['home', 'local'] as const) {
+for (const surface of ['home', 'local', 'federated'] as const) {
   test(`${surface} block mutation filters blocked authors and pure reposts while retaining Quotes and unrelated rows`, async () => {
     const { environment, queryOwner } = await start(surface);
     assert.deepEqual(visibleBodies(), [

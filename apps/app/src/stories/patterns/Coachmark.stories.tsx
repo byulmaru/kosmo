@@ -537,6 +537,10 @@ export const PlacementContract: Story = {
     const target = await screen.findByRole('button', { name: '화면 끝 대상' });
     const surface = await findReadySurface('완료');
     const arrow = await screen.findByTestId('coachmark-arrow');
+    const arrowStyle = getComputedStyle(arrow);
+    expect(arrowStyle.borderBottomWidth).toBe('1px');
+    expect(arrowStyle.borderRightWidth).toBe('1px');
+    expect(arrowStyle.borderBottomColor).toBe(getComputedStyle(surface).borderBottomColor);
     await waitFor(() => {
       const targetRect = target.getBoundingClientRect();
       const surfaceRect = surface.getBoundingClientRect();
