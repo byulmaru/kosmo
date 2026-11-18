@@ -169,6 +169,7 @@ function readMockQuery(
         handle: variables.handle,
         id: `profile:${variables.handle}`,
         instance: { kind: profileInstanceKind },
+        followPolicy: 'OPEN',
         relativeHandle: `@${variables.handle}`,
         viewerState:
           profileBlockStatus == null || profileViewerState == null

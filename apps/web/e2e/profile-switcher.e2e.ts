@@ -135,7 +135,7 @@ test('profile route action follows Profile.viewerState after switching', async (
   await createProfileFromSwitcher(page, 'delta');
   await expect(sidebarProfileHandle(page, 'delta')).toBeVisible();
 
-  const profileLayoutResponsePromise = waitForGraphQLOperation(page, 'ProfileLayoutQuery');
+  const profileLayoutResponsePromise = waitForGraphQLOperation(page, 'ProfileScreenQuery');
   await page.goto('/@gamma');
   const profileLayoutResponse = await profileLayoutResponsePromise;
   await profileLayoutResponse.finished();

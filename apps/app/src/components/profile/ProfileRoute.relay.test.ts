@@ -122,8 +122,8 @@ mockModule(new URL('../pagination/PaginationScrollView.tsx', import.meta.url), {
   PaginationScrollView: ({ children }: { children?: ReactNode }) => children,
 });
 mockModule(new URL('../post/PostList.tsx', import.meta.url), {
-  PostList: ({ error, loading, onRetry, ...props }: Record<string, unknown>) =>
-    createElement('PostList', { ...props, error, loading, onRetry }),
+  PostList: ({ error, header, loading, onRetry, ...props }: Record<string, unknown>) =>
+    createElement('PostList', { ...props, error, loading, onRetry }, header as ReactNode),
 });
 mockModule(new URL('../shell/NavigationLink.tsx', import.meta.url), {
   NavigationLink: ({ children }: { children?: ReactNode }) => children,
