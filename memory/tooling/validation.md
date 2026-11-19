@@ -3,6 +3,7 @@
 ## Script And Tooling Review
 
 - 실행 스크립트는 명령이 성공하는지만 보지 말고 사용자가 기대하는 visible workflow까지 확인한다.
+- Reaction emoji generated JSON 두 파일은 Git에 포함하며 설치·Docker 빌드는 저장된 데이터를 사용한다. 원본 이모지·주석 dependency를 갱신할 때 `pnpm generate:reaction-emoji`로 재생성하고 JSON 변경을 함께 커밋한다. picker/core 데이터 테스트로 원본 데이터와의 일치를 확인한다.
 - iOS/Android 실행 스크립트는 실제 기기/시뮬레이터 선택 목록, 앱 창 foreground, install/launch 결과처럼 사용자가 보는 동작을 검증한다.
 - tool output JSON field나 runtime API를 근거로 필터를 바꿀 때는 현재 target tool 버전의 실제 출력에 해당 field가 있는지 확인한다.
 - Node/Web/OS별 API 지원 여부를 확인하지 않고 polyfill이나 대체 구현으로 바꾸지 않는다.

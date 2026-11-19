@@ -13,6 +13,7 @@
     "db:bootstrap-local-instance": "pnpm --filter @kosmo/api db:bootstrap-local-instance",
     "dev": "pnpm local:services:up && node scripts/vault-run.mjs -- node scripts/local-development.mjs run",
     "dev:worker": "pnpm local:services:up && node scripts/vault-run.mjs -- node scripts/local-development.mjs run -- pnpm --workspace-root run --parallel \"/^local-dev:(temporal|worker)$/\"",
+    "generate:reaction-emoji": "node scripts/generate-reaction-emoji.mjs",
     "lint:eslint": "eslint --max-warnings 0 .",
     "lint:prettier": "prettier --check --ignore-unknown '**/*'",
     "lint:syncpack": "syncpack lint --dependency-types prod,dev,peer",
