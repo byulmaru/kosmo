@@ -203,6 +203,45 @@ describe('PostHog Web client', () => {
     assert.deepEqual(instance.calls, [{ event: 'post_created', properties }]);
   });
 
+  it('Account-bound onboarding capture and home arrival reject identity drift and consume once', () => {
+    analytics.identifyAnalytics('account-a');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.trackAnalyticsForAccount('account-a', 'first_profile_onboarding_started', {
+      flow_id: 'flow-a',
+    });
+    analytics.trackAnalyticsForAccount('account-b', 'first_profile_onboarding_started', {
+      flow_id: 'flow-b',
+    });
+    analytics.setPendingOnboardingHomeView('account-a', 'flow-a');
+    analytics.trackAnalyticsScreen('/settings');
+    analytics.trackAnalyticsScreen('/home');
+    analytics.trackAnalyticsScreen('/home');
+
+    assert.deepEqual(
+      instance.calls.map(({ event, properties }) => ({ event, properties })),
+      [
+        {
+          event: 'first_profile_onboarding_started',
+          properties: { flow_id: 'flow-a' },
+        },
+        {
+          event: 'first_profile_onboarding_home_viewed',
+          properties: { flow_id: 'flow-a' },
+        },
+      ],
+    );
+
+    analytics.setPendingOnboardingHomeView('account-a', 'stale-flow');
+    analytics.identifyAnalytics('account-b');
+    analytics.trackAnalyticsScreen('/home');
+    assert.equal(
+      instance.calls.filter(({ event }) => event === 'first_profile_onboarding_home_viewed').length,
+      1,
+    );
+  });
+
   it('capture 실패는 product flow를 차단하지 않는다', () => {
     analytics.clearAnalytics();
     const instance = instances[0];

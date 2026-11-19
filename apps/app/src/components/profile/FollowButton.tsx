@@ -8,12 +8,17 @@ import { useSession } from '@/session/SessionProvider';
 import { ProfileBlockAction } from './ProfileBlockAction';
 import type { StyleProp, ViewStyle } from 'react-native';
 import type { RecordProxy, RecordSourceSelectorProxy } from 'relay-runtime';
+import type {
+  FirstProfileFollowAnalytics,
+  FirstProfileFollowOutcome,
+} from '@/components/onboarding/firstProfileOnboardingAnalytics';
 import type { FollowButton_profile$key } from './__generated__/FollowButton_profile.graphql';
 import type { FollowButtonCancelProfileFollowRequestMutation } from './__generated__/FollowButtonCancelProfileFollowRequestMutation.graphql';
 import type { FollowButtonFollowProfileMutation } from './__generated__/FollowButtonFollowProfileMutation.graphql';
 import type { FollowButtonUnfollowProfileMutation } from './__generated__/FollowButtonUnfollowProfileMutation.graphql';
 
 type FollowButtonProps = {
+  onboardingAnalytics?: FirstProfileFollowAnalytics;
   profile: FollowButton_profile$key;
   style?: StyleProp<ViewStyle>;
 };
@@ -107,7 +112,7 @@ const updateProfileCount = (
 const getSelectedProfile = (store: RecordSourceSelectorProxy) =>
   store.getRoot().getLinkedRecord('currentSession')?.getLinkedRecord('selectedProfile');
 
-export function FollowButton({ profile, style }: FollowButtonProps) {
+export function FollowButton({ onboardingAnalytics, profile, style }: FollowButtonProps) {
   const environment = useRelayEnvironment();
   const [commitFollow, following] =
     useMutation<FollowButtonFollowProfileMutation>(followProfileMutation);
@@ -159,6 +164,7 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
     };
 
     if (isFollowing) {
+      const onboardingToken = onboardingAnalytics?.begin(data.id, 'unfollow');
       const follower = viewerState.follow?.follower;
       const followerCount = data.followersCount;
       const followingCount = follower?.followingCount;
@@ -168,14 +174,37 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
       commitUnfollow({
         ...callbacks,
         onCompleted: (response, errors) => {
+          const unfollowResult = response?.unfollowProfile;
+          const removed =
+            unfollowResult?.profileFollowId != null || Boolean(unfollowResult && !errors?.length);
+          if (!errors?.length || unfollowResult?.profileFollowId != null) {
+            invalidateHome();
+          }
+          if (onboardingToken) {
+            onboardingAnalytics?.finish(
+              onboardingToken,
+              data.id,
+              removed ? 'removed' : 'failed',
+              selectedProfileId ?? undefined,
+              removed ? undefined : 'response',
+            );
+          }
           if (errors?.length) {
-            if (response?.unfollowProfile?.profileFollowId != null) {
-              invalidateHome();
-            }
             showFailureToast();
             return;
           }
-          invalidateHome();
+        },
+        onError: () => {
+          if (onboardingToken) {
+            onboardingAnalytics?.finish(
+              onboardingToken,
+              data.id,
+              'failed',
+              selectedProfileId ?? undefined,
+              'network',
+            );
+          }
+          callbacks.onError();
         },
         optimisticResponse:
           follower && canOptimisticallyUnfollow
@@ -206,8 +235,40 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
         variables: { id: data.id },
       });
     } else if (viewerState.followRequest) {
+      const requestedId = viewerState.followRequest.id;
+      const onboardingToken = onboardingAnalytics?.begin(data.id, 'cancel_request');
       commitCancel({
         ...callbacks,
+        onCompleted: (response, errors) => {
+          const cancelResult = response?.cancelProfileFollowRequest;
+          const cancelled =
+            cancelResult?.profileFollowRequestId === requestedId ||
+            Boolean(cancelResult && !errors?.length);
+          if (onboardingToken) {
+            onboardingAnalytics?.finish(
+              onboardingToken,
+              data.id,
+              cancelled ? 'removed' : 'failed',
+              selectedProfileId ?? undefined,
+              cancelled ? undefined : 'response',
+            );
+          }
+          if (errors?.length) {
+            showFailureToast();
+          }
+        },
+        onError: () => {
+          if (onboardingToken) {
+            onboardingAnalytics?.finish(
+              onboardingToken,
+              data.id,
+              'failed',
+              selectedProfileId ?? undefined,
+              'network',
+            );
+          }
+          callbacks.onError();
+        },
         optimisticResponse: {
           cancelProfileFollowRequest: {
             profileFollowRequestId: viewerState.followRequest.id,
@@ -216,13 +277,29 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
         variables: { id: viewerState.followRequest.id },
       });
     } else {
+      const onboardingToken = onboardingAnalytics?.begin(data.id, 'follow');
       commitFollow({
         onCompleted: (response, errors) => {
-          const result = response?.followProfile?.result;
-          if (result?.__typename === 'ProfileFollow') {
+          const followResult = response?.followProfile?.result;
+          if (followResult?.__typename === 'ProfileFollow') {
             invalidateHome();
           }
-          const failed = Boolean(errors?.length);
+          const outcome: FirstProfileFollowOutcome | null =
+            followResult?.__typename === 'ProfileFollow'
+              ? 'relationship'
+              : followResult?.__typename === 'ProfileFollowRequest'
+                ? 'request'
+                : null;
+          if (onboardingToken) {
+            onboardingAnalytics?.finish(
+              onboardingToken,
+              data.id,
+              outcome ?? 'failed',
+              selectedProfileId ?? undefined,
+              outcome ? undefined : 'response',
+            );
+          }
+          const failed = Boolean(errors?.length) || Boolean(onboardingAnalytics && !outcome);
           if (failed) {
             showFailureToast();
             return;
@@ -231,15 +308,28 @@ export function FollowButton({ profile, style }: FollowButtonProps) {
             return;
           }
 
-          trackAnalytics('follow_succeeded', {
-            result:
-              response.followProfile.result.__typename === 'ProfileFollowRequest'
-                ? 'request'
-                : 'follow',
-            selected_profile_id: selectedProfileId,
-          });
+          if (!onboardingAnalytics) {
+            trackAnalytics('follow_succeeded', {
+              result:
+                response.followProfile.result.__typename === 'ProfileFollowRequest'
+                  ? 'request'
+                  : 'follow',
+              selected_profile_id: selectedProfileId,
+            });
+          }
         },
-        onError: showFailureToast,
+        onError: () => {
+          if (onboardingToken) {
+            onboardingAnalytics?.finish(
+              onboardingToken,
+              data.id,
+              'failed',
+              selectedProfileId ?? undefined,
+              'network',
+            );
+          }
+          callbacks.onError();
+        },
         optimisticUpdater: (store) => {
           const followee = store.get(data.id);
           const follower = getSelectedProfile(store);

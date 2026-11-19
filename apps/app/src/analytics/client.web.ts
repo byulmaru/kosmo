@@ -7,6 +7,7 @@ const POSTHOG_USER_ID = '$user_id';
 
 let client: PostHog | null | undefined;
 let selectedProfileContext: { accountId: string; profileId: string } | null = null;
+let pendingOnboardingHomeView: { accountId: string; flowId: string } | null = null;
 
 function initializeAnalytics(): PostHog | null {
   const browserHostname = typeof window === 'undefined' ? undefined : window.location.hostname;
@@ -89,8 +90,48 @@ export function trackAnalytics<Name extends AnalyticsEventName>(
   }
 }
 
+export function trackAnalyticsForAccount<Name extends AnalyticsEventName>(
+  accountId: string,
+  eventName: Name,
+  properties: AnalyticsEventProperties[Name],
+): void {
+  if (!accountId) {
+    return;
+  }
+
+  try {
+    const analyticsClient = initializeAnalytics();
+    if (
+      !analyticsClient ||
+      getPostHogAccountId(analyticsClient) !== accountId ||
+      analyticsClient.get_distinct_id() !== accountId
+    ) {
+      return;
+    }
+
+    analyticsClient.capture(eventName, properties as Parameters<PostHog['capture']>[1]);
+  } catch {
+    // Analytics is best-effort and must not affect the product flow.
+  }
+}
+
 export function trackAnalyticsScreen(screenName: string): void {
-  void screenName;
+  if (screenName !== '/home' || !pendingOnboardingHomeView) {
+    return;
+  }
+
+  const pending = pendingOnboardingHomeView;
+  pendingOnboardingHomeView = null;
+  trackAnalyticsForAccount(pending.accountId, 'first_profile_onboarding_home_viewed', {
+    flow_id: pending.flowId,
+  });
+}
+
+export function setPendingOnboardingHomeView(
+  accountId: string | null,
+  flowId: string | null,
+): void {
+  pendingOnboardingHomeView = accountId && flowId ? { accountId, flowId } : null;
 }
 
 function getPostHogAccountId(analyticsClient: PostHog): string | null {
@@ -137,6 +178,7 @@ export function identifyAnalytics(accountId: string, availableProfileCount?: num
 }
 
 export function clearAnalytics(): void {
+  pendingOnboardingHomeView = null;
   selectedProfileContext = null;
   try {
     const analyticsClient = initializeAnalytics();

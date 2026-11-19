@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
+import { createFirstProfileOnboardingAnalytics } from '@/components/onboarding/firstProfileOnboardingAnalytics';
 import { FirstProfileTagDiscoveryRoute } from '@/components/onboarding/FirstProfileTagDiscoveryRoute';
 import { StateView } from '@/components/ui/StateView';
 import { SessionProvider } from '@/session/SessionProvider';
@@ -55,6 +56,7 @@ type State = 'ready' | 'empty' | 'tags-error' | 'list-error' | 'loading' | 'long
 function DiscoveryStory({ state = 'ready' }: { state?: State }) {
   const [continued, setContinued] = useState(false);
   const { height } = useWindowDimensions();
+  const analytics = useMemo(() => createFirstProfileOnboardingAnalytics('story-account'), []);
   const operationResponses = useMemo(() => {
     const savedTags =
       state === 'long'
@@ -111,8 +113,9 @@ function DiscoveryStory({ state = 'ready' }: { state?: State }) {
             <StateView title="홈으로 이동했어요" />
           ) : (
             <FirstProfileTagDiscoveryRoute
-              empty={<StateView title="저장한 태그가 없어 홈으로 이동해요" />}
+              analytics={analytics}
               onContinue={() => setContinued(true)}
+              onNoSavedTags={() => setContinued(true)}
               profileId="discovery-owner"
             />
           )}
