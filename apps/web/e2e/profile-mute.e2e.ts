@@ -374,7 +374,7 @@ test('같은 Account의 selected Profile별 Mute를 분리하고 switcher 전환
   await page.getByRole('tablist', { name: '타임라인' }).getByRole('tab', { name: '로컬' }).click();
   await expect(page).toHaveURL(/\/local$/u);
   await expect(visibleTargetPostBody).toBeVisible();
-  const profilePostsResponse = waitForGraphQLOperation(page, 'ProfilePostListPageQuery');
+  const profilePostsResponse = waitForGraphQLOperation(page, 'ProfileScreenQuery');
   await page
     .getByRole('link', { name: `${target.displayName} @${target.handle}`, exact: true })
     .click();
@@ -635,7 +635,7 @@ async function confirmUnmute(page: Page) {
 }
 
 async function gotoProfileForMute(page: Page, handle: string) {
-  const profilePostsResponse = waitForGraphQLOperation(page, 'ProfilePostListPageQuery');
+  const profilePostsResponse = waitForGraphQLOperation(page, 'ProfileScreenQuery');
   await page.goto(`/@${handle}`);
   const response = await profilePostsResponse;
   await response.finished();

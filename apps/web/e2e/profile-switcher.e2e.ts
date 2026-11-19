@@ -135,7 +135,7 @@ test('profile route action follows Profile.viewerState after switching', async (
   await createProfileFromSwitcher(page, 'delta');
   await expect(sidebarProfileHandle(page, 'delta')).toBeVisible();
 
-  const profileLayoutResponsePromise = waitForGraphQLOperation(page, 'ProfileLayoutQuery');
+  const profileLayoutResponsePromise = waitForGraphQLOperation(page, 'ProfileScreenQuery');
   await page.goto('/@gamma');
   const profileLayoutResponse = await profileLayoutResponsePromise;
   await profileLayoutResponse.finished();
@@ -151,7 +151,7 @@ test('profile route action follows Profile.viewerState after switching', async (
   await expect(page.getByText('@gamma', { exact: true }).last()).toBeVisible();
 
   expect(graphQLRequests.operationNames).toContain('ProfileSwitcherSelectProfileMutation');
-  expect(graphQLRequests.operationNames).toContain('ProfileLayoutQuery');
+  expect(graphQLRequests.operationNames).toContain('ProfileScreenQuery');
 });
 
 test('home route active profile query refetches after switching profiles', async ({ page }) => {
