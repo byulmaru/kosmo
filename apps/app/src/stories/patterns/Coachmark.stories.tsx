@@ -119,6 +119,32 @@ function TargetReadinessFixture({
   );
 }
 
+function CenteredFixture({
+  onClose,
+  onComplete,
+  onShown,
+}: Pick<StoryArgs, 'onClose' | 'onComplete' | 'onShown'>) {
+  const [visible, setVisible] = useState(true);
+
+  return (
+    <View style={styles.stage}>
+      <Coachmark
+        description="검색 결과가 없어도 프로필과 태그를 탐색하는 방법을 확인하세요."
+        onClose={() => {
+          onClose();
+          setVisible(false);
+        }}
+        onComplete={() => {
+          onComplete();
+          setVisible(false);
+        }}
+        onShown={onShown}
+        visible={visible}
+      />
+    </View>
+  );
+}
+
 function StepsFixture({ onClose, onComplete }: Pick<StoryArgs, 'onClose' | 'onComplete'>) {
   const anchorRefs = [
     useRef<NativeView>(null),
@@ -273,6 +299,7 @@ const meta = {
     'CompactContentContract',
     'CompactViewportContract',
     'InteractionContract',
+    'CenteredContract',
     'PlacementContract',
     'StepsInteraction',
     'ViewportContract',
@@ -373,6 +400,21 @@ export const Tests: Story = {
     expect(args.onComplete).toHaveBeenCalledOnce();
     expect(args.onClose).not.toHaveBeenCalled();
     await waitFor(() => expect(trigger).toHaveFocus());
+  },
+};
+
+export const CenteredContract: Story = {
+  render: (args) => (
+    <CenteredFixture onClose={args.onClose} onComplete={args.onComplete} onShown={args.onShown} />
+  ),
+  play: async ({ args }) => {
+    args.onComplete.mockClear();
+    const surface = await findReadySurface('완료');
+    await waitFor(() => expect(args.onShown).toHaveBeenCalledOnce());
+    expect(screen.queryByTestId('coachmark-arrow')).not.toBeInTheDocument();
+    await userEvent.click(within(surface).getByRole('button', { name: '완료' }));
+    await waitFor(() => expect(screen.queryByTestId('coachmark-surface')).not.toBeInTheDocument());
+    expect(args.onComplete).toHaveBeenCalledOnce();
   },
 };
 

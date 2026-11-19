@@ -28,20 +28,20 @@ PROD-1200은 공통 노출·다시 보기 기반을 소유한다. 화면별 단�
 
 `apps/app/src/components/ui/Coachmark.tsx`의 공개 props는 다음과 같다.
 
-| Prop                | 필수 | 타입                                           | 역할                                                                                               |
-| ------------------- | ---- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `visible`           | 예   | `boolean`                                      | 말풍선 표시와 퇴장 상태를 제어한다.                                                                |
-| `anchorRef`         | 예   | `RefObject<View \| null>`                      | 실제 대상 `View`의 화면 좌표를 배치 기준으로 사용한다.                                             |
-| `title`             | 선택 | `string`                                       | 짧은 제목이다. 생략·공백이면 제목을 숨기고 본문을 접근성 이름으로 사용한다.                        |
-| `description`       | 예   | `string`                                       | 짧은 안내 본문이다.                                                                                |
-| `onClose`           | 예   | `() => void`                                   | 건너뛰기, Escape, Native back, backdrop dismiss의 공통 callback이다.                               |
-| `onComplete`        | 예   | `() => void`                                   | 완료 action이다. 단일 안내와 마지막 단계에 사용하며 caller가 안내를 종료한다.                      |
-| `onPrevious`        | 선택 | `() => void`                                   | 이전 단계로 이동한다. 단계형 안내에서 생략하면 첫 단계의 이전이 비활성화된다.                      |
-| `onNext`            | 선택 | `() => void`                                   | 있으면 기본 action이 다음으로 바뀌며 caller가 다음 단계와 anchor를 선택한다.                       |
-| `onExited`          | 선택 | `() => void`                                   | 표시 요청 종료와 퇴장이 완료되면 한 번 호출한다. 초기 숨김·숨김 상태 재렌더에서는 호출하지 않는다. |
-| `onShown`           | 선택 | `() => void`                                   | 대상과 말풍선의 배치 및 진입이 완료되어 실제 표시되었을 때 호출한다.                               |
-| `preferredFocusRef` | 선택 | `RefObject<View \| HTMLElement \| null>`       | 종료 후 Web 포커스를 돌려줄 대상을 지정한다.                                                       |
-| `progress`          | 선택 | `Readonly<{ current: number; total: number }>` | 제목 위에 현재/전체 숫자와 단계별 분할 막대를 표시한다. current는 1부터 시작한다.                  |
+| Prop                | 필수 | 타입                                           | 역할                                                                                                                                                                                |
+| ------------------- | ---- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `visible`           | 예   | `boolean`                                      | 말풍선 표시와 퇴장 상태를 제어한다.                                                                                                                                                 |
+| `anchorRef`         | 선택 | `RefObject<View \| null>`                      | 제공하면 실제 대상 `View`의 화면 좌표로 배치하고 화살표를 표시한다. 생략하면 화살표 없이 safe area 안에 중앙 배치한다. 제공된 ref가 아직 비어 있으면 기존처럼 대상 준비를 기다린다. |
+| `title`             | 선택 | `string`                                       | 짧은 제목이다. 생략·공백이면 제목을 숨기고 본문을 접근성 이름으로 사용한다.                                                                                                         |
+| `description`       | 예   | `string`                                       | 짧은 안내 본문이다.                                                                                                                                                                 |
+| `onClose`           | 예   | `() => void`                                   | 건너뛰기, Escape, Native back, backdrop dismiss의 공통 callback이다.                                                                                                                |
+| `onComplete`        | 예   | `() => void`                                   | 완료 action이다. 단일 안내와 마지막 단계에 사용하며 caller가 안내를 종료한다.                                                                                                       |
+| `onPrevious`        | 선택 | `() => void`                                   | 이전 단계로 이동한다. 단계형 안내에서 생략하면 첫 단계의 이전이 비활성화된다.                                                                                                       |
+| `onNext`            | 선택 | `() => void`                                   | 있으면 기본 action이 다음으로 바뀌며 caller가 다음 단계와 anchor를 선택한다.                                                                                                        |
+| `onExited`          | 선택 | `() => void`                                   | 표시 요청 종료와 퇴장이 완료되면 한 번 호출한다. 초기 숨김·숨김 상태 재렌더에서는 호출하지 않는다.                                                                                  |
+| `onShown`           | 선택 | `() => void`                                   | 대상과 말풍선의 배치 및 진입이 완료되어 실제 표시되었을 때 호출한다.                                                                                                                |
+| `preferredFocusRef` | 선택 | `RefObject<View \| HTMLElement \| null>`       | 종료 후 Web 포커스를 돌려줄 대상을 지정한다.                                                                                                                                        |
+| `progress`          | 선택 | `Readonly<{ current: number; total: number }>` | 제목 위에 현재/전체 숫자와 단계별 분할 막대를 표시한다. current는 1부터 시작한다.                                                                                                   |
 
 단계 상태·진행 번호는 caller가 소유하고 최초 노출 이력은 Account metadata에 기록한다. `progress`는 유한 정수이며 `1 <= current <= total`인 값만 표시한다. 미지정·잘못된 값·`total=1`에서는 숫자와 막대를 모두 숨긴다. 하단 `children` 합성은 제공하지 않는다. 공용 컴포넌트가 `이전`·`다음`·`완료`와 `건너뛰기` action을 렌더한다. `onNext`가 있으면 다음, 없으면 완료를 표시한다. `onNext` 또는 `onPrevious`가 있으면 단계형 이전·다음 묶음을 표시하고, 둘 다 없으면 단일 완료 버튼을 표시한다. 완료와 중단을 구분하도록 `onComplete`와 `onClose`는 분리한다. `width`, `height`, `style`, `size`, `placement` public prop은 제공하지 않는다.
 
