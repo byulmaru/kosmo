@@ -22,6 +22,8 @@ export type ReactionSummaryProps = {
   entries?: ReadonlyArray<ReactionSummaryEntry>;
   error?: boolean;
   errorTypeIds?: ReadonlyArray<string>;
+  firstEntryRef?: RefObject<NativeView | null>;
+  onFirstEntryLayout?: () => void;
   loading?: boolean;
   onBackgroundPress?: () => void;
   onMore?: () => void;
@@ -47,6 +49,8 @@ export function ReactionSummary({
   entries,
   error,
   errorTypeIds = [],
+  firstEntryRef,
+  onFirstEntryLayout,
   loading,
   onBackgroundPress,
   onMore,
@@ -218,6 +222,8 @@ export function ReactionSummary({
                 disabled={entryDisabled}
                 key={`${entry.type}-${index}`}
                 onPress={() => onToggle?.({ nextSelected: !selected, optionId: entry.type })}
+                onLayout={index === 0 ? onFirstEntryLayout : undefined}
+                ref={index === 0 && !entryDisabled ? firstEntryRef : undefined}
                 style={({ pressed }) => [
                   styles.entry,
                   {
