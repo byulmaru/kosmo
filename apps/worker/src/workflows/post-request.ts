@@ -73,6 +73,7 @@ const workflowArgsSchema = z
       replyParentId: z.uuid().optional(),
       repostSourceId: z.uuid().optional(),
       sensitiveMedia: z.boolean().optional(),
+      quotePolicy: z.enum(['EVERYONE', 'FOLLOWERS', 'AUTHOR']).nullish(),
       visibility: z.enum(PostVisibility),
     }),
     mediaProcessing: z

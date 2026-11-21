@@ -25,6 +25,7 @@ import { PostComposerProfileSwitcher } from './PostComposerProfileSwitcher';
 import {
   createPostComposerContextKey,
   createPostComposerMutationInput,
+  defaultPostComposerQuotePolicy,
   findPostComposerMentionQuery,
   normalizePostComposerMentionDraft,
   replacePostComposerMentionQuery,
@@ -53,6 +54,7 @@ import type {
   PostComposerMentionCandidateResults,
   PostComposerMentionQuery,
   PostComposerMentionSearchState,
+  PostComposerQuotePolicy,
   PostComposerTextSelection,
 } from './postComposerState';
 
@@ -410,6 +412,9 @@ function PostComposerContents({
     replyParentVisibility,
   );
   const [visibility, setVisibility] = useState<Visibility>(() => defaultVisibility);
+  const [quotePolicy, setQuotePolicy] = useState<PostComposerQuotePolicy>(
+    defaultPostComposerQuotePolicy,
+  );
   const defaultVisibilityRef = useRef(defaultVisibility);
   const visibilityProfileIdRef = useRef(profile.id);
   const [media, setMedia] = useState<PostComposerMediaValue>(emptyPostComposerMediaValue);
@@ -438,7 +443,10 @@ function PostComposerContents({
     contentWarningText.length > 0 ||
     media.items.length > 0 ||
     media.hasPendingMedia;
-  const hasUnsavedDraft = hasDraftContent || visibility !== defaultVisibility;
+  const hasUnsavedDraft =
+    hasDraftContent ||
+    visibility !== defaultVisibility ||
+    quotePolicy !== defaultPostComposerQuotePolicy;
   const remaining = postBodyMaxLength - [...bodyText].length - [...contentWarningText].length;
   const disabled =
     accountId === null ||
@@ -449,6 +457,7 @@ function PostComposerContents({
   useEffect(() => {
     if (visibilityProfileIdRef.current !== profile.id) {
       visibilityProfileIdRef.current = profile.id;
+      setQuotePolicy(defaultPostComposerQuotePolicy);
       defaultVisibilityRef.current = defaultVisibility;
       return;
     }
@@ -531,6 +540,7 @@ function PostComposerContents({
           contentWarningText,
           repostSourceId,
           mentions,
+          quotePolicy,
         ),
         actorProfileId: profile.id,
         media: submittedMedia,
@@ -589,6 +599,7 @@ function PostComposerContents({
           setContentWarningExpanded(false);
           setMedia(emptyPostComposerMediaValue);
           setMediaGeneration((generation) => generation + 1);
+          setQuotePolicy(defaultPostComposerQuotePolicy);
           setSelectedProfileKey(null);
           setVisibility(
             resolvePostComposerVisibility(
@@ -855,6 +866,8 @@ function PostComposerContents({
                   }
                 },
                 onPollAction: () => undefined,
+                quotePolicy,
+                onQuotePolicyChange: setQuotePolicy,
                 onSubmit: () => submit(),
                 onVisibilityChange: setVisibility,
                 remaining,

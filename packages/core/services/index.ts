@@ -31,7 +31,11 @@ export {
   resolveActivityPubPostCreatedAt,
 } from './post';
 export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post-quote-consent';
-export { isLocalQuoteAllowedByPolicy } from './post-quote-consent';
+export {
+  assertPostQuotePolicy,
+  defaultPostQuotePolicy,
+  isLocalQuoteAllowedByPolicy,
+} from './post-quote-consent';
 export type { PostQuoteConsentRow, QuoteSource } from './post-quote-identity';
 export {
   canDisplayQuoteSource,

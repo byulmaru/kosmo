@@ -1,4 +1,3 @@
-import { PostQuoteConsentStatus } from '@kosmo/core/enums';
 import { builder } from '@/graphql/builder';
 import { Profile } from '@/graphql/resolvers/profile';
 import {
@@ -9,6 +8,7 @@ import { postProfilePinLoader } from '../loader/profile-pin';
 import { reactionCountLoader } from '../loader/reaction-count';
 import { replyCountLoader } from '../loader/reply-count';
 import { repostCountLoader, viewerRepostLoader } from '../loader/repost';
+import { repostSourceLoader } from '../loader/repost-source';
 import { smartFilterProbabilityLoader } from '../loader/smart-filter-probability';
 import { isCachedHomeTimelinePost, Post, PostContent } from '../ref';
 
@@ -47,12 +47,13 @@ builder.objectFields(Post, (t) => ({
     type: Post,
     nullable: true,
     resolve: (post, _, ctx) => {
-      if (
-        post.currentContentId != null &&
-        post.quoteConsentStatus != null &&
-        post.quoteConsentStatus !== PostQuoteConsentStatus.APPROVED
-      ) {
-        return null;
+      if (post.currentContentId != null && post.repostSourceId != null) {
+        return repostSourceLoader(ctx)
+          .load({
+            quotePostId: post.id,
+            sourcePostId: post.repostSourceId,
+          })
+          .then((source) => source?.sourcePostId ?? null);
       }
       if (
         !isCachedHomeTimelinePost(post) ||

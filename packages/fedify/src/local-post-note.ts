@@ -1,6 +1,14 @@
 import '@kosmo/core/polyfill';
 
-import { Hashtag, Image, Mention, Note, PUBLIC_COLLECTION } from '@fedify/vocab';
+import {
+  Hashtag,
+  Image,
+  InteractionPolicy,
+  InteractionRule,
+  Mention,
+  Note,
+  PUBLIC_COLLECTION,
+} from '@fedify/vocab';
 import {
   ActivityPubActors,
   db,
@@ -22,6 +30,7 @@ import {
   MediaSource,
   MediaState,
   PostQuoteConsentStatus,
+  PostQuotePolicy,
   PostState,
   PostVisibility,
   ProfileState,
@@ -34,6 +43,7 @@ import {
 } from '@kosmo/core/post-content/server';
 import { isConfiguredLocalProfile } from '@kosmo/core/profile';
 import {
+  defaultPostQuotePolicy,
   loadQuoteConsentForPost,
   loadQuotePostIdentity,
   loadQuoteSourceIdentity,
@@ -58,6 +68,7 @@ type LocalPostNote = {
   readonly mediaAttachments: readonly Image[];
   readonly quoteAuthorizationUri: string | null;
   readonly quoteProtocolEnabled: boolean;
+  readonly quotePolicy: PostQuotePolicy;
   readonly quoteSourceUri: string | null;
   readonly replyParentId: string | null;
   readonly summary: string | null;
@@ -167,6 +178,7 @@ const loadLocalPostNoteForProjection = async (
     mediaAttachments,
     quoteAuthorizationUri: quote.quoteAuthorizationUri,
     quoteProtocolEnabled: quote.quoteProtocolEnabled,
+    quotePolicy: row.post.quotePolicy ?? defaultPostQuotePolicy,
     quoteSourceUri: quote.quoteSourceUri,
     replyParentId: row.post.replyParentId,
     sensitiveMedia: row.contentDocument.body.attrs?.sensitiveMedia ?? false,
@@ -553,6 +565,14 @@ export const projectLocalPostNote = async (
   const tags = [...mentions.tags, ...hashtags.tags];
   const ccs = cc && mentions.remoteActorUris.length > 0 ? [cc, ...mentions.remoteActorUris] : null;
 
+  const canQuote = new InteractionRule({
+    automaticApprovals:
+      note.quotePolicy === PostQuotePolicy.EVERYONE
+        ? [PUBLIC_COLLECTION]
+        : note.quotePolicy === PostQuotePolicy.FOLLOWERS
+          ? [followersUri, authorUri]
+          : [authorUri],
+  });
   const object = new Note({
     attachments: [...note.mediaAttachments],
     attribution: authorUri,
@@ -563,6 +583,7 @@ export const projectLocalPostNote = async (
       note.quoteSourceUri && note.quoteProtocolEnabled ? note.quoteSourceUri : null,
     ),
     id: new URL(`/ap/note/${note.id}`, note.canonicalOrigin),
+    interactionPolicy: new InteractionPolicy({ canQuote }),
     mediaType: 'text/html',
     emojiReactions: new URL(`/ap/note/${note.id}/emoji-reactions`, note.canonicalOrigin),
     published: note.createdAt,
