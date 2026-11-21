@@ -45,4 +45,7 @@ spec:
       - name: kosmo_migration
         ensure: absent
   storage:
-    size: 10Gi
+    size: {{ .Values.postgres.storage.size }}
+    {{- with .Values.postgres.storage.storageClass }}
+    storageClass: {{ . | quote }}
+    {{- end }}
