@@ -1193,9 +1193,7 @@ export const MobilePlaygroundContract: Story = {
     const menu = canvas.getByRole('menu', { name: '공개 범위 선택' });
     const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     const visibilityGroup = within(menu).getByRole('group', { name: '공개 범위' });
-    const quoteGroup = within(menu).getByRole('group', { name: '인용 허용 정책' });
     expect(within(visibilityGroup).getAllByRole('menuitemradio')).toHaveLength(4);
-    expect(within(quoteGroup).getAllByRole('menuitemradio')).toHaveLength(3);
     expect(
       within(visibilityGroup).getByRole('menuitemradio', { name: '언급한 프로필만' }),
     ).toBeVisible();
@@ -1204,7 +1202,14 @@ export const MobilePlaygroundContract: Story = {
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: '공개' }));
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('PUBLIC');
     expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toBeVisible();
-    await userEvent.click(within(quoteGroup).getByRole('menuitemradio', { name: /^팔로워:/ }));
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '인용 허용: 모두' }));
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '공개 범위로 돌아가기' }));
+    expect(within(menu).getByRole('menuitemradio', { name: '공개' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '인용 허용: 모두' }));
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: '내 팔로워' }));
     expect(args.onQuotePolicyChange).toHaveBeenLastCalledWith('FOLLOWERS');
     expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
 

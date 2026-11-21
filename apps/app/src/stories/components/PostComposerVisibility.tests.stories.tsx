@@ -111,7 +111,7 @@ export const DirectSelection: Story = {
       await userEvent.click(canvas.getByRole('menuitemradio', { name: label }));
       expect(args.onVisibilityChange).toHaveBeenLastCalledWith(value);
       if (value === 'PUBLIC' || value === 'UNLISTED') {
-        expect(canvas.getByRole('group', { name: '인용 허용 정책' })).toBeVisible();
+        expect(canvas.getByRole('menuitem', { name: '인용 허용: 모두' })).toBeVisible();
         await userEvent.keyboard('{Escape}');
       }
       expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).toBeNull();
@@ -132,6 +132,9 @@ export const DirectSelection: Story = {
       expect(target.scrollWidth).toBeLessThanOrEqual(target.clientWidth);
 
       await userEvent.click(trigger);
+      if (value === 'DIRECT' || value === 'FOLLOWERS') {
+        expect(canvas.queryByRole('menuitem', { name: /^인용 허용:/ })).toBeNull();
+      }
       expect(canvas.getByRole('menuitemradio', { name: label })).toHaveAttribute(
         'aria-checked',
         'true',
@@ -169,7 +172,7 @@ export const KeyboardSelection: Story = {
     expect(canvas.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
     await userEvent.keyboard(' ');
     expect(args.onVisibilityChange).toHaveBeenLastCalledWith('UNLISTED');
-    expect(canvas.getByRole('group', { name: '인용 허용 정책' })).toBeVisible();
+    expect(canvas.getByRole('menuitem', { name: '인용 허용: 모두' })).toBeVisible();
     await userEvent.keyboard('{Escape}');
     const unlisted = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     expect(unlisted).toHaveFocus();

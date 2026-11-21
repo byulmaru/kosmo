@@ -95,21 +95,34 @@ export const QuotePolicyKeyboardContract: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 공개' }));
 
-    const quotePolicyGroup = canvas.getByRole('group', { name: '인용 허용 정책' });
+    const visibilityMenu = canvas.getByRole('menu', { name: '공개 범위 선택' });
+    expect(within(visibilityMenu).getByRole('menuitem', { name: '인용 허용: 모두' })).toBeVisible();
+    expect(canvas.queryByRole('group', { name: '인용 허용 정책' })).toBeNull();
+    await userEvent.keyboard('{ArrowRight}');
+
+    const quotePolicyGroup = within(visibilityMenu).getByRole('group', { name: '인용 허용 정책' });
     const policyOptions = within(quotePolicyGroup).getAllByRole('menuitemradio');
-    policyOptions[0]?.focus();
+    expect(policyOptions[0]).toHaveFocus();
+    expect(within(visibilityMenu).queryByRole('group', { name: '공개 범위' })).toBeNull();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(within(visibilityMenu).getByRole('menuitem', { name: '인용 허용: 모두' })).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
     await userEvent.keyboard('{ArrowDown}');
 
-    expect(policyOptions[1]).toHaveFocus();
-    expect(
-      within(quotePolicyGroup).getByRole('menuitemradio', {
-        name: '팔로워: 나를 팔로우하는 사람이 인용할 수 있어요.',
-      }),
-    ).toHaveAttribute('aria-checked', 'true');
+    expect(canvas.getByRole('menuitemradio', { name: '내 팔로워' })).toHaveFocus();
+    expect(canvas.getByRole('menuitemradio', { name: '내 팔로워' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
     expect(canvas.getByRole('button', { name: '공개 범위: 공개' })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
+    await userEvent.keyboard('{Escape}');
+    const trigger = canvas.getByRole('button', { name: '공개 범위: 공개' });
+    expect(trigger).toHaveFocus();
+    await userEvent.click(trigger);
+    expect(canvas.getByRole('menuitem', { name: '인용 허용: 내 팔로워' })).toBeVisible();
   },
 };
 

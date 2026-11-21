@@ -192,8 +192,8 @@ open/close lifecycle만 추가한다. Reply 또는 Quote 전용 Composer를 별�
   선택 사항이며, 관계가 없으면 작성자만 읽을 수 있다. 기존 Mention 제안 또는 유효한 handle 입력으로 대상을 지정하며,
   미확인·malformed·이용할 수 없는 handle text는 수신자가 아니다. 별도 수신자 선택 UI는 없다.
 - 이 local 작성 선택은 ActivityPub DIRECT 수신 audience나 outbound delivery를 지원하지 않는다.
-- PROD-924는 공용 공개 범위 설정 UI에 인용 허용 정책을 추가한다. 현재 draft가 `PUBLIC` 또는
-  `UNLISTED`일 때만 `모두`·`팔로워`·`본인만`을 선택하며 Parent나 Source의 정책을 상속하지 않는다.
+- 현재 draft가 `PUBLIC` 또는 `UNLISTED`이면 공개 범위 메뉴 하단에 `인용 허용`과 현재 값을 표시한다.
+  이 행을 누르면 같은 팝업에서 `모두`·`내 팔로워`·`본인만`을 선택할 수 있다. Parent나 Source의 정책을 상속하지 않는다.
 - 이 정책은 작성할 Post가 인용되는 범위를 정하며 Reply+Quote 동시 작성을 추가하지 않는다. 초기값·draft 수명·
   제출·오류 복구는 [Post Action Bar의 설정 계약](./post-action-bar.md#공개-범위-설정의-인용-정책-2026-09-11)을 따른다.
 

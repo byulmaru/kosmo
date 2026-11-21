@@ -8229,14 +8229,8 @@ export const ComposerVisibilityAndSubmitInteraction: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '공개 범위: 조용한 공개' }));
     menu = await canvas.findByRole('menu', { name: '공개 범위 선택' });
     await userEvent.click(within(menu).getByRole('menuitemradio', { name: /^공개/ }));
-    await userEvent.click(
-      within(within(menu).getByRole('group', { name: '인용 허용 정책' })).getByRole(
-        'menuitemradio',
-        {
-          name: /^모두/,
-        },
-      ),
-    );
+    await userEvent.click(within(menu).getByRole('menuitem', { name: '인용 허용: 모두' }));
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: '모두' }));
     await waitFor(() => {
       expect(canvas.queryByRole('menu', { name: '공개 범위 선택' })).not.toBeInTheDocument();
     });

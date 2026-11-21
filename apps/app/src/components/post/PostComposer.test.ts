@@ -365,14 +365,18 @@ mockModule('expo-crypto', {
   randomUUID: () => quoteUUIDs.shift() ?? '00000000-0000-4000-8000-000000000000',
 });
 mockModule(require.resolve('lucide-react-native'), {
+  ArrowLeftIcon: 'ArrowLeftIcon',
   AtSignIcon: 'AtSignIcon',
   ChartNoAxesColumnIncreasingIcon: 'ChartNoAxesColumnIncreasingIcon',
+  CheckIcon: 'CheckIcon',
   ChevronDownIcon: 'ChevronDownIcon',
+  ChevronRightIcon: 'ChevronRightIcon',
   ExpandIcon: 'ExpandIcon',
   GlobeIcon: 'GlobeIcon',
   ImagePlusIcon: 'ImagePlusIcon',
   LockIcon: 'LockIcon',
   MoonIcon: 'MoonIcon',
+  QuoteIcon: 'QuoteIcon',
   SmileIcon: 'SmileIcon',
   TriangleAlertIcon: 'TriangleAlertIcon',
   XIcon: 'XIcon',

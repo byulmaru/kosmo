@@ -1,10 +1,14 @@
 import { PostVisibility } from '@kosmo/core/enums';
 import { postBodyMaxLength } from '@kosmo/core/validation/post-policy';
 import {
+  ArrowLeftIcon,
   ChartNoAxesColumnIncreasingIcon,
+  CheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   ExpandIcon,
   ImagePlusIcon,
+  QuoteIcon,
   SmileIcon,
   TriangleAlertIcon,
   XIcon,
@@ -40,7 +44,7 @@ import {
   defaultPostComposerQuotePolicy,
   isPostComposerQuotePolicyVisible,
 } from './postComposerState';
-import { postQuotePolicyOptions, postQuotePolicyPresentation } from './postQuotePolicyPresentation';
+import { postQuotePolicyLabels, postQuotePolicyOptions } from './postQuotePolicyPresentation';
 import { postVisibilityPresentation } from './postVisibilityPresentation';
 import type { PostQuotePolicy } from '@kosmo/core/enums';
 import type { ReactNode, RefObject } from 'react';
@@ -129,6 +133,8 @@ const visibilityOptions = postComposerTargetVisibilityValues.map((value) => ({
   value,
 }));
 
+const quotePolicyGroupLabel = '인용 허용 정책';
+
 const composerBodyFocusStyle = {
   borderWidth: borderWidths[0],
   outlineStyle: 'solid',
@@ -164,8 +170,6 @@ function useVisibilityMenu(
     }
     const control = controlRef.current as unknown as HTMLElement;
     const menu = menuRef.current as unknown as HTMLElement;
-    const items = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitemradio"]'));
-    (items.find((item) => item.getAttribute('aria-checked') === 'true') ?? items[0])?.focus();
     const dismissOutside = (event: Event) => {
       if (!control.contains(event.target as Node)) {
         setVisibilityOpen(false);
@@ -184,6 +188,18 @@ function useVisibilityMenu(
       }
       const activeItem = document.activeElement as HTMLElement;
       const group = activeItem.closest<HTMLElement>('[role="group"]');
+      const navigationItem = menu.querySelector<HTMLElement>('[role="menuitem"]');
+      const quoteStep = !!menu.querySelector(`[aria-label="${quotePolicyGroupLabel}"]`);
+      if (
+        navigationItem &&
+        (event.key === (quoteStep ? 'ArrowLeft' : 'ArrowRight') ||
+          (navigationItem === activeItem && [' ', 'Enter'].includes(event.key)))
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        navigationItem.click();
+        return;
+      }
       const currentItems = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitemradio"]'));
       const groupItems = group
         ? currentItems.filter((item) => item.closest('[role="group"]') === group)
@@ -207,7 +223,7 @@ function useVisibilityMenu(
             : (index + (event.key === 'ArrowDown' ? 1 : -1) + groupItems.length) %
               groupItems.length;
       groupItems[next]?.focus();
-      if (group?.getAttribute('aria-label') === '인용 허용 정책') {
+      if (group?.getAttribute('aria-label') === quotePolicyGroupLabel) {
         const policy = postQuotePolicyOptions[next];
         if (policy) {
           onQuotePolicyChangeRef.current?.(policy);
@@ -1301,6 +1317,10 @@ function VisibilityMenu({
   const elevation = useElevation();
   const { height, width } = useWindowDimensions();
   const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
+  const [step, setStep] = useState<'visibility' | 'quote' | 'return-to-visibility'>('visibility');
+  const canChooseQuotePolicy = isPostComposerQuotePolicyVisible(value);
+  const quoteStep = step === 'quote' && canChooseQuotePolicy;
+  const returnToVisibility = () => setStep('return-to-visibility');
   const dismiss = () => {
     onDismiss();
     triggerRef.current?.focus();
@@ -1322,6 +1342,33 @@ function VisibilityMenu({
       });
     });
   }, [alignRight, height, triggerRef, width]);
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+    const menu = menuRef.current as unknown as HTMLElement;
+    const selector =
+      !quoteStep && step === 'return-to-visibility' && canChooseQuotePolicy
+        ? '[role="menuitem"]'
+        : '[role="menuitemradio"][aria-checked="true"]';
+    menu.querySelector<HTMLElement>(selector)?.focus();
+  }, [canChooseQuotePolicy, menuRef, quoteStep, step]);
+
+  const menuItemRole = Platform.OS === 'web' ? 'menuitem' : undefined;
+  const navigationRole = Platform.OS === 'web' ? undefined : 'button';
+  const optionRole = Platform.OS === 'web' ? ('menuitemradio' as never) : undefined;
+  const radioRole = Platform.OS === 'web' ? undefined : 'radio';
+  const groupRole = Platform.OS === 'web' ? 'group' : undefined;
+  const radioGroupRole = Platform.OS === 'web' ? undefined : 'radiogroup';
+  const rowStyle = ({ pressed }: { pressed: boolean }) => [
+    styles.visibilityOption,
+    { backgroundColor: pressed ? theme.statePressed : 'transparent' },
+  ];
+  const labelStyle = [styles.visibilityOptionLabel, { color: theme.foregroundPrimary }];
+  const secondaryStyle = [styles.visibilityDescription, { color: theme.foregroundSecondary }];
+  const selectionCheck = (
+    <CheckIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
+  );
   const menu = (
     <View
       ref={menuRef}
@@ -1339,103 +1386,96 @@ function VisibilityMenu({
         { backgroundColor: theme.backgroundElevated, borderColor: theme.borderDefault },
       ]}
     >
-      <View
-        accessibilityLabel="공개 범위"
-        accessibilityRole={Platform.OS === 'web' ? undefined : 'radiogroup'}
-        role={Platform.OS === 'web' ? 'group' : undefined}
-      >
-        {visibilityOptions.map((option) => {
-          const Icon = option.icon;
-          const selected = option.value === value;
-          return (
-            <Pressable
-              aria-checked={selected}
-              accessibilityLabel={option.label}
-              accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
-              accessibilityState={{ checked: selected }}
-              key={option.value}
-              onPress={() => onChange(option.value)}
-              role={Platform.OS === 'web' ? ('menuitemradio' as never) : undefined}
-              style={({ pressed }) => [
-                styles.visibilityOption,
-                {
-                  backgroundColor: selected
-                    ? theme.stateSelectedSurface
-                    : pressed
-                      ? theme.statePressed
-                      : 'transparent',
-                },
-              ]}
-            >
-              <Icon color={theme.foregroundSecondary} size={iconSizes[16]} strokeWidth={2} />
-              <View style={styles.visibilityOptionCopy}>
-                <Text style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}>
-                  {option.label}
-                </Text>
-                <Text style={[styles.visibilityDescription, { color: theme.foregroundSecondary }]}>
-                  {option.description}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
-      {isPostComposerQuotePolicyVisible(value) ? (
+      {quoteStep ? (
         <>
-          <Text
-            style={[
-              styles.policyHeading,
-              { color: theme.foregroundPrimary, borderTopColor: theme.borderSubtle },
-            ]}
+          <Pressable
+            accessibilityLabel="공개 범위로 돌아가기"
+            accessibilityRole={navigationRole}
+            onPress={returnToVisibility}
+            role={menuItemRole}
+            style={rowStyle}
           >
-            인용 허용
-          </Text>
+            <ArrowLeftIcon color={theme.foregroundPrimary} size={iconSizes[16]} strokeWidth={2} />
+            <Text style={labelStyle}>공개 범위</Text>
+          </Pressable>
+          <Text style={[secondaryStyle, styles.policyHeading]}>인용 허용</Text>
           <View
-            accessibilityLabel="인용 허용 정책"
-            accessibilityRole={Platform.OS === 'web' ? undefined : 'radiogroup'}
-            role={Platform.OS === 'web' ? 'group' : undefined}
+            accessibilityLabel={quotePolicyGroupLabel}
+            accessibilityRole={radioGroupRole}
+            role={groupRole}
           >
             {postQuotePolicyOptions.map((policy) => {
-              const presentation = postQuotePolicyPresentation[policy];
+              const label = postQuotePolicyLabels[policy];
               const selected = policy === quotePolicy;
               return (
                 <Pressable
-                  accessibilityLabel={`${presentation.label}: ${presentation.description}`}
-                  aria-checked={selected}
-                  accessibilityRole={Platform.OS === 'web' ? undefined : 'radio'}
+                  accessibilityLabel={label}
+                  accessibilityRole={radioRole}
                   accessibilityState={{ checked: selected }}
+                  aria-checked={selected}
                   key={policy}
                   onPress={() => onQuotePolicyChange(policy)}
-                  role={Platform.OS === 'web' ? ('menuitemradio' as never) : undefined}
-                  style={({ pressed }) => [
-                    styles.visibilityOption,
-                    {
-                      backgroundColor: selected
-                        ? theme.stateSelectedSurface
-                        : pressed
-                          ? theme.statePressed
-                          : 'transparent',
-                    },
-                  ]}
+                  role={optionRole}
+                  style={rowStyle}
                 >
-                  <View style={styles.visibilityOptionCopy}>
-                    <Text
-                      style={[styles.visibilityOptionLabel, { color: theme.foregroundPrimary }]}
-                    >
-                      {presentation.label}
-                    </Text>
-                    <Text
-                      style={[styles.visibilityDescription, { color: theme.foregroundSecondary }]}
-                    >
-                      {presentation.description}
-                    </Text>
-                  </View>
+                  <Text style={[labelStyle, styles.visibilityOptionCopy]}>{label}</Text>
+                  {selected ? selectionCheck : null}
                 </Pressable>
               );
             })}
           </View>
         </>
-      ) : null}
+      ) : (
+        <>
+          <View accessibilityLabel="공개 범위" accessibilityRole={radioGroupRole} role={groupRole}>
+            {visibilityOptions.map((option) => {
+              const Icon = option.icon;
+              const selected = option.value === value;
+              return (
+                <Pressable
+                  accessibilityLabel={option.label}
+                  accessibilityRole={radioRole}
+                  accessibilityState={{ checked: selected }}
+                  aria-checked={selected}
+                  key={option.value}
+                  onPress={() => onChange(option.value)}
+                  role={optionRole}
+                  style={rowStyle}
+                >
+                  <Icon color={theme.foregroundSecondary} size={iconSizes[16]} strokeWidth={2} />
+                  <View style={styles.visibilityOptionCopy}>
+                    <Text style={labelStyle}>{option.label}</Text>
+                    {option.value === PostVisibility.UNLISTED ? (
+                      <Text style={secondaryStyle}>{option.description}</Text>
+                    ) : null}
+                  </View>
+                  {selected ? selectionCheck : null}
+                </Pressable>
+              );
+            })}
+          </View>
+          {canChooseQuotePolicy ? (
+            <View style={[styles.policyEntry, { borderTopColor: theme.borderSubtle }]}>
+              <Pressable
+                accessibilityLabel={`인용 허용: ${postQuotePolicyLabels[quotePolicy]}`}
+                accessibilityRole={navigationRole}
+                onPress={() => setStep('quote')}
+                role={menuItemRole}
+                style={rowStyle}
+              >
+                <QuoteIcon color={theme.foregroundSecondary} size={iconSizes[16]} strokeWidth={2} />
+                <Text style={[labelStyle, styles.visibilityOptionCopy]}>인용 허용</Text>
+                <Text style={secondaryStyle}>{postQuotePolicyLabels[quotePolicy]}</Text>
+                <ChevronRightIcon
+                  color={theme.foregroundPrimary}
+                  size={iconSizes[16]}
+                  strokeWidth={2}
+                />
+              </Pressable>
+            </View>
+          ) : null}
+        </>
+      )}
     </View>
   );
   return Platform.OS === 'web' ? (
@@ -1446,14 +1486,14 @@ function VisibilityMenu({
       visible
       statusBarTranslucent
       navigationBarTranslucent
-      onRequestClose={dismiss}
+      onRequestClose={quoteStep ? returnToVisibility : dismiss}
     >
       <View style={styles.visibilityBackdrop}>
         <Pressable accessible={false} onPress={dismiss} style={StyleSheet.absoluteFill} />
         {anchor ? (
           <ScrollView
             accessibilityViewIsModal
-            onAccessibilityEscape={dismiss}
+            onAccessibilityEscape={quoteStep ? returnToVisibility : dismiss}
             keyboardShouldPersistTaps="handled"
             style={[
               styles.nativeVisibilityPosition,
@@ -1630,7 +1670,8 @@ const styles = StyleSheet.create({
   toolVisual: { borderRadius: radius[8] },
   visibilityControl: { position: 'relative', zIndex: 12 },
   visibilityDescription: textStyles.uiCopyS,
-  policyHeading: { borderTopWidth: borderWidths[1], padding: space[12], ...textStyles.uiLabelM },
+  policyEntry: { borderTopWidth: borderWidths[1] },
+  policyHeading: { paddingHorizontal: space[12], paddingVertical: space[4] },
   visibilityLabel: textStyles.uiLabelM,
   visibilityMenu: {
     borderRadius: radius[12],
@@ -1648,10 +1689,12 @@ const styles = StyleSheet.create({
   nativeVisibilityPosition: { position: 'absolute', width: 240 },
   visibilityBackdrop: { flex: 1 },
   visibilityOption: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: space[8],
-    padding: space[12],
+    minHeight: 48,
+    paddingHorizontal: space[12],
+    paddingVertical: space[8],
   },
   visibilityOptionCopy: { flex: 1 },
   visibilityOptionLabel: textStyles.uiLabelM,

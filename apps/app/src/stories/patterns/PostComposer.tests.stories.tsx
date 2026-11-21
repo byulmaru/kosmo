@@ -530,7 +530,7 @@ export const KeyboardFollowersDismissContract: Story = {
     const canvas = within(canvasElement);
     const trigger = canvas.getByRole('button', { name: '공개 범위: 조용한 공개' });
     await userEvent.click(trigger);
-    expect(canvas.getByRole('group', { name: '인용 허용 정책' })).toBeVisible();
+    expect(canvas.getByRole('menuitem', { name: '인용 허용: 모두' })).toBeVisible();
     expect(canvas.getByRole('menuitemradio', { name: '조용한 공개' })).toHaveFocus();
 
     await userEvent.keyboard('{ArrowDown}');
