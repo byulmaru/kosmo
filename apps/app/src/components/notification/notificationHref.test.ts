@@ -10,7 +10,17 @@ describe('notification hrefs', () => {
     });
   });
 
-  it('opens arbitrary HTTP and HTTPS domains as external destinations', () => {
+  it('keeps absolute links on the current KOSMO origin inside the app', () => {
+    assert.deepEqual(
+      parseNotificationHref('https://kos.moe/privacy/changes/2026-10-13?source=notice#latest'),
+      {
+        href: '/privacy/changes/2026-10-13?source=notice#latest',
+        kind: 'internal',
+      },
+    );
+  });
+
+  it('opens other HTTP and HTTPS origins as external destinations', () => {
     assert.deepEqual(parseNotificationHref('https://different.example/path?q=1'), {
       href: 'https://different.example/path?q=1',
       kind: 'external',
@@ -19,8 +29,19 @@ describe('notification hrefs', () => {
       href: 'http://localhost:3000/notice',
       kind: 'external',
     });
-    assert.deepEqual(parseNotificationHref('https://user:password@different.example/path'), {
-      href: 'https://user:password@different.example/path',
+    assert.deepEqual(parseNotificationHref('https://dev.kos.moe/notifications'), {
+      href: 'https://dev.kos.moe/notifications',
+      kind: 'external',
+    });
+  });
+
+  it('keeps absolute URLs that cannot be represented as app paths intact', () => {
+    assert.deepEqual(parseNotificationHref('https://user:password@kos.moe/path'), {
+      href: 'https://user:password@kos.moe/path',
+      kind: 'external',
+    });
+    assert.deepEqual(parseNotificationHref('https://kos.moe//path'), {
+      href: 'https://kos.moe//path',
       kind: 'external',
     });
   });

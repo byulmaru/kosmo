@@ -1,3 +1,4 @@
+import { getPublicWebOrigin } from '@/config/origin';
 import type { Href } from 'expo-router';
 
 export type NotificationHrefTarget =
@@ -16,7 +17,6 @@ function hasControlCharacters(value: string) {
   return false;
 }
 
-/** Accepts app-root paths and HTTP(S) destinations from server-owned notifications. */
 export function parseNotificationHref(value: unknown): NotificationHrefTarget | null {
   if (typeof value !== 'string' || !value || hasControlCharacters(value)) {
     return null;
@@ -43,6 +43,15 @@ export function parseNotificationHref(value: unknown): NotificationHrefTarget | 
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       return null;
+    }
+
+    if (
+      url.origin === getPublicWebOrigin() &&
+      !url.username &&
+      !url.password &&
+      !url.pathname.startsWith('//')
+    ) {
+      return { href: `${url.pathname}${url.search}${url.hash}` as Href, kind: 'internal' };
     }
 
     return { href: url.href, kind: 'external' };
