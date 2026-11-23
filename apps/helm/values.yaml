@@ -5,6 +5,7 @@ version: main
 gateway:
   name: public
   namespace: gateway
+  httpsSectionName: https-kos-moe-wildcard
 secrets:
   vaultKubernetesRole: vso-kubernetes-sync
   vaultKubernetesAudiences: []
@@ -61,6 +62,7 @@ temporal:
       dev: 3d
       prod: 30d
 postgres:
+  existingCluster: ''
   storage:
     size: 10Gi
     storageClass: ''

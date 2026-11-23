@@ -3,7 +3,8 @@
 {{- end -}}
 
 {{- define "kosmo.postgresName" -}}
-{{- printf "%s-postgres" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- $defaultName := printf "%s-postgres" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- .Values.postgres.existingCluster | default $defaultName -}}
 {{- end -}}
 
 {{- define "kosmo.redisName" -}}

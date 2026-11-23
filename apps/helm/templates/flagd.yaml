@@ -3,6 +3,7 @@
 {{- $featureFlagSourceName := printf "%s-flag-source" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- $flagdName := printf "%s-flagd" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- $labels := dict "helm.sh/chart" (include "kosmo.chart" .) "app.kubernetes.io/name" "flagd" "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/managed-by" .Release.Service -}}
+{{- $httpsSectionName := .Values.gateway.httpsSectionName | default "https-kos-moe-wildcard" -}}
 apiVersion: core.openfeature.dev/v1beta1
 kind: FeatureFlag
 metadata:
@@ -115,9 +116,9 @@ metadata:
 {{ toYaml $labels | indent 4 }}
 spec:
   parentRefs:
-    - name: "public"
-      namespace: "gateway"
-      sectionName: "https-kos-moe-wildcard"
+    - name: {{ .Values.gateway.name | quote }}
+      namespace: {{ .Values.gateway.namespace | quote }}
+      sectionName: {{ $httpsSectionName | quote }}
   hostnames:
     - "flags.kos.moe"
   rules:
