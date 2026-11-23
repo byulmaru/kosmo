@@ -53,12 +53,12 @@ export const load: PageServerLoad = async ({ url }) => {
 
   return {
     ...page,
-    instanceDomain: instanceDomain ?? null,
+    ...(instanceDomain ? { instanceDomain } : {}),
     filters: {
       q,
       origin: selectedOrigin ?? '',
       state: selectedState ?? '',
-      instanceId: selectedInstanceId ?? '',
+      ...(selectedInstanceId ? { instanceId: selectedInstanceId } : {}),
     },
   };
 };
