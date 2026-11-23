@@ -95,5 +95,6 @@ postgres:
         cpu: 250m
         memory: 128Mi
 monitoring:
+  alertEvaluator: prometheus
   podMonitor:
     enabled: true
