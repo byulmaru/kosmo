@@ -3,7 +3,7 @@ import { InstanceState } from '@kosmo/core/enums';
 import { and, asc, count, desc, eq, gt, ilike, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
 
-export const instanceIdSchema = z.uuid();
+const instanceIdSchema = z.uuid();
 export const instanceStateSchema = z.enum([
   InstanceState.ACTIVE,
   InstanceState.UNRESPONSIVE,

@@ -84,7 +84,7 @@
             </Table.Cell>
             <Table.Cell class="text-right tabular-nums">
               <a
-                href={resolve(`/profiles?instanceId=${instance.id}`)}
+                href={resolve(`/profiles?instanceDomain=${encodeURIComponent(instance.domain)}`)}
                 aria-label={`${instance.profileCount} profiles on ${instance.domain}`}
                 class="rounded-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >

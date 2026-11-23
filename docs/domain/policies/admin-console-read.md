@@ -79,8 +79,8 @@ Suspension State를 포함할 수 있다.
 목록은 Profile ID, handle, 표시 handle, 표시 이름, avatar, Profile Origin, Lifecycle State, Suspension State,
 Followers Count, Following Count, 작성한 Post의 수와 조회 대상 Post 중 가장 최근 시각을 반환한다. `handle`과
 `표시 handle`은 서로 다른 필드이며 둘 다 목록 projection에 포함한다. 검색어는 handle 또는 표시 이름을 대상으로
-하고 Origin과 State를 각각 필터링할 수 있다. 기본 목록은 모든 Origin과 State를 포함한다. Instance 목록에서
-이동하면 해당 Instance에 속한 Profile로 조회 범위를 좁힐 수 있다.
+하고 Origin, State, Instance Domain으로 필터링할 수 있다. Instance Domain 필터는 도메인이 일치하는 Instance에
+속한 Profile을 반환한다. 기본 목록은 모든 Origin, State, Instance를 포함한다.
 
 `Followers Count`와 `Following Count`는 저장된 best-effort Follow Relationship count다. Post 수와 가장 최근 시각
 (`lastPostedAt`)은 해당 Profile이 작성한 모든 active Post에서 계산하며 Visibility와 무관하게 Reply, Quote, Content
@@ -147,8 +147,8 @@ Instance에 속한 모든 저장 Profile을 세며, 0개인 Instance도 목록�
 상태이며 목록 조회는 원격 연결을 확인하지 않는다.
 
 Domain으로 검색하거나 저장 상태로 필터링할 수 있다. 기본 목록은 소속 Profile 수 내림차순으로 정렬하며,
-수가 같으면 Instance ID 내림차순을 사용한다. Viewer는 소속 Profile 수에서 해당 Instance의 Profile 목록으로
-이동할 수 있다. Instance 상태와 제재를 변경하는 권한은 부여하지 않는다.
+수가 같으면 Instance ID 내림차순을 사용한다. 소속 Profile 수에서 Profile 목록으로 이동하면 해당 Instance의
+Domain이 필터에 적용된다. Instance 상태와 제재를 변경하는 권한은 부여하지 않는다.
 
 ## Account-Profile Membership 조회
 

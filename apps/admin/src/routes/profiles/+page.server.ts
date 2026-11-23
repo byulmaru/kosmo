@@ -1,7 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { instanceIdSchema } from '#lib/server/instances.js';
 import {
-  getInstanceDomain,
   listProfiles,
   profileIdSchema,
   profileOriginSchema,
@@ -15,10 +13,9 @@ export const load: PageServerLoad = async ({ url }) => {
   const q = url.searchParams.get('q')?.trim() ?? '';
   const rawOrigin = url.searchParams.get('origin');
   const rawState = url.searchParams.get('state');
-  const rawInstanceId = url.searchParams.get('instanceId');
+  const instanceDomain = url.searchParams.get('instanceDomain')?.trim().toLowerCase() ?? '';
   const origin = rawOrigin ? profileOriginSchema.safeParse(rawOrigin) : undefined;
   const state = rawState ? profileStateSchema.safeParse(rawState) : undefined;
-  const instanceId = rawInstanceId ? instanceIdSchema.safeParse(rawInstanceId) : undefined;
 
   if (
     (cursor && !profileIdSchema.safeParse(cursor).success) ||
@@ -26,26 +23,17 @@ export const load: PageServerLoad = async ({ url }) => {
     (direction === 'previous' && !cursor) ||
     (rawOrigin && !origin?.success) ||
     (rawState && !state?.success) ||
-    (rawInstanceId && !instanceId?.success)
+    instanceDomain.includes('\0')
   ) {
     error(404, 'Not Found');
   }
 
   const selectedOrigin = origin?.success ? origin.data : undefined;
   const selectedState = state?.success ? state.data : undefined;
-  const selectedInstanceId = instanceId?.success ? instanceId.data : undefined;
-  const instanceDomain = selectedInstanceId
-    ? await getInstanceDomain(selectedInstanceId)
-    : undefined;
-
-  if (selectedInstanceId && !instanceDomain) {
-    error(404, 'Not Found');
-  }
-
   const page = await listProfiles({
     cursor: cursor ?? undefined,
     direction: direction === 'previous' ? 'previous' : 'next',
-    instanceId: selectedInstanceId,
+    instanceDomain: instanceDomain || undefined,
     q: q || undefined,
     origin: selectedOrigin,
     state: selectedState,
@@ -53,12 +41,11 @@ export const load: PageServerLoad = async ({ url }) => {
 
   return {
     ...page,
-    ...(instanceDomain ? { instanceDomain } : {}),
     filters: {
       q,
       origin: selectedOrigin ?? '',
       state: selectedState ?? '',
-      ...(selectedInstanceId ? { instanceId: selectedInstanceId } : {}),
+      ...(instanceDomain ? { instanceDomain } : {}),
     },
   };
 };

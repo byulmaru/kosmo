@@ -40,9 +40,8 @@ const loadProfilePage = async (url: URL) => {
     throw new Error('Expected Profile list data');
   }
   return page as {
-    instanceDomain: string | null;
     profiles: ProfileListRow[];
-    filters: { instanceId: string };
+    filters: { instanceDomain?: string };
   };
 };
 
@@ -173,22 +172,22 @@ describe('Admin Instance read projections', () => {
     expect(mismatchedState.instances).toEqual([]);
   });
 
-  test('filters Profiles by exact Instance ID and keeps inactive Profiles in the scope', async () => {
+  test('filters Profiles by exact Instance domain and keeps inactive Profiles in the scope', async () => {
     const url = new URL('http://admin.test/profiles');
-    url.searchParams.set('instanceId', instanceIds[0]!);
+    url.searchParams.set('instanceDomain', ` ${domainFor(0).toUpperCase()} `);
     const page = await loadProfilePage(url);
 
-    expect(page.instanceDomain).toBe(domainFor(0));
-    expect(page.filters.instanceId).toBe(instanceIds[0]);
+    expect(page.filters.instanceDomain).toBe(domainFor(0));
     expect(page.profiles.map(({ id, state }) => [id, state])).toEqual([
       [profileIds[0], ProfileState.SUSPENDED],
     ]);
 
-    await expect(
-      loadProfiles({
-        url: new URL('http://admin.test/profiles?instanceId=00000000-0000-7000-8000-000000000000'),
-      } as Parameters<typeof loadProfiles>[0]),
-    ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
+    url.searchParams.set('state', 'ACTIVE');
+    expect((await loadProfilePage(url)).profiles).toEqual([]);
+
+    url.searchParams.delete('state');
+    url.searchParams.set('instanceDomain', domainFor(0).replace('.example', ''));
+    expect((await loadProfilePage(url)).profiles).toEqual([]);
   });
 
   test.each([
