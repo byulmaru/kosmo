@@ -1,13 +1,14 @@
 <script lang="ts">
   import { SvelteURLSearchParams } from 'svelte/reactivity';
+  import ModerationAction from '#lib/components/moderation-action.svelte';
   import { Badge } from '#lib/components/ui/badge/index.js';
   import { Button } from '#lib/components/ui/button/index.js';
   import { Input } from '#lib/components/ui/input/index.js';
   import * as Table from '#lib/components/ui/table/index.js';
   import { resolve } from '$app/paths';
-  import type { PageData } from './$types';
+  import type { ActionData, PageData } from './$types';
 
-  let { data }: { data: PageData } = $props();
+  let { data, form }: { data: PageData; form: ActionData | null } = $props();
 
   function cursorHref(cursor: string, direction: 'previous' | undefined) {
     const params = new SvelteURLSearchParams();
@@ -23,6 +24,25 @@
     }
 
     return resolve(`/instances?${params.toString()}`);
+  }
+
+  function actionHref(action: 'suspend' | 'restore') {
+    const params = new SvelteURLSearchParams();
+    if (data.filters.q) {
+      params.set('q', data.filters.q);
+    }
+    if (data.filters.state) {
+      params.set('state', data.filters.state);
+    }
+    if (data.filters.cursor) {
+      params.set('cursor', data.filters.cursor);
+    }
+    if (data.filters.direction) {
+      params.set('direction', data.filters.direction);
+    }
+    params.set(`/${action}`, '');
+
+    return `${resolve('/instances')}?${params.toString()}`;
   }
 </script>
 
@@ -71,6 +91,7 @@
           <Table.Head>Domain</Table.Head>
           <Table.Head class="w-40">Stored state</Table.Head>
           <Table.Head class="w-40 text-right">Stored profiles</Table.Head>
+          <Table.Head class="w-36">Actions</Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -78,9 +99,18 @@
           <Table.Row>
             <Table.Cell class="break-all font-medium">{instance.domain}</Table.Cell>
             <Table.Cell>
-              <Badge variant={instance.state === 'ACTIVE' ? 'default' : 'outline'}>
-                {instance.state}
-              </Badge>
+              <div class="grid justify-items-start gap-1">
+                <Badge variant={instance.state === 'ACTIVE' ? 'default' : 'outline'}>
+                  {instance.state}
+                </Badge>
+                {#if instance.suspensionReason}
+                  <span
+                    class="max-w-64 whitespace-pre-wrap break-all text-xs text-muted-foreground"
+                  >
+                    {instance.suspensionReason}
+                  </span>
+                {/if}
+              </div>
             </Table.Cell>
             <Table.Cell class="text-right tabular-nums">
               <a
@@ -91,11 +121,40 @@
                 {instance.profileCount}
               </a>
             </Table.Cell>
+            <Table.Cell>
+              {#if instance.moderationAction === 'SUSPEND'}
+                <ModerationAction
+                  action="suspend"
+                  actionHref={actionHref('suspend')}
+                  targetId={instance.id}
+                  targetKind="instance"
+                  targetName={instance.domain}
+                />
+              {:else if instance.moderationAction === 'RESTORE'}
+                <ModerationAction
+                  action="restore"
+                  actionHref={actionHref('restore')}
+                  targetId={instance.id}
+                  targetKind="instance"
+                  targetName={instance.domain}
+                />
+              {:else}
+                —
+              {/if}
+            </Table.Cell>
           </Table.Row>
         {/each}
       </Table.Body>
     </Table.Root>
   </div>
+
+  {#if form && 'moderationSuccess' in form}
+    <p role="status" class="text-sm text-muted-foreground">
+      {form.moderationSuccess === 'suspended' ? 'Instance suspended.' : 'Instance restored.'}
+    </p>
+  {:else if form && 'moderationError' in form}
+    <p role="alert" class="text-sm text-destructive">{form.moderationError}</p>
+  {/if}
 
   {#if data.previousCursor || data.nextCursor}
     <nav aria-label="Instance pagination" class="flex justify-end gap-2">

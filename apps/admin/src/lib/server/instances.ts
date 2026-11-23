@@ -1,9 +1,9 @@
 import { db, first, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceState } from '@kosmo/core/enums';
-import { and, asc, count, desc, eq, gt, ilike, lt, or } from 'drizzle-orm';
+import { InstanceKind, InstanceState } from '@kosmo/core/enums';
+import { and, asc, count, desc, eq, gt, ilike, inArray, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
 
-const instanceIdSchema = z.uuid();
+export const instanceIdSchema = z.uuid();
 export const instanceStateSchema = z.enum([
   InstanceState.ACTIVE,
   InstanceState.UNRESPONSIVE,
@@ -35,7 +35,9 @@ export interface InstanceListRow {
   id: string;
   domain: string;
   state: InstanceReadState;
+  moderationAction: 'SUSPEND' | 'RESTORE' | null;
   profileCount: number;
+  suspensionReason: string | null;
 }
 
 const pageSize = 50;
@@ -44,7 +46,9 @@ const instancesWithProfileCounts = db
   .select({
     id: Instances.id,
     domain: Instances.domain,
+    kind: Instances.kind,
     state: Instances.state,
+    suspensionReason: Instances.suspensionReason,
     profileCount: count(Profiles.id).as('profile_count'),
   })
   .from(Instances)
@@ -106,7 +110,9 @@ export const listInstances = async ({
     .select({
       id: instancesWithProfileCounts.id,
       domain: instancesWithProfileCounts.domain,
+      kind: instancesWithProfileCounts.kind,
       state: instancesWithProfileCounts.state,
+      suspensionReason: instancesWithProfileCounts.suspensionReason,
       profileCount: instancesWithProfileCounts.profileCount,
     })
     .from(instancesWithProfileCounts)
@@ -127,8 +133,20 @@ export const listInstances = async ({
     .limit(pageSize + 1);
 
   const hasMoreInDirection = rows.length > pageSize;
-  const instances =
+  const pageRows =
     direction === 'previous' ? rows.slice(0, pageSize).reverse() : rows.slice(0, pageSize);
+  const instances = pageRows.map(({ kind, ...row }) => {
+    const moderationAction: InstanceListRow['moderationAction'] =
+      kind !== InstanceKind.ACTIVITYPUB
+        ? null
+        : row.state === InstanceState.SUSPENDED
+          ? 'RESTORE'
+          : row.state === InstanceState.ACTIVE || row.state === InstanceState.UNRESPONSIVE
+            ? 'SUSPEND'
+            : null;
+
+    return { ...row, moderationAction };
+  });
   const firstInstance = instances.at(0);
   const lastInstance = instances.at(-1);
   const previousPageExists =
@@ -153,4 +171,36 @@ export const listInstances = async ({
     previousCursor: string | null;
     nextCursor: string | null;
   };
+};
+
+export const suspendInstance = async (id: string, reason: string | null): Promise<boolean> => {
+  const rows = await db
+    .update(Instances)
+    .set({ state: InstanceState.SUSPENDED, suspensionReason: reason })
+    .where(
+      and(
+        eq(Instances.id, id),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        inArray(Instances.state, [InstanceState.ACTIVE, InstanceState.UNRESPONSIVE]),
+      ),
+    )
+    .returning({ id: Instances.id });
+
+  return rows.length > 0;
+};
+
+export const restoreInstance = async (id: string): Promise<boolean> => {
+  const rows = await db
+    .update(Instances)
+    .set({ state: InstanceState.ACTIVE, suspensionReason: null })
+    .where(
+      and(
+        eq(Instances.id, id),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        eq(Instances.state, InstanceState.SUSPENDED),
+      ),
+    )
+    .returning({ id: Instances.id });
+
+  return rows.length > 0;
 };

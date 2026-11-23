@@ -35,10 +35,9 @@ projection만 허용하는 애플리케이션 capability 계층은 두지 않는
   않는다. login과 display name만 사용하고 profile picture header는 사용하지 않는다.
 - 상세한 조회 범위와 필드, projection 분리는 [Admin Console Read Policy](../policies/admin-console-read.md)가
   소유한다.
-- Admin Console v1은 기본적으로 읽기 전용이며, [PROD-1299](https://linear.app/byulmaru/issue/PROD-1299)가 허용한
-  Local Profile 기본 게시 공개 범위 변경만 예외다. 이 변경은 기존 Tailscale 접근 경계를 사용하며 다른 Account,
-  Profile, Instance, Membership, Post 변경은 허용하지 않는다. 기존 Account 인증, Profile Owner/Member 사실,
-  `Account.Operator` 기반 운영자 Mutation 권한은 변경하지 않는다.
+- 기존 Tailscale 접근 경계는 [PROD-1299](https://linear.app/byulmaru/issue/PROD-1299)의 Local Profile 기본 게시 공개
+  범위 변경과 [PROD-1355](https://linear.app/byulmaru/issue/PROD-1355)의 Profile·원격 Instance 정지 및 해제에도
+  적용한다. 기존 Account 인증, Profile Owner/Member 관계와 `Account.Operator` 권한은 별도 정책을 따른다.
 - Admin-specific 성공·실패 조회 감사, identity snapshot, 접근 실패·proxy 우회·위조 header security event
   logging 및 보존 기간은 v1에서 모두 제외한다. 기존 공통 runtime 오류·접근 로그의 동작은 이 결정의
   범위가 아니다.
