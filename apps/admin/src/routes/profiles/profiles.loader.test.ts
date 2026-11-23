@@ -7,6 +7,7 @@ test.each([
   'http://admin.test/profiles?direction=next',
   'http://admin.test/profiles?origin=ACTIVITYPUB',
   'http://admin.test/profiles?state=DELETED',
+  'http://admin.test/profiles?instanceDomain=example%00.social',
 ])('rejects malformed Profile filters and pagination with a generic 404', async (url) => {
   await expect(
     loadProfiles({ url: new URL(url) } as Parameters<typeof loadProfiles>[0]),

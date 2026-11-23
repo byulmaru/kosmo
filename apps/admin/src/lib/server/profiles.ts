@@ -36,6 +36,7 @@ export type ProfilePostKind = 'POST' | 'REPLY' | 'QUOTE' | 'REPOST' | 'REPLY_QUO
 export interface ProfileListOptions {
   cursor?: string;
   direction?: 'next' | 'previous';
+  instanceDomain?: string;
   q?: string;
   origin?: ProfileOrigin;
   state?: ProfileReadState;
@@ -112,11 +113,12 @@ const serializeInstant = (value: Temporal.Instant | null | undefined) => value?.
 
 const escapeLikePattern = (value: string) => value.replace(/[\\%_]/g, '\\$&');
 
-const profileFiltersWhere = ({ q, origin, state }: ProfileListOptions) => {
+const profileFiltersWhere = ({ instanceDomain, q, origin, state }: ProfileListOptions) => {
   const search = q?.trim();
   const pattern = search ? `%${escapeLikePattern(search)}%` : undefined;
 
   return and(
+    instanceDomain ? eq(Instances.domain, instanceDomain) : undefined,
     origin ? eq(Instances.kind, originToInstanceKind(origin)) : undefined,
     state ? eq(Profiles.state, state) : undefined,
     pattern ? or(ilike(Profiles.handle, pattern), ilike(Profiles.displayName, pattern)) : undefined,
@@ -245,11 +247,12 @@ const hasNextCursor = async (cursor: string, filters: ProfileListOptions): Promi
 export const listProfiles = async ({
   cursor,
   direction = 'next',
+  instanceDomain,
   q,
   origin,
   state,
 }: ProfileListOptions = {}) => {
-  const filters = { q, origin, state };
+  const filters = { instanceDomain, q, origin, state };
   const rows = await db
     .select({
       id: Profiles.id,
