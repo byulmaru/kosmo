@@ -13,7 +13,7 @@ import type { Href } from 'expo-router';
 import type { ReactElement } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { PostMediaItem } from '@/components/post/PostMediaImage';
-import type { NotificationHrefTarget } from './notificationHref';
+import type { AppLinkTarget } from '@/lib/appLink';
 
 type Actor = { id: string; name: string; avatarUrl?: string | null };
 type ProfileActor = Actor & { profileHref: Href };
@@ -71,7 +71,7 @@ type PostNotificationChildProps = {
 
 type OperationalNotificationProps = {
   body: string | null;
-  href: NotificationHrefTarget;
+  href: AppLinkTarget;
   kind: 'operational';
   onNavigate: () => void;
   timestamp: string;

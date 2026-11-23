@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { NavigationLink } from '@/components/shell/NavigationLink';
+import { resolveAppLink } from '@/lib/appLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { borderWidths, radius, space, textStyles } from '@/theme/tokens';
 import type { ViewStyle } from 'react-native';
@@ -78,7 +80,8 @@ export function PostLinkPreviewCard({
     { backgroundColor: theme.backgroundSurface, borderColor: theme.borderDefault },
   ];
 
-  if (!interactive) {
+  const target = interactive ? resolveAppLink(preview.url) : null;
+  if (!target) {
     return (
       <View style={style} testID="post-link-preview-card">
         {content}
@@ -86,7 +89,7 @@ export function PostLinkPreviewCard({
     );
   }
 
-  return (
+  const card = (
     <Pressable
       accessibilityLabel={`${preview.title}, ${hostname}`}
       accessibilityRole="link"
@@ -101,9 +104,11 @@ export function PostLinkPreviewCard({
         setFocusVisible(Boolean(target.matches?.(':focus-visible')));
       }}
       onPress={(event) => {
-        event.preventDefault();
         event.stopPropagation();
-        void Linking.openURL(preview.url);
+        if (target.kind === 'external') {
+          event.preventDefault();
+          void Linking.openURL(target.href);
+        }
       }}
       onPointerDown={() => setFocusVisible(false)}
       style={[
@@ -121,6 +126,12 @@ export function PostLinkPreviewCard({
     >
       {content}
     </Pressable>
+  );
+
+  return target.kind === 'internal' ? (
+    <NavigationLink href={target.href}>{card}</NavigationLink>
+  ) : (
+    card
   );
 }
 

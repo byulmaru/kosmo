@@ -1,9 +1,7 @@
 import { getPublicWebOrigin } from '@/config/origin';
 import type { Href } from 'expo-router';
 
-export type NotificationHrefTarget =
-  | { kind: 'internal'; href: Href }
-  | { kind: 'external'; href: string };
+export type AppLinkTarget = { kind: 'internal'; href: Href } | { kind: 'external'; href: string };
 
 const internalUrlBase = 'https://app.invalid';
 
@@ -17,7 +15,7 @@ function hasControlCharacters(value: string) {
   return false;
 }
 
-export function parseNotificationHref(value: unknown): NotificationHrefTarget | null {
+export function resolveAppLink(value: unknown): AppLinkTarget | null {
   if (typeof value !== 'string' || !value || hasControlCharacters(value)) {
     return null;
   }
@@ -29,7 +27,7 @@ export function parseNotificationHref(value: unknown): NotificationHrefTarget | 
 
     try {
       const url = new URL(value, internalUrlBase);
-      if (url.origin !== internalUrlBase) {
+      if (url.origin !== internalUrlBase || url.pathname.startsWith('//')) {
         return null;
       }
 

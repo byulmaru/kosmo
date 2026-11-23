@@ -1,9 +1,9 @@
 import { readPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { useCallback } from 'react';
 import { graphql, useFragment, useMutation } from 'react-relay';
+import { resolveAppLink } from '@/lib/appLink';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { MentionNotificationPost } from './MentionNotificationPost';
-import { parseNotificationHref } from './notificationHref';
 import { NotificationListItemView } from './NotificationListItemView';
 import { QuoteNotificationPost } from './QuoteNotificationPost';
 import { ReplyNotificationPost } from './ReplyNotificationPost';
@@ -88,7 +88,7 @@ export function OperationalNotificationListItem({
 }) {
   const data = useFragment(operationalNotificationFragment, notification);
   const markRead = useNotificationRead();
-  const href = parseNotificationHref(data.href);
+  const href = resolveAppLink(data.href);
 
   if (!href) {
     return null;
