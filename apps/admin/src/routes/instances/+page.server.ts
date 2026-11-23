@@ -20,12 +20,13 @@ export const load: PageServerLoad = async ({ url }) => {
   }
 
   const selectedState = state?.success ? state.data : undefined;
-  const page = await listInstances({
+  const options = {
     cursor: cursorValue?.success ? cursorValue.data : undefined,
     direction: direction === 'previous' ? 'previous' : 'next',
     q: q || undefined,
     state: selectedState,
-  });
+  } as const;
+  const page = await listInstances(options);
 
   return {
     ...page,

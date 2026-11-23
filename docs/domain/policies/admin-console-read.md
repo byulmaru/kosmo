@@ -4,16 +4,14 @@
 
 Admin Console Read Policy는 durable 객체가 아니라 Tailscale 접근 제어를 통과한 Admin Console Viewer와
 Account, Profile, Instance, Account-Profile Membership, Profile authored Post를 함께 소비해 운영자용 읽기 결과의 노출
-필드를 결정하는 교차 객체 조회 정책이다. 유일한 변경 예외는 [PROD-1299](https://linear.app/byulmaru/issue/PROD-1299)가
-허용한 Local Profile 기본 게시 공개 범위이며, 이 정책은 Admin Console Viewer를 Kosmo 도메인의 Account 또는
-`Account.Operator`로 만들지 않는다.
+필드를 결정하는 교차 객체 조회 정책이다. 이 정책은 Local Profile 기본 게시 공개 범위 변경과 Profile·원격 Instance
+정지 및 해제를 허용한다. Admin Console Viewer의 Account 인증과 `Account.Operator` 권한은 별도 정책을 따른다.
 
 ## Admin Console Viewer
 
 Admin Console Viewer는 Tailscale 접근 정책에 따라 Admin Console 진입이 허용된 요청 주체다. 애플리케이션은
-별도의 app capability나 객체별 action을 계산하지 않는다. 진입이 허용된 Viewer는 v1의 Account, Profile,
-Instance, Account-Profile Membership, Profile authored Post 읽기 projection을 모두 사용할 수 있고, Local Profile의
-기본 게시 공개 범위만 변경할 수 있다.
+별도의 app capability나 객체별 action을 계산하지 않는다. 진입이 허용된 Viewer는 이 정책의 읽기 projection과
+Local Profile 기본 게시 공개 범위 변경, Profile·원격 Instance 정지 및 해제를 사용할 수 있다.
 
 Tailscale proxy가 제공하는 login, display name과 같은 identity header는 현재 Viewer를 화면에 표시하기 위한
 선택적 metadata일 뿐이며 애플리케이션 인가의 근거가 아니다.
@@ -23,8 +21,8 @@ Tailscale proxy가 제공하는 login, display name과 같은 identity header는
 - Tailscale identity를 표시할 때는 login과 display name만 사용하며 profile picture header는 사용하지 않는다.
 - ingress 정규화에 실패한 identity metadata는 없는 것으로 취급하며 접근 결과를 바꾸지 않는다.
 - identity header의 Account 일치 여부나 표시 이름은 추가 권한을 부여하지 않는다.
-- Admin Console Viewer는 이 정책의 읽기 결과와 Local Profile 기본 게시 공개 범위 변경만 사용할 수 있으며,
-  Account 인증, Profile Owner/Member 관계, `Account.Operator` 사실을 획득하지 않는다.
+- Admin Console Viewer는 이 정책에서 허용한 작업을 사용할 수 있으며, Account 인증, Profile Owner/Member 관계,
+  `Account.Operator` 사실을 획득하지 않는다.
 
 ## 접근 계약
 
@@ -100,6 +98,7 @@ Profile Posts 목록의 필터가 아니다.
 - Profile Tag
 - Followers Count, Following Count
 - Lifecycle State, Suspension State, Profile Origin
+- 입력된 현재 정지 사유
 - Instance Domain
 - 작성한 Post의 수와 조회 대상 Post 중 가장 최근 시각
 - 생성 시각
@@ -124,8 +123,7 @@ Admin Console Viewer는 [PROD-1299](https://linear.app/byulmaru/issue/PROD-1299)
 영향을 주며 이미 작성된 Post는 변경하지 않는다.
 
 이 변경은 기존 Tailscale 접근 경계만 사용한다. Profile Owner/Member 관계나 `Account.Operator` 사실을
-인가 근거로 삼거나 새로 만들지 않는다. 그 밖의 Account, Profile, Account-Profile Membership, Post 변경은
-허용하지 않는다.
+인가 근거로 삼거나 새로 만들지 않는다.
 
 ### Profile Posts 조회
 
@@ -148,7 +146,21 @@ Instance에 속한 모든 저장 Profile을 세며, 0개인 Instance도 목록�
 
 Domain으로 검색하거나 저장 상태로 필터링할 수 있다. 기본 목록은 소속 Profile 수 내림차순으로 정렬하며,
 수가 같으면 Instance ID 내림차순을 사용한다. 소속 Profile 수에서 Profile 목록으로 이동하면 해당 Instance의
-Domain이 필터에 적용된다. Instance 상태와 제재를 변경하는 권한은 부여하지 않는다.
+Domain이 필터에 적용된다. Domain을 선택하면 해당 Instance의 상세 화면으로 이동한다.
+
+Instance 상세에서는 Domain, 저장 상태, 소속 Profile 수와 입력된 현재 정지 사유를 확인할 수 있다.
+
+## 모더레이션
+
+[PROD-1355](https://linear.app/byulmaru/issue/PROD-1355)에 따라 기존 Tailscale 접근 경계를 통과한 모든 Admin
+Console Viewer는 Profile과 원격 Instance를 정지하거나 해제할 수 있다. 정지 효과는 Profile·Instance 조회와
+ActivityPub에서 기존에 저장된 정지 상태를 해석하는 규칙을 따른다.
+
+- 정지와 해제는 대상의 상세 화면에서 확인 후 실행한다. 목록은 조회와 상세 이동을 제공한다.
+- 활성 로컬·원격 Profile을 정지할 수 있다. 정지된 Profile을 해제하면 활성 상태가 된다.
+- 활성 또는 응답 불가인 원격 Instance를 정지할 수 있다. 정지된 원격 Instance를 해제하면 활성 상태가 된다.
+- 정지 시 사유를 선택적으로 입력할 수 있다. 현재 정지 사유는 상태와 함께 바뀌며, 정지를 해제하면 지운다.
+- 인스턴스 정지 전에 홈 타임라인에 들어간 게시물은 기존 캐시 정책에 따라 캐시에서 제거될 때까지 노출될 수 있다.
 
 ## Account-Profile Membership 조회
 
@@ -181,8 +193,8 @@ Membership 결과는 다음을 제공한다.
 ## 제외/보류
 
 - Admin Console Viewer의 Account 자동 매핑과 `Account.Operator` 승격
-- Admin Console을 통한 Account, Local Profile 기본 게시 공개 범위를 제외한 Profile,
-  Account-Profile Membership, Post Mutation
+- Admin Console을 통한 Account, Account-Profile Membership, Post Mutation
+- 이 정책에 열거한 작업 외의 Profile·Instance Mutation
 - 객체별 Admin Console action과 권한 위임
 - selected Profile, Session, credential 정보
 - Admin-specific audit, security-event, query logging과 별도 보존 정책

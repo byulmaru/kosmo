@@ -1,9 +1,9 @@
 import { db, first, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceState } from '@kosmo/core/enums';
-import { and, asc, count, desc, eq, gt, ilike, lt, or } from 'drizzle-orm';
+import { InstanceKind, InstanceState } from '@kosmo/core/enums';
+import { and, asc, count, desc, eq, gt, ilike, inArray, lt, or } from 'drizzle-orm';
 import { z } from 'zod';
 
-const instanceIdSchema = z.uuid();
+export const instanceIdSchema = z.uuid();
 export const instanceStateSchema = z.enum([
   InstanceState.ACTIVE,
   InstanceState.UNRESPONSIVE,
@@ -36,6 +36,11 @@ export interface InstanceListRow {
   domain: string;
   state: InstanceReadState;
   profileCount: number;
+}
+
+export interface InstanceDetail extends InstanceListRow {
+  moderationAction: 'SUSPEND' | 'RESTORE' | null;
+  suspensionReason: string | null;
 }
 
 const pageSize = 50;
@@ -153,4 +158,76 @@ export const listInstances = async ({
     previousCursor: string | null;
     nextCursor: string | null;
   };
+};
+
+export const getInstance = async (id: string): Promise<InstanceDetail | undefined> => {
+  const row = await db
+    .select({
+      id: Instances.id,
+      domain: Instances.domain,
+      kind: Instances.kind,
+      state: Instances.state,
+      suspensionReason: Instances.suspensionReason,
+      profileCount: count(Profiles.id),
+    })
+    .from(Instances)
+    .leftJoin(Profiles, eq(Profiles.instanceId, Instances.id))
+    .where(eq(Instances.id, id))
+    .groupBy(Instances.id)
+    .limit(1)
+    .then(first);
+
+  if (!row) {
+    return undefined;
+  }
+
+  const moderationAction: InstanceDetail['moderationAction'] =
+    row.kind !== InstanceKind.ACTIVITYPUB
+      ? null
+      : row.state === InstanceState.SUSPENDED
+        ? 'RESTORE'
+        : row.state === InstanceState.ACTIVE || row.state === InstanceState.UNRESPONSIVE
+          ? 'SUSPEND'
+          : null;
+
+  return {
+    id: row.id,
+    domain: row.domain,
+    state: row.state,
+    profileCount: row.profileCount,
+    moderationAction,
+    suspensionReason: row.suspensionReason,
+  };
+};
+
+export const suspendInstance = async (id: string, reason: string | null): Promise<boolean> => {
+  const rows = await db
+    .update(Instances)
+    .set({ state: InstanceState.SUSPENDED, suspensionReason: reason })
+    .where(
+      and(
+        eq(Instances.id, id),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        inArray(Instances.state, [InstanceState.ACTIVE, InstanceState.UNRESPONSIVE]),
+      ),
+    )
+    .returning({ id: Instances.id });
+
+  return rows.length > 0;
+};
+
+export const restoreInstance = async (id: string): Promise<boolean> => {
+  const rows = await db
+    .update(Instances)
+    .set({ state: InstanceState.ACTIVE, suspensionReason: null })
+    .where(
+      and(
+        eq(Instances.id, id),
+        eq(Instances.kind, InstanceKind.ACTIVITYPUB),
+        eq(Instances.state, InstanceState.SUSPENDED),
+      ),
+    )
+    .returning({ id: Instances.id });
+
+  return rows.length > 0;
 };

@@ -18,7 +18,7 @@ Accepted
 - Deleted는 terminal 상태다.
 - Owner는 Active Local Profile을 Deactivated로, Deactivated Local Profile을 Active로 바꿀 수 있다.
 - (2026-10-14 보충으로 superseded) Owner Profile 삭제는 Deactivated/Normal Local Profile에만 적용하며 Deleted로 전이한다.
-- 운영자는 Deleted가 아닌 Profile을 정지할 수 있고 Owner는 정지를 직접 해제할 수 없다.
+- (2026-11-23 보충으로 superseded) 운영자는 Deleted가 아닌 Profile을 정지할 수 있고 Owner는 정지를 직접 해제할 수 없다.
 - Remote Profile 갱신은 Lifecycle/Suspension State를 바꾸지 않는다.
 
 ### Instance
@@ -46,6 +46,15 @@ Accepted
 - Settings에서 Owner에게 제공하는 단일 Profile lifecycle action은 `Profile 삭제`다. 이 action은 기존 소프트 딜리트 동작으로 Active Local Profile을 `Deactivated` 상태로 바꾼다. 이미 `Deactivated`인 Profile에 대한 권한 있는 재시도는 기존 idempotent 동작을 따른다.
 - 위의 이전 `Deactivated -> Deleted` Owner action 규칙은 더 이상 현재 사용자 action을 정의하지 않는다. Lifecycle enum과 기존 `Deactivated -> Active` 내부 전이는 유지하며, 이 Settings 흐름은 별도 재활성화 또는 영구 삭제 action을 제공하지 않는다.
 - 30일 후 물리 파기는 별도 [PROD-1110](https://linear.app/byulmaru/issue/PROD-1110) 범위다. 이 보충은 파기 시점이나 동작을 보장하지 않는다.
+
+## 2026-11-23 보충: Admin Console 정지
+
+- [PROD-1355](https://linear.app/byulmaru/issue/PROD-1355)의 정지 조치는 기존 [Admin Console 접근 정책](../policies/admin-console-read.md)을
+  통과한 Viewer에게 허용한다.
+- 활성 Profile을 정지할 수 있으며 정지를 해제하면 활성 상태가 된다. 비활성화된 Profile은 정지 대상에서 제외한다.
+- 활성 또는 응답 불가인 원격 Instance를 정지할 수 있으며 정지를 해제하면 활성 상태가 된다. 이 어드민 조치는
+  응답 불가 상태를 복원하지 않는다.
+- 정지 사유는 선택 사항이다. 현재 정지 사유는 Admin Console에서 확인할 수 있고 정지를 해제하면 지운다.
 
 ## 문서 반영
 

@@ -1,9 +1,13 @@
 import '@kosmo/core/polyfill';
 
-import { db, Instances, pg, Profiles } from '@kosmo/core/db';
+import { db, Instances, pg, Profiles, withPrimaryDatabase } from '@kosmo/core/db';
 import { InstanceKind, InstanceState, ProfileFollowPolicy, ProfileState } from '@kosmo/core/enums';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import {
+  actions as instanceActions,
+  load as loadInstanceDetail,
+} from '../../routes/instances/[id]/+page.server';
 import { load as loadInstances } from '../../routes/instances/+page.server';
 import { load as loadProfiles } from '../../routes/profiles/+page.server';
 import type { InstanceListRow } from './instances';
@@ -34,6 +38,17 @@ const loadInstancePage = async (url: URL) => {
   };
 };
 
+const loadInstanceDetailPage = async (id: string, method = 'GET') => {
+  const page = await loadInstanceDetail({
+    params: { id },
+    request: new Request(`http://admin.test/instances/${id}`, { method }),
+  } as Parameters<typeof loadInstanceDetail>[0]);
+  if (!page) {
+    throw new Error('Expected Instance detail data');
+  }
+  return page;
+};
+
 const loadProfilePage = async (url: URL) => {
   const page = await loadProfiles({ url } as Parameters<typeof loadProfiles>[0]);
   if (!page) {
@@ -58,6 +73,7 @@ describe('Admin Instance read projections', () => {
             : index === instanceIds.length - 1
               ? InstanceState.SUSPENDED
               : InstanceState.UNRESPONSIVE,
+        suspensionReason: index === instanceIds.length - 1 ? 'Upstream check failed' : null,
       })),
     );
 
@@ -196,7 +212,157 @@ describe('Admin Instance read projections', () => {
     'http://admin.test/instances?direction=previous',
   ])('rejects invalid Instance filters and cursors', async (url) => {
     await expect(
-      loadInstances({ url: new URL(url) } as Parameters<typeof loadInstances>[0]),
+      loadInstances({
+        url: new URL(url),
+        request: new Request(url),
+      } as Parameters<typeof loadInstances>[0]),
     ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
+  });
+
+  test('loads Instance detail and keeps local Instances read-only', async () => {
+    const remote = await loadInstanceDetailPage(instanceIds[52]);
+    expect(remote.instance).toEqual({
+      id: instanceIds[52],
+      domain: domainFor(52),
+      state: InstanceState.SUSPENDED,
+      profileCount: 0,
+      moderationAction: 'RESTORE',
+      suspensionReason: 'Upstream check failed',
+    });
+
+    const local = await loadInstanceDetailPage(instanceIds[1]);
+    expect(local.instance).toEqual({
+      id: instanceIds[1],
+      domain: domainFor(1),
+      state: InstanceState.ACTIVE,
+      profileCount: 1,
+      moderationAction: null,
+      suspensionReason: null,
+    });
+
+    await expect(loadInstanceDetailPage('not-a-uuid')).rejects.toMatchObject({
+      status: 404,
+      body: { message: 'Not Found' },
+    });
+    await expect(
+      loadInstanceDetailPage('00000000-0000-7000-8000-000000000000'),
+    ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
+  });
+
+  test('suspends and restores remote Instances, restoring unresponsive ones to ACTIVE', async () => {
+    const callAction = async (action: 'suspend' | 'restore', id: string, reason?: string) => {
+      const formData = new FormData();
+      if (reason !== undefined) {
+        formData.set('reason', reason);
+      }
+      const request = new Request(`http://admin.test/instances/${id}?/${action}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const event = { params: { id }, request } as Parameters<typeof instanceActions.suspend>[0];
+      return action === 'suspend' ? instanceActions.suspend(event) : instanceActions.restore(event);
+    };
+    const readInstance = (id: string) =>
+      withPrimaryDatabase(() =>
+        db
+          .select({ state: Instances.state, suspensionReason: Instances.suspensionReason })
+          .from(Instances)
+          .where(eq(Instances.id, id))
+          .limit(1)
+          .then((rows) => rows[0]),
+      );
+
+    expect(await callAction('restore', instanceIds[52])).toEqual({
+      moderationSuccess: 'restored',
+    });
+    expect(await readInstance(instanceIds[52])).toEqual({
+      state: InstanceState.ACTIVE,
+      suspensionReason: null,
+    });
+
+    const activePage = await loadInstanceDetailPage(instanceIds[52], 'POST');
+    expect(activePage.instance).toMatchObject({
+      id: instanceIds[52],
+      state: InstanceState.ACTIVE,
+      moderationAction: 'SUSPEND',
+    });
+
+    expect(await callAction('suspend', instanceIds[52], '  connection failure  ')).toEqual({
+      moderationSuccess: 'suspended',
+    });
+    expect(await readInstance(instanceIds[52])).toEqual({
+      state: InstanceState.SUSPENDED,
+      suspensionReason: 'connection failure',
+    });
+    expect(await callAction('restore', instanceIds[52])).toEqual({
+      moderationSuccess: 'restored',
+    });
+    expect(await readInstance(instanceIds[52])).toEqual({
+      state: InstanceState.ACTIVE,
+      suspensionReason: null,
+    });
+
+    expect(await callAction('suspend', instanceIds[51], '   ')).toEqual({
+      moderationSuccess: 'suspended',
+    });
+    expect(await readInstance(instanceIds[51])).toEqual({
+      state: InstanceState.SUSPENDED,
+      suspensionReason: null,
+    });
+    expect(await callAction('restore', instanceIds[51])).toEqual({
+      moderationSuccess: 'restored',
+    });
+    expect(await readInstance(instanceIds[51])).toEqual({
+      state: InstanceState.ACTIVE,
+      suspensionReason: null,
+    });
+  });
+
+  test('does not suspend or restore a LOCAL Instance', async () => {
+    const callAction = async (action: 'suspend' | 'restore', id: string, reason?: string) => {
+      const formData = new FormData();
+      if (reason !== undefined) {
+        formData.set('reason', reason);
+      }
+      const request = new Request(`http://admin.test/instances/${id}?/${action}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const event = { params: { id }, request } as Parameters<typeof instanceActions.suspend>[0];
+      return action === 'suspend' ? instanceActions.suspend(event) : instanceActions.restore(event);
+    };
+    const readLocalInstance = () =>
+      withPrimaryDatabase(() =>
+        db
+          .select({ state: Instances.state, suspensionReason: Instances.suspensionReason })
+          .from(Instances)
+          .where(eq(Instances.id, instanceIds[1]))
+          .limit(1)
+          .then((rows) => rows[0]),
+      );
+
+    const suspended = await callAction('suspend', instanceIds[1], 'local instances are excluded');
+    expect(suspended).toMatchObject({
+      status: 409,
+      data: { moderationError: 'Instance state changed. Refresh and try again.' },
+    });
+    expect(await readLocalInstance()).toEqual({
+      state: InstanceState.ACTIVE,
+      suspensionReason: null,
+    });
+
+    await db
+      .update(Instances)
+      .set({ state: InstanceState.SUSPENDED, suspensionReason: 'Retained local reason' })
+      .where(eq(Instances.id, instanceIds[1]));
+    const restored = await callAction('restore', instanceIds[1]);
+    expect(restored).toMatchObject({
+      status: 409,
+      data: { moderationError: 'Instance state changed. Refresh and try again.' },
+    });
+    expect(await readLocalInstance()).toEqual({
+      state: InstanceState.SUSPENDED,
+      suspensionReason: 'Retained local reason',
+    });
   });
 });

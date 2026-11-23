@@ -5,6 +5,7 @@
   import { Input } from '#lib/components/ui/input/index.js';
   import * as Table from '#lib/components/ui/table/index.js';
   import { resolve } from '$app/paths';
+  import { page } from '$app/state';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -23,6 +24,10 @@
     }
 
     return resolve(`/instances?${params.toString()}`);
+  }
+
+  function instanceHref(id: string) {
+    return `${resolve('/instances/[id]', { id })}${page.url.search}`;
   }
 </script>
 
@@ -76,7 +81,14 @@
       <Table.Body>
         {#each data.instances as instance (instance.id)}
           <Table.Row>
-            <Table.Cell class="break-all font-medium">{instance.domain}</Table.Cell>
+            <Table.Cell class="break-all font-medium">
+              <a
+                href={instanceHref(instance.id)}
+                class="rounded-sm underline decoration-muted-foreground/50 underline-offset-4 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {instance.domain}
+              </a>
+            </Table.Cell>
             <Table.Cell>
               <Badge variant={instance.state === 'ACTIVE' ? 'default' : 'outline'}>
                 {instance.state}
