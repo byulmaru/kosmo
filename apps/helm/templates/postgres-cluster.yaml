@@ -1,3 +1,4 @@
+{{- if not .Values.postgres.existingCluster }}
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -49,3 +50,4 @@ spec:
     {{- with .Values.postgres.storage.storageClass }}
     storageClass: {{ . | quote }}
     {{- end }}
+{{- end }}

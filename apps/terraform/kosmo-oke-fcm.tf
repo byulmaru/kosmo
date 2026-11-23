@@ -21,7 +21,7 @@ resource "google_iam_workload_identity_pool_provider" "oke_kosmo_worker" {
   attribute_mapping = {
     "google.subject" = "assertion.sub"
   }
-  attribute_condition = "assertion.sub == 'system:serviceaccount:kosmo-dev:kosmo-worker'"
+  attribute_condition = "assertion.sub in ['system:serviceaccount:kosmo-dev:kosmo-worker', 'system:serviceaccount:kosmo-prod:kosmo-worker']"
 
   oidc {
     issuer_uri = "https://kubernetes.default.svc.cluster.local"
@@ -34,6 +34,15 @@ resource "google_service_account_iam_member" "firebase_fcm_sender_oke" {
   service_account_id = google_service_account.firebase_fcm_sender.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.oke_kosmo.name}/subject/system:serviceaccount:kosmo-dev:kosmo-worker"
+
+  depends_on = [google_iam_workload_identity_pool_provider.oke_kosmo_worker]
+}
+
+resource "google_service_account_iam_member" "firebase_fcm_sender_oke_prod" {
+  provider           = google-beta
+  service_account_id = google_service_account.firebase_fcm_sender.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principal://iam.googleapis.com/${google_iam_workload_identity_pool.oke_kosmo.name}/subject/system:serviceaccount:kosmo-prod:kosmo-worker"
 
   depends_on = [google_iam_workload_identity_pool_provider.oke_kosmo_worker]
 }

@@ -1,4 +1,4 @@
-{{- if eq .Values.env "prod" }}
+{{- if and (eq .Values.env "prod") (not .Values.postgres.existingCluster) }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:

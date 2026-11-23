@@ -1,4 +1,4 @@
-{{- if eq .Values.env "prod" }}
+{{- if and (eq .Values.env "prod") (ne (.Values.monitoring.alertEvaluator | default "prometheus") "grafana") }}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
