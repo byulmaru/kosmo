@@ -146,7 +146,9 @@ Instance에 속한 모든 저장 Profile을 세며, 0개인 Instance도 목록�
 
 Domain으로 검색하거나 저장 상태로 필터링할 수 있다. 기본 목록은 소속 Profile 수 내림차순으로 정렬하며,
 수가 같으면 Instance ID 내림차순을 사용한다. 소속 Profile 수에서 Profile 목록으로 이동하면 해당 Instance의
-Domain이 필터에 적용된다. 정지된 원격 Instance에 입력된 현재 정지 사유가 있으면 Admin Console에서 확인할 수 있다.
+Domain이 필터에 적용된다. Domain을 선택하면 해당 Instance의 상세 화면으로 이동한다.
+
+Instance 상세에서는 Domain, 저장 상태, 소속 Profile 수와 입력된 현재 정지 사유를 확인할 수 있다.
 
 ## 모더레이션
 
@@ -154,6 +156,7 @@ Domain이 필터에 적용된다. 정지된 원격 Instance에 입력된 현재 
 Console Viewer는 Profile과 원격 Instance를 정지하거나 해제할 수 있다. 정지 효과는 Profile·Instance 조회와
 ActivityPub에서 기존에 저장된 정지 상태를 해석하는 규칙을 따른다.
 
+- 정지와 해제는 대상의 상세 화면에서 확인 후 실행한다. 목록은 조회와 상세 이동을 제공한다.
 - 활성 로컬·원격 Profile을 정지할 수 있다. 정지된 Profile을 해제하면 활성 상태가 된다.
 - 활성 또는 응답 불가인 원격 Instance를 정지할 수 있다. 정지된 원격 Instance를 해제하면 활성 상태가 된다.
 - 정지 시 사유를 선택적으로 입력할 수 있다. 현재 정지 사유는 상태와 함께 바뀌며, 정지를 해제하면 지운다.

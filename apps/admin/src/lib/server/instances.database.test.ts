@@ -6,8 +6,9 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import {
   actions as instanceActions,
-  load as loadInstances,
-} from '../../routes/instances/+page.server';
+  load as loadInstanceDetail,
+} from '../../routes/instances/[id]/+page.server';
+import { load as loadInstances } from '../../routes/instances/+page.server';
 import { load as loadProfiles } from '../../routes/profiles/+page.server';
 import type { InstanceListRow } from './instances';
 import type { ProfileListRow } from './profiles';
@@ -24,11 +25,8 @@ const profileIds = Array.from(
 const domainFor = (index: number) =>
   `instance-${token}-${String(index + 1).padStart(2, '0')}.example`;
 
-const loadInstancePage = async (url: URL, method = 'GET') => {
-  const page = await loadInstances({
-    url,
-    request: new Request(url, { method }),
-  } as Parameters<typeof loadInstances>[0]);
+const loadInstancePage = async (url: URL) => {
+  const page = await loadInstances({ url } as Parameters<typeof loadInstances>[0]);
   if (!page) {
     throw new Error('Expected Instance list data');
   }
@@ -36,8 +34,19 @@ const loadInstancePage = async (url: URL, method = 'GET') => {
     instances: InstanceListRow[];
     previousCursor: string | null;
     nextCursor: string | null;
-    filters: { q: string; state: string; cursor: string; direction: string };
+    filters: { q: string; state: string };
   };
+};
+
+const loadInstanceDetailPage = async (id: string, method = 'GET') => {
+  const page = await loadInstanceDetail({
+    params: { id },
+    request: new Request(`http://admin.test/instances/${id}`, { method }),
+  } as Parameters<typeof loadInstanceDetail>[0]);
+  if (!page) {
+    throw new Error('Expected Instance detail data');
+  }
+  return page;
 };
 
 const loadProfilePage = async (url: URL) => {
@@ -103,22 +112,16 @@ describe('Admin Instance read projections', () => {
       id: instanceIds[50],
       domain: domainFor(50),
       state: InstanceState.ACTIVE,
-      moderationAction: 'SUSPEND',
       profileCount: 1,
-      suspensionReason: null,
     });
     expect(firstPage.previousCursor).toBeNull();
     expect(firstPage.nextCursor).toBeTruthy();
-    expect(
-      firstPage.instances.find(({ id }) => id === instanceIds[1])?.moderationAction,
-    ).toBeNull();
 
     const nextUrl = new URL('http://admin.test/instances');
     nextUrl.searchParams.set('q', token);
     nextUrl.searchParams.set('state', 'ACTIVE');
     nextUrl.searchParams.set('cursor', firstPage.nextCursor!);
     const nextPage = await loadInstancePage(nextUrl);
-    expect(nextPage.filters.cursor).toBe(firstPage.nextCursor);
 
     expect(nextPage.instances.map(({ id, profileCount }) => [id, profileCount])).toEqual([
       [instanceIds[0], 1],
@@ -132,7 +135,6 @@ describe('Admin Instance read projections', () => {
     previousUrl.searchParams.set('cursor', nextPage.previousCursor!);
     previousUrl.searchParams.set('direction', 'previous');
     const previousPage = await loadInstancePage(previousUrl);
-    expect(previousPage.filters.direction).toBe('previous');
 
     expect(previousPage.instances.map(({ id }) => id)).toEqual(instanceIds.slice(1, 51).reverse());
     expect(previousPage.nextCursor).toBeTruthy();
@@ -174,9 +176,7 @@ describe('Admin Instance read projections', () => {
         id: instanceIds[51],
         domain: domainFor(51),
         state: InstanceState.UNRESPONSIVE,
-        moderationAction: 'SUSPEND',
         profileCount: 0,
-        suspensionReason: null,
       },
     ]);
 
@@ -219,33 +219,47 @@ describe('Admin Instance read projections', () => {
     ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
   });
 
-  test('shows the suspension reason for a suspended Instance', async () => {
-    const page = await loadInstancePage(
-      new URL(`http://admin.test/instances?q=${encodeURIComponent(domainFor(52))}`),
-    );
+  test('loads Instance detail and keeps local Instances read-only', async () => {
+    const remote = await loadInstanceDetailPage(instanceIds[52]);
+    expect(remote.instance).toEqual({
+      id: instanceIds[52],
+      domain: domainFor(52),
+      state: InstanceState.SUSPENDED,
+      profileCount: 0,
+      moderationAction: 'RESTORE',
+      suspensionReason: 'Upstream check failed',
+    });
 
-    expect(page.instances).toMatchObject([
-      {
-        id: instanceIds[52],
-        state: InstanceState.SUSPENDED,
-        moderationAction: 'RESTORE',
-        suspensionReason: 'Upstream check failed',
-      },
-    ]);
+    const local = await loadInstanceDetailPage(instanceIds[1]);
+    expect(local.instance).toEqual({
+      id: instanceIds[1],
+      domain: domainFor(1),
+      state: InstanceState.ACTIVE,
+      profileCount: 1,
+      moderationAction: null,
+      suspensionReason: null,
+    });
+
+    await expect(loadInstanceDetailPage('not-a-uuid')).rejects.toMatchObject({
+      status: 404,
+      body: { message: 'Not Found' },
+    });
+    await expect(
+      loadInstanceDetailPage('00000000-0000-7000-8000-000000000000'),
+    ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
   });
 
   test('suspends and restores remote Instances, restoring unresponsive ones to ACTIVE', async () => {
     const callAction = async (action: 'suspend' | 'restore', id: string, reason?: string) => {
       const formData = new FormData();
-      formData.set('id', id);
       if (reason !== undefined) {
         formData.set('reason', reason);
       }
-      const request = new Request(`http://admin.test/instances?/${action}`, {
+      const request = new Request(`http://admin.test/instances/${id}?/${action}`, {
         method: 'POST',
         body: formData,
       });
-      const event = { request } as Parameters<typeof instanceActions.suspend>[0];
+      const event = { params: { id }, request } as Parameters<typeof instanceActions.suspend>[0];
       return action === 'suspend' ? instanceActions.suspend(event) : instanceActions.restore(event);
     };
     const readInstance = (id: string) =>
@@ -266,13 +280,12 @@ describe('Admin Instance read projections', () => {
       suspensionReason: null,
     });
 
-    const activePage = await loadInstancePage(
-      new URL(`http://admin.test/instances?q=${encodeURIComponent(domainFor(52))}`),
-      'POST',
-    );
-    expect(activePage.instances).toMatchObject([
-      { id: instanceIds[52], state: InstanceState.ACTIVE, moderationAction: 'SUSPEND' },
-    ]);
+    const activePage = await loadInstanceDetailPage(instanceIds[52], 'POST');
+    expect(activePage.instance).toMatchObject({
+      id: instanceIds[52],
+      state: InstanceState.ACTIVE,
+      moderationAction: 'SUSPEND',
+    });
 
     expect(await callAction('suspend', instanceIds[52], '  connection failure  ')).toEqual({
       moderationSuccess: 'suspended',
@@ -308,15 +321,14 @@ describe('Admin Instance read projections', () => {
   test('does not suspend or restore a LOCAL Instance', async () => {
     const callAction = async (action: 'suspend' | 'restore', id: string, reason?: string) => {
       const formData = new FormData();
-      formData.set('id', id);
       if (reason !== undefined) {
         formData.set('reason', reason);
       }
-      const request = new Request(`http://admin.test/instances?/${action}`, {
+      const request = new Request(`http://admin.test/instances/${id}?/${action}`, {
         method: 'POST',
         body: formData,
       });
-      const event = { request } as Parameters<typeof instanceActions.suspend>[0];
+      const event = { params: { id }, request } as Parameters<typeof instanceActions.suspend>[0];
       return action === 'suspend' ? instanceActions.suspend(event) : instanceActions.restore(event);
     };
     const readLocalInstance = () =>

@@ -7,10 +7,9 @@
     actionHref: string;
     targetKind: 'profile' | 'instance';
     targetName: string;
-    targetId?: string;
   };
 
-  let { action, actionHref, targetKind, targetName, targetId }: Props = $props();
+  let { action, actionHref, targetKind, targetName }: Props = $props();
 </script>
 
 <AlertDialog.Root>
@@ -39,10 +38,6 @@
       </AlertDialog.Title>
 
       <form method="POST" action={actionHref} class="grid gap-4">
-        {#if targetId}
-          <input type="hidden" name="id" value={targetId} />
-        {/if}
-
         {#if action === 'suspend'}
           <label class="grid gap-2 text-sm font-medium">
             Reason (optional)
