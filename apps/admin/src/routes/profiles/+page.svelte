@@ -21,6 +21,9 @@
     if (data.filters.state) {
       params.set('state', data.filters.state);
     }
+    if (data.filters.instanceId) {
+      params.set('instanceId', data.filters.instanceId);
+    }
     params.set('cursor', cursor);
     if (direction) {
       params.set('direction', direction);
@@ -38,6 +41,15 @@
   <header>
     <p class="text-sm font-medium text-muted-foreground">Admin Console</p>
     <h1 id="profiles-heading" class="text-2xl font-semibold tracking-tight">Profiles</h1>
+    {#if data.instanceDomain}
+      <p class="mt-1 break-all text-sm text-muted-foreground">
+        Domain · {data.instanceDomain}
+        <a
+          class="ml-2 rounded-sm font-medium text-foreground hover:underline"
+          href={resolve('/profiles')}>Clear</a
+        >
+      </p>
+    {/if}
   </header>
 
   <form
@@ -45,6 +57,10 @@
     action={resolve('/profiles')}
     class="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_12rem_auto] lg:items-end"
   >
+    {#if data.filters.instanceId}
+      <input type="hidden" name="instanceId" value={data.filters.instanceId} />
+    {/if}
+
     <label for="profile-search" class="grid gap-2 text-sm font-medium">
       검색
       <Input id="profile-search" type="search" name="q" value={data.filters.q ?? ''} />

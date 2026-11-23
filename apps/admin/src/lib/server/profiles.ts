@@ -36,6 +36,7 @@ export type ProfilePostKind = 'POST' | 'REPLY' | 'QUOTE' | 'REPOST' | 'REPLY_QUO
 export interface ProfileListOptions {
   cursor?: string;
   direction?: 'next' | 'previous';
+  instanceId?: string;
   q?: string;
   origin?: ProfileOrigin;
   state?: ProfileReadState;
@@ -112,11 +113,12 @@ const serializeInstant = (value: Temporal.Instant | null | undefined) => value?.
 
 const escapeLikePattern = (value: string) => value.replace(/[\\%_]/g, '\\$&');
 
-const profileFiltersWhere = ({ q, origin, state }: ProfileListOptions) => {
+const profileFiltersWhere = ({ instanceId, q, origin, state }: ProfileListOptions) => {
   const search = q?.trim();
   const pattern = search ? `%${escapeLikePattern(search)}%` : undefined;
 
   return and(
+    instanceId ? eq(Instances.id, instanceId) : undefined,
     origin ? eq(Instances.kind, originToInstanceKind(origin)) : undefined,
     state ? eq(Profiles.state, state) : undefined,
     pattern ? or(ilike(Profiles.handle, pattern), ilike(Profiles.displayName, pattern)) : undefined,
@@ -245,11 +247,12 @@ const hasNextCursor = async (cursor: string, filters: ProfileListOptions): Promi
 export const listProfiles = async ({
   cursor,
   direction = 'next',
+  instanceId,
   q,
   origin,
   state,
 }: ProfileListOptions = {}) => {
-  const filters = { q, origin, state };
+  const filters = { instanceId, q, origin, state };
   const rows = await db
     .select({
       id: Profiles.id,
@@ -307,6 +310,17 @@ export const listProfiles = async ({
     previousCursor: previousPageExists ? (firstProfile?.id ?? null) : null,
     nextCursor: nextPageExists ? (lastProfile?.id ?? null) : null,
   } satisfies PageCursors & { profiles: ProfileListRow[] };
+};
+
+export const getInstanceDomain = async (id: string) => {
+  const row = await db
+    .select({ domain: Instances.domain })
+    .from(Instances)
+    .where(eq(Instances.id, id))
+    .limit(1)
+    .then(first);
+
+  return row?.domain;
 };
 
 export const getProfile = async (id: string): Promise<ProfileDetail | undefined> => {
