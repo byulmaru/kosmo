@@ -2,81 +2,6 @@ provider "argocd" {
   grpc_web = true
 }
 
-resource "argocd_application_set" "kosmo" {
-  metadata {
-    name      = "kosmo"
-    namespace = "argocd"
-  }
-
-  spec {
-    ignore_application_differences {
-      name = "kosmo-dev"
-
-      json_pointers = [
-        "/spec/source/targetRevision",
-        "/spec/source/helm/parameters",
-      ]
-    }
-
-    generator {
-      list {
-        elements = [
-          {
-            env       = "dev"
-            namespace = "kosmo-dev"
-            webDomain = "dev.kos.moe"
-            apiDomain = "dev-api.kos.moe"
-            image     = "ghcr.io/byulmaru/kosmo"
-            version   = "main"
-          },
-        ]
-      }
-    }
-
-    template {
-      metadata {
-        name = "kosmo-{{env}}"
-      }
-
-      spec {
-        project                = "kosmo"
-        revision_history_limit = 10
-
-        source {
-          repo_url        = "https://github.com/byulmaru/kosmo.git"
-          target_revision = "main"
-          path            = "apps/helm"
-
-          helm {
-            release_name = "kosmo"
-            values       = <<-EOT
-              env: '{{env}}'
-              webDomain: '{{webDomain}}'
-              apiDomain: '{{apiDomain}}'
-              image: '{{image}}'
-              version: '{{version}}'
-              worker:
-                fcm:
-                  projectId: '${local.firebase_project_id}'
-                  workloadIdentityProvider: '${google_iam_workload_identity_pool_provider.kosmo_worker.name}'
-                  serviceAccountEmail: '${google_service_account.firebase_fcm_sender.email}'
-            EOT
-          }
-        }
-
-        destination {
-          server    = "https://kubernetes.default.svc"
-          namespace = "{{namespace}}"
-        }
-
-        sync_policy {
-          sync_options = ["CreateNamespace=true"]
-        }
-      }
-    }
-  }
-}
-
 resource "argocd_application" "kosmo_prod" {
   cascade = false
   wait    = false
@@ -132,9 +57,4 @@ resource "argocd_application" "kosmo_prod" {
       sync_options = ["CreateNamespace=true"]
     }
   }
-}
-
-import {
-  to = argocd_application_set.kosmo
-  id = "kosmo:argocd"
 }
