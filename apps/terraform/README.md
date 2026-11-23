@@ -12,9 +12,9 @@
 - Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
 - GitHub에서 직접 관리하는 Actions environment와 변수 (`terraform-apply`, 승인형 `prod` release)
 - `byulmaru-kosmo-prod-postgresql-backups-822638974464` PostgreSQL backup bucket과 `byulmaru-kosmo-prod-postgres-backup` EKS Pod Identity role
-- AWS Argo CD의 롤백용 `kosmo-dev` ApplicationSet과 `kosmo-prod` Application
+- AWS Argo CD의 `kosmo-prod` Application
 
-OKE의 `kosmo-dev` ApplicationSet은 `byulmaru/infrastructure`가 관리한다. `Deploy Dev`는 OKE Argo CD에서 `targetRevision`과 Helm `parameters`를 갱신한다. OKE ApplicationSet은 두 필드의 차이를 무시하므로 배포 설정이 유지된다. 배포 상태는 Argo CD의 sync와 rollout 결과에서 확인한다. AWS `kosmo-dev`는 자동 sync를 끈 상태로 보존한다.
+OKE의 `kosmo-dev` ApplicationSet은 `byulmaru/infrastructure`가 관리한다. `Deploy Dev`는 OKE Argo CD에서 `targetRevision`과 Helm `parameters`를 갱신한다. OKE ApplicationSet은 두 필드의 차이를 무시하므로 배포 설정이 유지된다. 배포 상태는 Argo CD의 sync와 rollout 결과에서 확인한다.
 
 Firebase를 Google Cloud 프로젝트에 추가하는 작업은 되돌릴 수 없다. 앱 리소스에는 `PREVENT` 삭제 정책을 적용한다.
 
