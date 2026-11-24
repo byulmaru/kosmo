@@ -819,7 +819,6 @@ describe('Local Media upload GraphQL 경계', () => {
     const other = await createAuthenticatedSession();
     const issued = await requestIssueMediaUploadUrl(owner.token);
     assertNoGraphQLErrors(issued);
-    const media = await db.select().from(Media).then(firstOrThrow);
 
     const result = await requestCompleteMediaUpload(
       issued.data!.issueMediaUploadUrl.media.id,

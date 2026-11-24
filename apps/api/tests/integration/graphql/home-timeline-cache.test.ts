@@ -1435,7 +1435,7 @@ test(
     assert.deepEqual(homeCacheBefore, [{ value: source.id, score: 123 }]);
     assert.ok(homeCacheTtlBefore !== undefined && homeCacheTtlBefore > 50);
     const ttlBefore = (await runRedisCommand((client) => client.hTTL(decisionHashKey, [source.id])))
-      ?.value[0];
+      ?.value?.[0];
     assert.ok(ttlBefore !== undefined && ttlBefore > 50);
 
     const modelRequests: NaturalMuteRequest[] = [];
@@ -1488,7 +1488,7 @@ test(
       );
       const ttlAfter = (
         await runRedisCommand((client) => client.hTTL(decisionHashKey, [source.id]))
-      )?.value[0];
+      )?.value?.[0];
       assert.ok(ttlAfter !== undefined && ttlAfter > 0 && ttlAfter <= ttlBefore);
 
       const secondProfile = await createProfile('smart-filter-results-second-profile');
