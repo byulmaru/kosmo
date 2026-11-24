@@ -63,6 +63,7 @@ temporal:
       prod: 30d
 postgres:
   existingCluster: ''
+  clusterSpec: {}
   storage:
     size: 10Gi
     storageClass: ''
@@ -94,8 +95,6 @@ postgres:
       limits:
         cpu: 250m
         memory: 128Mi
-postgresCluster:
-  enabled: false
 monitoring:
   alertEvaluator: prometheus
   podMonitor:
