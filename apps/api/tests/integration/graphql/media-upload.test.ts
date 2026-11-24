@@ -294,6 +294,7 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(completed.data?.completeMediaUpload.media.id, media.id);
     assert.equal(completed.data?.completeMediaUpload.media.state, MediaState.READY);
     assert.ok(completed.data?.completeMediaUpload.media.readyAt);
+    const readyAt = completed.data!.completeMediaUpload.media.readyAt;
     assert.equal(execution.mock.callCount(), 1);
     assertMediaUploadWorkflowOptions(execution.mock.calls[0]!, storedMedia.id, auth.account.id);
     assert.deepEqual(stagingR2.metadataRequests, [
@@ -302,10 +303,14 @@ describe('Local Media upload GraphQL 경계', () => {
     const repeated = await requestCompleteMediaUpload(media.id, auth.token);
     assertNoGraphQLErrors(repeated);
     assert.deepEqual(repeated.data, completed.data);
+    assert.equal(repeated.data?.completeMediaUpload.media.readyAt, readyAt);
     assert.equal(execution.mock.callCount(), 1);
     const stored = await db.select().from(Media).then(firstOrThrow);
     assert.equal(stored.url, 'https://media.example/media.webp');
     assert.equal(stored.mediaType, 'image/webp');
+    assert.equal(stored.state, MediaState.READY);
+    assert.ok(stored.readyAt);
+    assert.equal(Temporal.Instant.compare(stored.readyAt, Temporal.Instant.from(readyAt)), 0);
   });
 
   test('선택한 AI 필터를 workflow에 전달하고 Ready Media를 선택과 무관하게 재사용한다', async (t) => {
@@ -469,21 +474,27 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(execution.mock.callCount(), 1);
   });
 
-  test('AI filter opt-in is rejected for a legacy upload instead of silently skipping processing', async (t) => {
+  test('지원하지 않는 storage reference는 필터 요청에도 외부 확인 없이 거부한다', async (t) => {
     const auth = await createAuthenticatedSession();
-    const media = await createUploadingMedia(
-      auth.account.id,
-      auth.profile.id,
-      'opaque/legacy-reference',
-    );
     const fetch = t.mock.method(globalThis, 'fetch');
     const execute = t.mock.method(temporalClient.workflow, 'execute');
 
-    const result = await requestCompleteMediaUpload(media.id, auth.token, true);
+    for (const storageReference of ['opaque/legacy-reference', '.', '..']) {
+      const media = await createUploadingMedia(auth.account.id, auth.profile.id, storageReference);
+      const result = await requestCompleteMediaUpload(media.id, auth.token, true);
 
-    assert.equal(result.errors?.[0]?.extensions?.code, 'CONFLICT');
-    assert.equal(result.errors?.[0]?.message, '이미지를 다시 첨부해 주세요');
-    assert.equal(result.data, null);
+      assert.equal(result.errors?.[0]?.extensions?.code, 'CONFLICT');
+      assert.equal(result.errors?.[0]?.message, '이미지를 다시 첨부해 주세요');
+      assert.equal(result.data, null);
+      const unchanged = await db
+        .select()
+        .from(Media)
+        .where(eq(Media.id, media.databaseId))
+        .then(firstOrThrow);
+      assert.equal(unchanged.state, MediaState.UPLOADING);
+      assert.equal(unchanged.readyAt, null);
+    }
+
     assert.equal(fetch.mock.callCount(), 0);
     assert.equal(execute.mock.callCount(), 0);
   });
@@ -546,6 +557,16 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(executionCount, 1);
     assertMediaUploadWorkflowOptions(execution.mock.calls[0]!, media.id, auth.account.id);
     assertMediaUploadWorkflowOptions(execution.mock.calls[1]!, media.id, auth.account.id);
+    const completed = await db.select().from(Media).then(firstOrThrow);
+    assert.equal(completed.state, MediaState.READY);
+    assert.ok(completed.readyAt);
+    assert.equal(
+      Temporal.Instant.compare(
+        completed.readyAt,
+        Temporal.Instant.from(results[0]!.data!.completeMediaUpload.media.readyAt),
+      ),
+      0,
+    );
   });
 
   test('workflow dispatch가 거부되어도 READY로 기록된 결과를 반환한다', async (t) => {
@@ -740,7 +761,7 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(await db.$count(Media), 0);
   });
 
-  test('같은 Account의 다른 선택 Profile이 저장 완료된 같은 Media를 Ready로 전환한다', async (t) => {
+  test('같은 Account의 다른 선택 Profile이 Nexus Media를 Ready로 전환한다', async (t) => {
     const auth = await createAuthenticatedSession();
     const remoteInstance = await createInstance(InstanceKind.ACTIVITYPUB, InstanceState.ACTIVE);
     const selectedProfile = await createProfile(`selected-${crypto.randomUUID()}`, {
@@ -752,62 +773,58 @@ describe('Local Media upload GraphQL 경계', () => {
       role: AccountProfileRole.MEMBER,
     });
     const selectedProfileToken = await createSession(auth.account.id, selectedProfile.id);
-    const stored = await createUploadingMedia(
-      auth.account.id,
-      auth.profile.id,
-      'opaque/reference?provider-owned',
-    );
-    const storedUploadExpiresAt = (
-      await db.select().from(Media).where(eq(Media.id, stored.databaseId)).then(firstOrThrow)
-    ).uploadExpiresAt;
+    const issued = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(issued);
+    const stored = await db.select().from(Media).then(firstOrThrow);
+    assert.ok(stored.storageReference);
+    const session = parseNexusMediaUploadReference(stored.storageReference);
+    assert.ok(session);
+    const storedUploadExpiresAt = stored.uploadExpiresAt;
+    const execution = mockCompletingWorkflow(t, async ({ mediaId, accountId }) => {
+      assert.equal(accountId, auth.account.id);
+      await markMediaReady(mediaId);
+      return workflowResult(session.id);
+    });
 
-    t.mock.method(
-      globalThis,
-      'fetch',
-      async (input: string | URL | Request, init?: RequestInit) => {
-        assert.equal(
-          String(input),
-          `${stagingR2.endpoint}/v1/uploads/opaque%2Freference%3Fprovider-owned`,
-        );
-        assert.equal(init?.method, undefined);
-        assert.deepEqual(init?.headers, { Authorization: 'Bearer secret' });
-        assert.equal(init?.body, undefined);
-        assert.ok(init?.signal instanceof AbortSignal);
-        return representationResponse();
-      },
+    const result = await requestCompleteMediaUpload(
+      issued.data!.issueMediaUploadUrl.media.id,
+      selectedProfileToken,
     );
-
-    const result = await requestCompleteMediaUpload(stored.id, selectedProfileToken);
 
     assertNoGraphQLErrors(result);
-    assert.equal(result.data?.completeMediaUpload.media.id, stored.id);
+    assert.equal(
+      result.data?.completeMediaUpload.media.id,
+      issued.data!.issueMediaUploadUrl.media.id,
+    );
     assert.equal(result.data?.completeMediaUpload.media.state, MediaState.READY);
     assert.ok(result.data?.completeMediaUpload.media.readyAt);
 
     const completed = await db.select().from(Media).then(firstOrThrow);
-    assert.equal(completed.id, stored.databaseId);
+    assert.equal(completed.id, stored.id);
     assert.equal(completed.accountId, auth.account.id);
     assert.equal(completed.profileId, auth.profile.id);
     assert.equal(completed.storageReference, stored.storageReference);
     assert.equal(completed.url, 'https://media.example/media.webp');
     assert.equal(completed.mediaType, 'image/webp');
+    assertMediaUploadWorkflowOptions(execution.mock.calls[0]!, stored.id, auth.account.id);
     assert.ok(completed.uploadExpiresAt);
     assert.equal(completed.uploadExpiresAt.toString(), storedUploadExpiresAt?.toString());
     assert.equal(completed.state, MediaState.READY);
     assert.ok(completed.readyAt);
   });
 
-  test('다른 Account의 완료 요청은 외부 확인 전에 거부한다', async (t) => {
+  test('다른 Account의 완료 요청은 workflow 시작 전에 거부한다', async (t) => {
     const execute = t.mock.method(temporalClient.workflow, 'execute');
     const owner = await createAuthenticatedSession();
     const other = await createAuthenticatedSession();
-    const media = await createUploadingMedia(
-      owner.account.id,
-      owner.profile.id,
-      `nexus:v1:${crypto.randomUUID()}`,
-    );
+    const issued = await requestIssueMediaUploadUrl(owner.token);
+    assertNoGraphQLErrors(issued);
+    const media = await db.select().from(Media).then(firstOrThrow);
 
-    const result = await requestCompleteMediaUpload(media.id, other.token);
+    const result = await requestCompleteMediaUpload(
+      issued.data!.issueMediaUploadUrl.media.id,
+      other.token,
+    );
 
     assert.equal(result.errors?.[0]?.extensions?.code, 'NOT_FOUND');
     assert.equal(result.data, null);
@@ -817,106 +834,17 @@ describe('Local Media upload GraphQL 경계', () => {
     assert.equal(unchanged.readyAt, null);
   });
 
-  test('저장 미완료와 외부 확인 실패는 Uploading state를 유지한다', async (t) => {
-    const auth = await createAuthenticatedSession();
-    const media = await createUploadingMedia(auth.account.id, auth.profile.id);
-    const attempts: Array<() => Promise<Response>> = [
-      async () => new Response(null, { status: 404 }),
-      async () => new Response(null, { status: 503 }),
-      async () => Response.json({ mediaType: 'image/webp', url: 'not-a-url' }),
-      async () => {
-        throw new Error('network failure');
-      },
-    ];
-
-    for (const attempt of attempts) {
-      t.mock.method(globalThis, 'fetch', attempt);
-      const result = await requestCompleteMediaUpload(media.id, auth.token);
-      assert.ok(result.errors?.[0]);
-      assert.equal(result.data, null);
-      t.mock.restoreAll();
-
-      const unchanged = await db.select().from(Media).then(firstOrThrow);
-      assert.equal(unchanged.state, MediaState.UPLOADING);
-      assert.equal(unchanged.readyAt, null);
-      assert.equal(unchanged.url, null);
-      assert.equal(unchanged.mediaType, null);
-    }
-  });
-
-  test('dot-segment opaque reference는 완료 endpoint 밖으로 정규화하지 않는다', async (t) => {
-    let fetchCalls = 0;
-    t.mock.method(globalThis, 'fetch', async () => {
-      fetchCalls += 1;
-      return representationResponse();
-    });
-    const auth = await createAuthenticatedSession();
-
-    for (const storageReference of ['.', '..']) {
-      const { id } = await createUploadingMedia(auth.account.id, auth.profile.id, storageReference);
-      const result = await requestCompleteMediaUpload(id, auth.token);
-      assert.ok(result.errors?.[0]);
-      assert.equal(result.data, null);
-    }
-
-    assert.equal(fetchCalls, 0);
-    for (const unchanged of await db.select().from(Media)) {
-      assert.equal(unchanged.state, MediaState.UPLOADING);
-      assert.equal(unchanged.readyAt, null);
-    }
-  });
-
-  test('반복 완료 요청은 같은 Ready Media와 최초 readyAt을 유지한다', async (t) => {
-    let fetchCalls = 0;
-    t.mock.method(globalThis, 'fetch', async () => {
-      fetchCalls += 1;
-      return representationResponse();
-    });
-    const auth = await createAuthenticatedSession();
-    const media = await createUploadingMedia(auth.account.id, auth.profile.id);
-
-    const first = await requestCompleteMediaUpload(media.id, auth.token);
-    const repeated = await requestCompleteMediaUpload(media.id, auth.token);
-
-    assertNoGraphQLErrors(first);
-    assertNoGraphQLErrors(repeated);
-    assert.deepEqual(repeated.data, first.data);
-    assert.equal(fetchCalls, 1);
-  });
-
-  test('동시 완료 요청은 하나의 Ready 결과를 공유한다', async (t) => {
-    let fetchCalls = 0;
-    const bothChecksStarted = Promise.withResolvers<void>();
-    t.mock.method(globalThis, 'fetch', async () => {
-      fetchCalls += 1;
-      if (fetchCalls === 2) {
-        bothChecksStarted.resolve();
-      }
-      await bothChecksStarted.promise;
-      return representationResponse();
-    });
-    const auth = await createAuthenticatedSession();
-    const media = await createUploadingMedia(auth.account.id, auth.profile.id);
-
-    const results = await Promise.all([
-      requestCompleteMediaUpload(media.id, auth.token),
-      requestCompleteMediaUpload(media.id, auth.token),
-    ]);
-
-    for (const result of results) {
-      assertNoGraphQLErrors(result);
-    }
-    assert.deepEqual(results[1]!.data, results[0]!.data);
-    assert.equal(fetchCalls, 2);
-    const completed = await db.select().from(Media).then(firstOrThrow);
-    assert.equal(completed.state, MediaState.READY);
-    assert.ok(completed.readyAt);
-  });
-
   test('Ready persistence 실패는 부분 state 전이를 남기지 않는다', async (t) => {
-    t.mock.method(globalThis, 'fetch', async () => representationResponse());
     const auth = await createAuthenticatedSession();
-    const media = await createUploadingMedia(auth.account.id, auth.profile.id);
+    const issued = await requestIssueMediaUploadUrl(auth.token);
+    assertNoGraphQLErrors(issued);
+    const media = await db.select().from(Media).then(firstOrThrow);
+    const session = parseNexusMediaUploadReference(media.storageReference!);
+    assert.ok(session);
+    const execution = mockCompletingWorkflow(t, async ({ mediaId }) => {
+      await markMediaReady(mediaId);
+      return workflowResult(session.id);
+    });
     await pg.unsafe(`
       CREATE FUNCTION fail_media_ready_update() RETURNS trigger
       LANGUAGE plpgsql AS $$
@@ -934,10 +862,14 @@ describe('Local Media upload GraphQL 경계', () => {
       `);
     });
 
-    const result = await requestCompleteMediaUpload(media.id, auth.token);
+    const result = await requestCompleteMediaUpload(
+      issued.data!.issueMediaUploadUrl.media.id,
+      auth.token,
+    );
 
     assert.ok(result.errors?.[0]);
     assert.equal(result.data, null);
+    assert.equal(execution.mock.callCount(), 1);
     const unchanged = await db.select().from(Media).then(firstOrThrow);
     assert.equal(unchanged.state, MediaState.UPLOADING);
     assert.equal(unchanged.readyAt, null);
@@ -1047,9 +979,6 @@ const requestGraphQL = async <TData>(
 const assertNoGraphQLErrors = (result: GraphQLResult<unknown>) => {
   assert.equal(result.errors, undefined, JSON.stringify(result.errors));
 };
-
-const representationResponse = () =>
-  Response.json({ mediaType: 'image/webp', url: 'https://media.example/media.webp' });
 
 const assertStagingUpload = (uploadUrl: string, id?: string) => {
   const url = new URL(uploadUrl);
