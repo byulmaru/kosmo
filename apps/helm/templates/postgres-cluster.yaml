@@ -1,4 +1,4 @@
-{{- if or (not .Values.postgres.existingCluster) .Values.postgres.clusterSpec }}
+{{- if not .Values.postgres.existingCluster }}
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -13,9 +13,6 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
-{{- if .Values.postgres.clusterSpec }}
-{{ toYaml .Values.postgres.clusterSpec | nindent 2 }}
-{{- else }}
   instances: {{ ternary 3 1 (eq .Values.env "prod") }}
 {{- if eq .Values.env "prod" }}
   affinity:
@@ -53,5 +50,4 @@ spec:
     {{- with .Values.postgres.storage.storageClass }}
     storageClass: {{ . | quote }}
     {{- end }}
-{{- end }}
 {{- end }}
