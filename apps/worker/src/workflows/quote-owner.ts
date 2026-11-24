@@ -8,6 +8,7 @@ import {
   defineQuery,
   defineSignal,
   defineUpdate,
+  patched,
   proxyActivities,
   setHandler,
   workflowInfo,
@@ -125,11 +126,16 @@ const {
   sendQuoteOwnerEffectActivity,
 } = proxyActivities<typeof activities>(workflowActivityOptions);
 
+const stopPollingPatch = 'post-quote-owner-stop-polling-v1';
+
 export async function postQuoteOwnerWorkflow(input: QuoteOwnerState): Promise<void> {
   if (!z.uuid().safeParse(input.postId).success) {
     throw ApplicationFailure.nonRetryable('Invalid Quote owner identity');
   }
-  const queue: QuoteOwnerCommand[] = [...(input.pending ?? [])];
+  const queue: QuoteOwnerCommand[] =
+    input.pending?.length && !patched('post-quote-owner-drop-carried-polls-v1')
+      ? [...input.pending]
+      : [];
   const results = new Map<string, QuoteOwnerResult>(input.completed ?? []);
   const deferred: QuoteOwnerCommand[] = [];
   const grants = new Set(input.seenApprovalUris ?? []);
@@ -393,13 +399,20 @@ export async function postQuoteOwnerWorkflow(input: QuoteOwnerState): Promise<vo
       ]);
       activeCommandId = null;
       phase = 'IDLE';
-      if (result.retryable && !finish && !renew && command.commandId === latestCommandId) {
+      if (
+        result.retryable &&
+        !finish &&
+        !renew &&
+        command.commandId === latestCommandId &&
+        !patched(stopPollingPatch)
+      ) {
         await condition(() => queue.length > 0 || finish || renew, '30 seconds');
         if (
           !finish &&
           !renew &&
           command.commandId === latestCommandId &&
-          !queue.some((c) => c.commandId === command.commandId)
+          !queue.some((c) => c.commandId === command.commandId) &&
+          !patched(stopPollingPatch)
         ) {
           queue.push(command);
         }
@@ -412,7 +425,8 @@ export async function postQuoteOwnerWorkflow(input: QuoteOwnerState): Promise<vo
         if (
           result.retryable &&
           command.commandId === latestCommandId &&
-          !queue.some((c) => c.commandId === command.commandId)
+          !queue.some((c) => c.commandId === command.commandId) &&
+          !patched(stopPollingPatch)
         ) {
           deferred.push(command);
         }

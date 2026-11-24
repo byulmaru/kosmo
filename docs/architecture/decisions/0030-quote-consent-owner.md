@@ -52,9 +52,10 @@ command ID·상태·approval binding에서 결정한다. 동일 상태 effect의
 상태 effect는 ID를 구분한다. 원격 서버의 중복 처리까지 포함한 exactly-once delivery는 보장하지 않는다.
 
 정상 종료와 Continue-As-New는 admission을 닫고 이미 대기 중인 Update들을 완료한 뒤 drain한다.
-Continue-As-New는 Source recovery ID·Source URI binding·재사용 URI 이력·pending 재검증을 전달한다.
-최신 admission command ID도 전달한다. 새로운 명령이 들어오면 이전 내부 재검증을 폐기하여 오래된 Note가
-최신 승인 참조를 되돌리지 못하게 한다. 최초 접수된 명령의 FIFO 순서는 유지한다.
+Continue-As-New는 Source recovery ID, Source URI binding, 재사용 URI 이력을 전달한다. 최초 접수된
+명령은 FIFO 순서로 처리한다. `PENDING` 반환 이후에는 새 수신 이벤트가 들어올 때 다시 검증한다.
+기존 히스토리에 기록된 timer와 내부 재검증은 Temporal patch로 재생한다. 기존 timer가 깨어나면
+같은 명령을 다시 queue에 넣지 않으며, 신규 Run은 이전 Run에서 넘어온 내부 재검증을 버린다.
 최근 command 결과 256개를 전달해 Run 전환 직후의 중복 admission을 줄인다. 이것은 무기한 이벤트
 receipt 저장소가 아니다. 오래된 이벤트/retention 만료를 이 cache만으로 판별하지 않는다.
 
@@ -70,7 +71,7 @@ Delete와 Activity ID/target 없는 Delete의 기존 허용 계약은 유지한�
 숨기지 않는다. Note의 명시적 승인 참조 변경 invalidation은 기존 계약대로 별도 처리한다.
 
 검증 가능한 Tombstone·issuer·URI·redirect/cache 경계를 포함한 410 상호운용 판정은 구현하지 않았다.
-body 없는 410과 반복 current-invalid의 최종 상태 표현은 후속 결정이다. 현재는 재검증 대상으로 유지한다.
+body 없는 410과 current-invalid 응답은 기존 상태를 유지한다. 이후 수신 이벤트에서 새 증거를 검증한다.
 
 **강제 Terminate/Reset은 정상 drain을 실행하지 않는다.** Query 성공 후 Terminate된 Activity는 뒤늦게
 commit할 수 있다. 새 Run의 bootstrap은 이미 열린 DB transaction을 기다리고 현재 증거로 후속 작업을

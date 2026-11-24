@@ -71,6 +71,12 @@
 ## Quote Consent Owner
 
 - Quote consent의 변경 명령은 Quote ID별 owner의 FIFO admission을 통과한다. Handler는 enqueue만 수행한다.
+- `PENDING`은 수신 명령의 처리 결과다. 이후 `Update(Note)`나 `Accept`처럼 새 ActivityPub 이벤트가 들어올 때
+  동의를 다시 검증한다. 완료된 명령을 timer로 다시 enqueue하거나 Continue-As-New에 실어 보내지 않는다.
+- ActivityPub 객체 조회에는 Fedify loader를 사용한다. Quote 요청·응답·승인서 구성과 승인서 검증에는
+  기존 wire 계약을 표현하는 `quoteInteraction` helper를 사용한다.
+  Fedify inbox/outbox가 수신 처리 실패와 발신 전달 실패의 재시도를 담당한다. Temporal Activity 재시도는
+  진행 중인 작업의 실행 실패를 복구하는 데 사용한다.
 - 원격 proof 조회는 읽기 전용 Activity로 분리한다. 쓰기 Activity는 Source → Quote 잠금, 현재 Run/token Query fence,
   기존 identity/state CAS를 같은 transaction에서 검사한다. Query 성공만으로 commit까지의 Temporal 소유권을 보장하지 않는다.
 - 정상 종료·Continue-As-New는 token 폐기와 DB drain을 수행한다. Source 삭제는 공유 잠금 순서를 따르는 제한된 다중 자원 transaction이다.
