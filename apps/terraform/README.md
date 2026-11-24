@@ -11,8 +11,6 @@
 - 각 store workflow에 필요한 GitHub Actions Workload Identity Federation. Native Store Distribution의 Android job은 `main`의 정확한 workflow와 기존 `prod` Environment만 허용한다.
 - Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
 - GitHub에서 직접 관리하는 Actions environment와 변수 (`terraform-apply`, 승인형 `prod` release)
-- `byulmaru-kosmo-prod-postgresql-backups-822638974464` PostgreSQL backup bucket과 `byulmaru-kosmo-prod-postgres-backup` EKS Pod Identity role
-- AWS Argo CD의 `kosmo-prod` Application
 
 OKE의 `kosmo-dev` ApplicationSet은 `byulmaru/infrastructure`가 관리한다. `Deploy Dev`는 OKE Argo CD에서 `targetRevision`과 Helm `parameters`를 갱신한다. OKE ApplicationSet은 두 필드의 차이를 무시하므로 배포 설정이 유지된다. 배포 상태는 Argo CD의 sync와 rollout 결과에서 확인한다.
 
@@ -29,23 +27,18 @@ mise install
 gcloud auth login
 ```
 
-Terraform 실행 시에는 장기 credential 파일 대신 현재 `gcloud` 계정의 단기 token을 주입한다. Argo CD 리소스를 읽는 plan에는 `ARGOCD_SERVER=argocd-aws.tail1fdd55.ts.net:443`과 SSO로 발급받은 `ARGOCD_AUTH_TOKEN`도 필요하다. CI는 GitHub OIDC token을 Argo CD Dex에서 교환해 장기 token 없이 인증한다.
+GitHub Actions는 OCI OIDC로 공용 state를 읽고 기존 Google OIDC로 Firebase와 IAM에 접근한다.
 
 ## 검증과 적용
 
-최초 bootstrap에서는 Terraform state와 이 root가 소유하는 AWS 리소스만 관리할 수 있는 AWS OIDC role을 만든다. AWS backup bucket 또는 Pod Identity role 구성이 바뀌면 plan 전에 같은 스크립트를 다시 실행해 provisioning 권한을 동기화한다. Terraform plan/apply는 `byulmaru` EKS cluster의 OIDC issuer만 읽으므로 이 role에는 해당 cluster에 한정된 `eks:DescribeCluster` 권한도 필요하다.
+OCI 관리자 초기 등록으로 `kosmo/terraform.tfstate`와 잠금 파일에 대한 CI 접근을 설정한다.
 
-```sh
-./scripts/ensure-ci-aws-role.sh
-```
-
-GCP 리소스를 적용한 뒤 store Environment와 변수는 각 workflow의 bootstrap 절차에 따라 GitHub에서 직접 관리한다. `terraform-apply` Environment는 `main`만 허용한다. Terraform workflow의 repository 변수 `GCP_TERRAFORM_PROVIDER`, `GCP_TERRAFORM_SERVICE_ACCOUNT`는 각 Terraform output을 기준으로 설정하고, `AWS_TERRAFORM_ROLE_ARN`은 `ensure-ci-aws-role.sh`의 마지막 출력값으로 설정한다. Production GitHub 설정은 [Production release 운영](../../docs/operations/production-release.md)의 첫 전환 절차에서 적용하고 live API로 검증한다.
+GCP 리소스를 적용한 뒤 store Environment와 변수는 각 workflow의 bootstrap 절차에 따라 GitHub에서 직접 관리한다. `terraform-apply` Environment는 `main`만 허용한다. Terraform workflow의 repository 변수 `GCP_TERRAFORM_PROVIDER`, `GCP_TERRAFORM_SERVICE_ACCOUNT`는 각 Terraform output을 기준으로 설정한다. Production GitHub 설정은 [Production release 운영](../../docs/operations/production-release.md)의 첫 전환 절차에서 적용하고 live API로 검증한다.
 
 `main`을 push하면 canonical Docker Build가 이미지를 한 번 build해 GHCR에 `sha-<full SHA>` tag로 push한다. 기존 `Deploy Dev` 경로는 해당 triggering run의 `head_sha`로 SHA tag digest를 조회해 자동 배포한다. Production release는 이 push로 시작하지 않으며, Main에 저장된 release workflow를 `main` ref에서 `workflow_dispatch`로 실행할 때만 요청된다. `target_sha`를 입력하면 해당 full SHA를 사용하고, 비워 두면 preflight가 실행 시점의 최신 `main` commit을 immutable target으로 확정한다. Preflight는 target SHA의 성공한 main push Docker Build run과 `sha-<target SHA>` GHCR tag digest를 검증·고정한다. `prod` Environment required reviewer의 한 번의 승인 전에는 production source checkout, prod Vault/Sentry credential 접근과 image build를 수행하지 않는다. 승인 뒤 gated job은 target source를 checkout하거나 image를 재build·재push하지 않고, preflight가 확정한 SHA와 digest를 production migration과 모든 활성화 workload에 사용한다. SHA tag 재빌드로 Dev와 Production의 조회 digest가 달라질 수 있으며, Web의 공개 채널 설정은 image input이 아니라 Helm `ENVIRONMENT`와 BFF `/channel.js` 런타임 경계로 선택한다.
 
 Main에 저장된 release workflow를 `main` ref에서 `workflow_dispatch`로 실행하면 `target_sha`를 선택할 수 있다. 입력하면 repository에 존재하는 정확한 40자리 commit SHA를 production target으로 사용하고, 비워 두면 preflight가 최신 `main`을 resolve한 뒤 성공한 canonical Docker Build run과 `sha-<target SHA>` GHCR tag digest를 검증·고정한다. Dispatch 경로는 `prod` Environment 승인 전에는 target checkout·prod Vault/Sentry credential 접근·image build를 하지 않으며, 승인 뒤 preflight가 확정한 target SHA와 digest를 같은 migration·workload 경로로 재빌드·재조회 없이 배포한다. Workflow summary에는 requester, workflow definition ref, trigger, canonical build run·SHA tag·digest와 resolved target SHA를 남기고, 명시적 `target_sha` 입력과 dispatch의 `github.sha` 구분은 Actions run/event metadata에서 확인한다. Git tag, `production` branch와 일반 branch push는 production source·approval·배포를 시작하지 않으며, production workload identity는 tag가 아니라 full SHA와 preflight 고정 GHCR digest다. SHA tag 재빌드로 Dev와 Production digest가 달라질 수 있다.
 
-Production PostgreSQL backup은 `s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/`에 저장한다. Bucket 객체는 S3의 기본 SSE-S3 암호화를 사용하며 별도 default encryption resource를 관리하지 않는다. Bucket은 public access 차단, TLS-only policy, versioning과 lifecycle을 사용하며 Terraform destroy로 제거되지 않는다. `byulmaru-kosmo-prod-postgres-backup` role은 EKS Pod Identity 전용이며 Barman의 bucket 확인을 위한 bucket-level list 권한과 `kosmo-prod/` prefix의 backup/WAL 객체 관리 권한만 가진다. Bucket과 role ARN은 각각 `postgres_backup_bucket_arn`, `postgres_backup_role_arn` Terraform output으로 확인한다.
 
 ## Google Play 내부 테스트 bootstrap
 
@@ -111,9 +104,9 @@ Kubernetes의 기본 ServiceAccount token 자동 mount도 계속 비활성으로
 
 그 뒤 `apps/terraform/**` 또는 Terraform workflow가 바뀐 PR에서는 GCP/Firebase/IAM/WIF plan을 실행해 PR comment와 artifact로 남긴다. Plan artifact는 저장소의 Actions 보존 기간만큼 유지하며 apply는 병합된 PR head와 일치하는 미만료 artifact만 선택한다.
 
-PR이 `main`에 병합되면 현재 main에서 plan을 새로 만들고, configuration, variables, 실제 action이 `no-op`이 아닌 resource changes, output changes와 checks가 reviewed plan과 같은지 확인한다. 이 JSON 비교는 sensitive value의 차이를 보존하되 Argo CD Application의 resource version이나 reconcile 시각처럼 실행 사이에 바뀌는 no-op 관측 상태는 제외한다. plan이 다르면 current plan을 자동 적용하지 않고 중단하며, 같으면 reviewed saved plan을 그대로 apply하므로 Terraform의 native stale-plan 검증도 유지된다. 여러 Terraform PR이 같은 merge queue 배치에 포함되어 plan이 달라지면 즉시 apply하지 않고 실패한다. 비교용 JSON은 로그나 artifact에 남기지 않고 job 안에서 삭제한다. plan과 apply는 같은 GCP 서비스 계정과 AWS role을 사용한다.
+PR이 `main`에 병합되면 현재 main에서 plan을 새로 만들고, configuration, variables, 실제 action이 `no-op`이 아닌 resource changes, output changes와 checks가 reviewed plan과 같은지 확인한다. 이 JSON 비교는 sensitive value의 차이를 보존한다. plan이 다르면 current plan을 자동 적용하지 않고 중단하며, 같으면 reviewed saved plan을 그대로 apply하므로 Terraform의 native stale-plan 검증도 유지된다. 여러 Terraform PR이 같은 merge queue 배치에 포함되어 plan이 달라지면 즉시 apply하지 않고 실패한다. 비교용 JSON은 로그나 artifact에 남기지 않고 job 안에서 삭제한다. plan과 apply는 각각 OCI backend와 GCP 서비스 계정을 사용한다.
 
-Terraform workflow는 `main`에서만 `workflow_dispatch` 수동 recovery를 허용한다. 수동 실행은 기존 Apply job에서 선택한 `github.sha`를 checkout하고, main ref guard와 기존 AWS/GCP/Tailscale/Argo 인증·Terraform 초기화 뒤 `terraform apply -auto-approve`를 한 번 직접 실행한다. 별도 Manual Plan job, `needs`, `terraform plan`, saved plan 파일, artifact 전달과 SHA metadata 검증은 사용하지 않으며 Terraform Apply 자체의 내부 계획 계산을 사용한다. PR Plan은 기존처럼 Environment 없이 실행하고, push 경로는 병합된 PR의 reviewed plan과 현재 plan을 비교한 뒤 reviewed saved plan을 적용하는 기존 계약을 유지한다.
+Terraform workflow는 `main`에서만 `workflow_dispatch` 수동 recovery를 허용한다. 수동 실행은 기존 Apply job에서 선택한 `github.sha`를 checkout하고, main ref guard와 OCI·Google 인증·Terraform 초기화 뒤 `terraform apply -auto-approve`를 한 번 직접 실행한다. 별도 Manual Plan job, `needs`, `terraform plan`, saved plan 파일, artifact 전달과 SHA metadata 검증은 사용하지 않으며 Terraform Apply 자체의 내부 계획 계산을 사용한다. PR Plan은 기존처럼 Environment 없이 실행하고, push 경로는 병합된 PR의 reviewed plan과 현재 plan을 비교한 뒤 reviewed saved plan을 적용하는 기존 계약을 유지한다.
 
 외부 기여자의 PR workflow는 기여 이력과 무관하게 저장소 관리자의 실행 승인을 받아야 한다. Repository의 Actions 설정에서 fork pull request 승인 정책을 `all_external_contributors`로 직접 관리하며, 조직 구성원의 PR만 자동 실행한다.
 
@@ -123,35 +116,11 @@ Terraform CI용 `kosmo-terraform` WIF provider는 `repository_id`, `repository_o
 - main push Apply: `push`이고 `refs/heads/main`이며 `terraform-apply` Environment
 - main manual Apply: `workflow_dispatch`이고 `refs/heads/main`이며 `terraform-apply` Environment
 
-따라서 다른 workflow, `workflow_run`, Environment 없는 main job, 다른 repository/owner, tag·feature ref의 non-PR 실행은 거부한다. main 대상 PR 예외는 read-only 권한을 보장하지 않는다. 이 조건 변경은 기존 main push Apply로 먼저 반영한 뒤 수동 recovery를 사용한다. AWS trust와 `terraform-apply` Environment, Firebase/native-distribution provider·IAM 역할과 다른 provider는 이 설정으로 변경하지 않는다.
-
-로컬 bootstrap 또는 복구가 필요할 때는 아래 순서로 실행한다.
-
-```sh
-export AWS_PROFILE=default
-export GOOGLE_OAUTH_ACCESS_TOKEN="$(gcloud auth print-access-token)"
-export ARGOCD_SERVER=argocd-aws.tail1fdd55.ts.net:443
-export ARGOCD_AUTH_TOKEN='<SSO access token>'
-
-terraform fmt -check
-terraform init
-terraform validate
-terraform plan -input=false -out=terraform.tfplan
-terraform apply -auto-approve terraform.tfplan
-terraform plan -input=false -detailed-exitcode
-```
-
-Firebase 약관을 아직 수락하지 않았다면 먼저 Firebase Console에서 같은 계정으로 약관을 수락한다.
+따라서 다른 workflow, `workflow_run`, Environment 없는 main job, 다른 repository/owner, tag·feature ref의 non-PR 실행은 거부한다. main 대상 PR 예외는 read-only 권한을 보장하지 않는다. 이 조건 변경은 기존 main push Apply로 먼저 반영한 뒤 수동 recovery를 사용한다. `terraform-apply` Environment와 Firebase/native-distribution provider·IAM 역할과 다른 provider는 이 설정으로 변경하지 않는다.
 
 ## State backend
 
-state는 기존 조직 S3 bucket의 Kosmo Terraform 전용 key에 저장한다.
-
-```sh
-AWS_PROFILE=default terraform init
-```
-
-bucket은 `byulmaru-terraform-state`, state key는 `kosmo/terraform.tfstate`이며 S3 native lockfile을 사용한다. AWS profile 이름이 다르면 `AWS_PROFILE`만 바꾼다. credential, `*.tfvars`, state, plan 파일은 커밋하지 않는다.
+OCI 춘천의 조직 공용 비공개 버킷 `byulmaru-terraform-state`에 `kosmo/terraform.tfstate`로 저장한다. GitHub Actions가 OCI OIDC로 인증하고 Terraform OCI backend가 잠금 파일을 관리한다. Credential, state와 plan 파일은 커밋하지 않는다.
 
 ## Rotation과 revocation
 
