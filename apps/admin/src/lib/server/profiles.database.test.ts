@@ -12,6 +12,7 @@ import {
   ProfileHashtags,
   ProfileMedia,
   Profiles,
+  withPrimaryDatabase,
 } from '@kosmo/core/db';
 import {
   ActivityPubActorType,
@@ -77,6 +78,7 @@ const makeProfile = ({
   displayName,
   instanceId = localInstanceId,
   state = ProfileState.ACTIVE,
+  suspensionReason = null,
   followersCount = 12,
   followingCount = 34,
 }: {
@@ -85,12 +87,14 @@ const makeProfile = ({
   displayName: string;
   instanceId?: string;
   state?: ProfileState;
+  suspensionReason?: string | null;
   followersCount?: number;
   followingCount?: number;
 }) => ({
   id,
   instanceId,
   state,
+  suspensionReason,
   handle,
   normalizedHandle: handle,
   displayName,
@@ -183,6 +187,7 @@ describe('Admin Profile read projections', () => {
         displayName: `display-name-only-${token}`,
         instanceId: remoteInstanceId,
         state: ProfileState.SUSPENDED,
+        suspensionReason: 'Remote policy review',
       }),
       makeProfile({
         id: sourceProfileId,
@@ -530,12 +535,14 @@ describe('Admin Profile read projections', () => {
       qualifiedHandle: `@state-group-${token}-remote-suspended@remote-${token}.example`,
       origin: 'REMOTE',
       state: 'SUSPENDED',
+      suspensionReason: 'Remote policy review',
       remoteUrl: `https://remote-${token}.example/users/suspended`,
     });
     expect(remote).not.toHaveProperty('privateKey');
 
     const loaded = await loadProfile({
       params: { id: targetProfileId },
+      request: new Request(`http://admin.test/profiles/${targetProfileId}`),
     } as Parameters<typeof loadProfile>[0]);
     if (!loaded) {
       throw new Error('Expected Profile detail loader data');
@@ -544,6 +551,7 @@ describe('Admin Profile read projections', () => {
     await expect(
       loadProfile({
         params: { id: '00000000-0000-7000-8000-000000000000' },
+        request: new Request('http://admin.test/profiles/00000000-0000-7000-8000-000000000000'),
       } as Parameters<typeof loadProfile>[0]),
     ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
   });
@@ -762,5 +770,112 @@ describe('Admin Profile read projections', () => {
     expect((await getProfile(targetProfileId))?.defaultPostVisibility).toBe(
       PostVisibility.UNLISTED,
     );
+  });
+
+  test('suspends and restores Profiles with an optional current reason', async () => {
+    const makeModerationRequest = (reason?: string) => {
+      const formData = new FormData();
+      if (reason !== undefined) {
+        formData.set('reason', reason);
+      }
+      return new Request(`http://admin.test/profiles/${targetProfileId}`, {
+        method: 'POST',
+        body: formData,
+      });
+    };
+    const callModerationAction = (action: 'suspend' | 'restore', id: string, reason?: string) =>
+      profileActions[action]({
+        params: { id },
+        request: makeModerationRequest(reason),
+      } as Parameters<typeof profileActions.suspend>[0]);
+    const readProfile = (id: string) => withPrimaryDatabase(() => getProfile(id));
+
+    const activeBefore = await readProfile(targetProfileId);
+    if (!activeBefore) {
+      throw new Error('Expected the active Profile');
+    }
+
+    expect(
+      await callModerationAction('suspend', targetProfileId, '  repeated spam reports  '),
+    ).toEqual({ moderationSuccess: 'suspended' });
+    expect(await readProfile(targetProfileId)).toMatchObject({
+      state: ProfileState.SUSPENDED,
+      suspensionReason: 'repeated spam reports',
+      defaultPostVisibility: activeBefore.defaultPostVisibility,
+      bio: activeBefore.bio,
+    });
+
+    const postActionPage = await loadProfile({
+      params: { id: targetProfileId },
+      request: new Request(`http://admin.test/profiles/${targetProfileId}`, { method: 'POST' }),
+    } as Parameters<typeof loadProfile>[0]);
+    expect(postActionPage?.profile.state).toBe(ProfileState.SUSPENDED);
+
+    expect(await callModerationAction('restore', targetProfileId)).toEqual({
+      moderationSuccess: 'restored',
+    });
+    expect(await readProfile(targetProfileId)).toMatchObject({
+      state: ProfileState.ACTIVE,
+      suspensionReason: null,
+      defaultPostVisibility: activeBefore.defaultPostVisibility,
+      bio: activeBefore.bio,
+    });
+
+    const blankReasonResult = await callModerationAction('suspend', targetProfileId, '   ');
+    expect(blankReasonResult).toEqual({ moderationSuccess: 'suspended' });
+    expect(await readProfile(targetProfileId)).toMatchObject({
+      state: ProfileState.SUSPENDED,
+      suspensionReason: null,
+    });
+
+    expect(await callModerationAction('restore', suspendedProfileId)).toEqual({
+      moderationSuccess: 'restored',
+    });
+    expect(await readProfile(suspendedProfileId)).toMatchObject({
+      origin: 'REMOTE',
+      state: ProfileState.ACTIVE,
+      suspensionReason: null,
+    });
+    expect(await callModerationAction('suspend', suspendedProfileId)).toEqual({
+      moderationSuccess: 'suspended',
+    });
+    expect(await readProfile(suspendedProfileId)).toMatchObject({
+      origin: 'REMOTE',
+      state: ProfileState.SUSPENDED,
+      suspensionReason: null,
+    });
+
+    await expect(
+      callModerationAction('suspend', 'not-a-uuid', 'invalid target'),
+    ).rejects.toMatchObject({ status: 404, body: { message: 'Not Found' } });
+  });
+
+  test('does not suspend or restore a disabled Profile', async () => {
+    const makeRequest = (reason?: string) => {
+      const formData = new FormData();
+      if (reason !== undefined) {
+        formData.set('reason', reason);
+      }
+      return new Request(`http://admin.test/profiles/${disabledProfileId}`, {
+        method: 'POST',
+        body: formData,
+      });
+    };
+    const readProfile = () => withPrimaryDatabase(() => getProfile(disabledProfileId));
+
+    for (const action of ['suspend', 'restore'] as const) {
+      const result = await profileActions[action]({
+        params: { id: disabledProfileId },
+        request: makeRequest('disabled profiles must remain disabled'),
+      } as Parameters<typeof profileActions.suspend>[0]);
+      expect(result).toMatchObject({
+        status: 409,
+        data: { moderationError: 'Profile state changed. Refresh and try again.' },
+      });
+      expect(await readProfile()).toMatchObject({
+        state: ProfileState.DISABLED,
+        suspensionReason: null,
+      });
+    }
   });
 });

@@ -13,6 +13,7 @@ export const load: PageServerLoad = async ({ url }) => {
   const q = url.searchParams.get('q')?.trim() ?? '';
   const rawOrigin = url.searchParams.get('origin');
   const rawState = url.searchParams.get('state');
+  const instanceDomain = url.searchParams.get('instanceDomain')?.trim().toLowerCase() ?? '';
   const origin = rawOrigin ? profileOriginSchema.safeParse(rawOrigin) : undefined;
   const state = rawState ? profileStateSchema.safeParse(rawState) : undefined;
 
@@ -21,7 +22,8 @@ export const load: PageServerLoad = async ({ url }) => {
     (direction && direction !== 'previous') ||
     (direction === 'previous' && !cursor) ||
     (rawOrigin && !origin?.success) ||
-    (rawState && !state?.success)
+    (rawState && !state?.success) ||
+    instanceDomain.includes('\0')
   ) {
     error(404, 'Not Found');
   }
@@ -31,6 +33,7 @@ export const load: PageServerLoad = async ({ url }) => {
   const page = await listProfiles({
     cursor: cursor ?? undefined,
     direction: direction === 'previous' ? 'previous' : 'next',
+    instanceDomain: instanceDomain || undefined,
     q: q || undefined,
     origin: selectedOrigin,
     state: selectedState,
@@ -42,6 +45,7 @@ export const load: PageServerLoad = async ({ url }) => {
       q,
       origin: selectedOrigin ?? '',
       state: selectedState ?? '',
+      ...(instanceDomain ? { instanceDomain } : {}),
     },
   };
 };

@@ -1,4 +1,4 @@
-import { QuoteAuthorization } from '@fedify/vocab';
+import { quoteInteraction } from '@fedify/interaction-controls';
 import { ActivityPubActors, db, first, Instances, Posts, Profiles } from '@kosmo/core/db';
 import {
   InstanceKind,
@@ -16,6 +16,7 @@ import {
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { authorizeLocalPostNote } from './local-post-note';
 import type { RequestContext } from '@fedify/fedify';
+import type { QuoteAuthorization } from '@fedify/vocab';
 
 type QuoteAuthorizationProjection = {
   readonly approvalUri: string;
@@ -115,8 +116,8 @@ export const dispatchLocalQuoteAuthorization = async (
     return null;
   }
 
-  return new QuoteAuthorization({
-    attribution: new URL(projection.sourceAuthorActorUri),
+  return quoteInteraction.createAuthorization({
+    attributedTo: new URL(projection.sourceAuthorActorUri),
     id: new URL(projection.approvalUri),
     interactingObject: new URL(projection.quoteUri),
     interactionTarget: new URL(projection.sourceUri),

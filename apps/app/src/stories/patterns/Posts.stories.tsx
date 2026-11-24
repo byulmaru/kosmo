@@ -533,6 +533,7 @@ const pureRepost = {
 };
 const visibilityOwnershipSourcePost = post({
   bodyText: '공개 범위가 다른 Quote·Repost의 원문입니다.',
+  createdAt: '2026-04-27T21:14:00.000Z',
   id: 'visibility-ownership-source',
   profile: sourceAuthor,
   visibility: 'PUBLIC',
@@ -546,6 +547,7 @@ const visibilityOwnershipQuotePost = post({
 });
 const visibilityOwnershipPureRepost = post({
   bodyText: null,
+  createdAt: '2026-04-28T21:14:00.000Z',
   id: 'visibility-ownership-repost',
   profile: repostAuthor,
   repostSource: visibilityOwnershipSourcePost,
@@ -3781,6 +3783,9 @@ export const ProductionRepostQuoteListIntegration: Story = {
       .getByText('재게시한 코스모 사용자님이 재게시함')
       .closest<HTMLAnchorElement>('a')!;
     const pureRepostSourceRow = within(pureRepostRow!).getByTestId('post-list-standard-row');
+    const pureRepostSourceAvatar = within(pureRepostSourceRow).getByLabelText(
+      `${sourceAuthor.displayName} 프로필 이미지`,
+    );
     const replyStandardRow = within(replyRow!).getByTestId('post-list-standard-row');
     expect(replyLabel.getBoundingClientRect().height).toBe(20);
     expect(
@@ -3803,7 +3808,7 @@ export const ProductionRepostQuoteListIntegration: Story = {
     const replyBody = within(replyRow!).getByTestId('post-list-row-body');
     expect(pureRepostAttributionLink.getBoundingClientRect().height).toBe(20);
     expect(
-      pureRepostSourceRow.getBoundingClientRect().top -
+      pureRepostSourceAvatar.getBoundingClientRect().top -
         pureRepostAttributionLink.getBoundingClientRect().bottom,
     ).toBeCloseTo(0, 0);
     expect(
@@ -4883,8 +4888,13 @@ export const Quote: Story = {
       formatTimelineTimestamp(sourcePost.createdAt),
     );
     const sourceTimestampLink = sourceTimestamp.closest('[role="link"]');
-    expect(window.getComputedStyle(sourceTimestamp).textAlign).toBe('right');
     expect(sourceTimestampLink).not.toBeNull();
+    expect(
+      Math.abs(
+        sourceTimestamp.getBoundingClientRect().right -
+          sourceTimestampLink!.getBoundingClientRect().right,
+      ),
+    ).toBeLessThanOrEqual(1);
     expect(sourceTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(sourceTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
     const sourceAvatar = within(preview).getByLabelText(
@@ -5233,6 +5243,19 @@ export const VisibilityListRows: Story = {
       ['FOLLOWERS', '팔로워만'],
       ['DIRECT', '언급한 프로필만'],
     ] as const;
+    const expectTimestampTopAligned = (
+      row: HTMLElement,
+      timestamp: HTMLElement,
+      profileRelativeHandle: string,
+    ) => {
+      const authorName = row
+        .querySelector<HTMLAnchorElement>(`a[role="link"][href="/${profileRelativeHandle}"]`)
+        ?.querySelector<HTMLElement>('[dir="auto"]');
+      expect(authorName).toBeTruthy();
+      expect(
+        Math.abs(timestamp.getBoundingClientRect().top - authorName!.getBoundingClientRect().top),
+      ).toBeLessThanOrEqual(1);
+    };
 
     for (const [visibility, label] of listVisibilityCases) {
       const postFixture = visibilityPosts.find((postItem) => postItem.visibility === visibility)!;
@@ -5247,6 +5270,7 @@ export const VisibilityListRows: Story = {
       );
       expect(timestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
       expect(timestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+      expectTimestampTopAligned(row, timestamp, postFixture.profile.relativeHandle);
       const textRange = row.ownerDocument.createRange();
       textRange.selectNodeContents(timestamp);
       const textBounds = textRange.getBoundingClientRect();
@@ -5283,6 +5307,11 @@ export const VisibilityListRows: Story = {
     );
     expect(quoteTimestampLink!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(quoteTimestampLink!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    expectTimestampTopAligned(
+      quoteRow,
+      quoteTimestamp,
+      visibilityOwnershipQuotePost.profile.relativeHandle,
+    );
     const quoteTextRange = quoteRow.ownerDocument.createRange();
     quoteTextRange.selectNodeContents(quoteTimestamp);
     const quoteTextBounds = quoteTextRange.getBoundingClientRect();
@@ -5307,9 +5336,37 @@ export const VisibilityListRows: Story = {
       'href',
       `/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}`,
     );
+    const sourceAuthorName = sourcePreview
+      .querySelector<HTMLAnchorElement>(
+        `a[role="link"][href="/${visibilityOwnershipSourcePost.profile.relativeHandle}"]`,
+      )
+      ?.querySelector<HTMLElement>('[dir="auto"]');
+    const sourceTimestampLink = within(sourcePreview).getByRole('link', {
+      name: '원문 게시글 보기',
+    });
+    const sourceTimestamp = sourceTimestampLink.querySelector<HTMLElement>('[dir="auto"]');
+    expect(sourceAuthorName).toBeTruthy();
+    expect(sourceTimestamp).toBeTruthy();
+    const sourceTimestampStyle = window.getComputedStyle(sourceTimestamp!);
+    expect(sourceTimestampStyle.fontSize).toBe(publicTimestampStyle.fontSize);
+    expect(sourceTimestampStyle.lineHeight).toBe(publicTimestampStyle.lineHeight);
+    expect(sourceTimestampStyle.fontWeight).toBe(publicTimestampStyle.fontWeight);
+    expect(sourceTimestampLink.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
+    expect(sourceTimestampLink.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    const sourceAuthorRange = sourcePreview.ownerDocument.createRange();
+    sourceAuthorRange.selectNodeContents(sourceAuthorName!);
+    const sourceTimestampRange = sourcePreview.ownerDocument.createRange();
+    sourceTimestampRange.selectNodeContents(sourceTimestamp!);
+    expect(
+      Math.abs(
+        sourceTimestampRange.getBoundingClientRect().top -
+          sourceAuthorRange.getBoundingClientRect().top,
+      ),
+    ).toBeLessThanOrEqual(3);
 
     const repostRow = canvas.getByTestId('visibility-pure-repost-row');
     const repostSourceRow = within(repostRow).getByTestId('post-list-standard-row');
+    const repostAttribution = within(repostRow).getByText('재게시한 코스모 사용자님이 재게시함');
     const repostSourceIcon = within(repostSourceRow).getByRole('img', { name: '공개' });
     const repostSourceTimestamp = repostSourceRow.querySelector<HTMLAnchorElement>(
       `a[href="/${visibilityOwnershipSourcePost.profile.relativeHandle}/${visibilityOwnershipSourcePost.id}"]`,
@@ -5320,6 +5377,46 @@ export const VisibilityListRows: Story = {
     expect(repostSourceTimestamp).not.toBeNull();
     expect(repostSourceTimestamp!.getBoundingClientRect().width).toBeGreaterThanOrEqual(44);
     expect(repostSourceTimestamp!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+    const repostSourceTimestampText = repostSourceTimestamp!.querySelector<HTMLElement>(
+      '[data-testid="post-timestamp"]',
+    );
+    expect(repostSourceTimestampText).not.toBeNull();
+    expect(repostSourceTimestampText).toHaveTextContent(
+      formatTimelineTimestamp(visibilityOwnershipSourcePost.createdAt),
+    );
+    expect(repostSourceTimestampText).not.toHaveTextContent(
+      formatTimelineTimestamp(visibilityOwnershipPureRepost.createdAt),
+    );
+    const repostAttributionRange = repostRow.ownerDocument.createRange();
+    repostAttributionRange.selectNodeContents(repostAttribution);
+    const repostAttributionBounds = repostAttributionRange.getBoundingClientRect();
+    const repostSourceTextRange = repostSourceRow.ownerDocument.createRange();
+    repostSourceTextRange.selectNodeContents(repostSourceTimestampText!);
+    const repostSourceTextBounds = repostSourceTextRange.getBoundingClientRect();
+    expect(Math.abs(repostSourceTextBounds.top - repostAttributionBounds.top)).toBeLessThanOrEqual(
+      1,
+    );
+    const repostSourceAuthor = repostSourceRow
+      .querySelector<HTMLAnchorElement>(
+        `a[role="link"][href="/${visibilityOwnershipSourcePost.profile.relativeHandle}"]`,
+      )
+      ?.querySelector<HTMLElement>('[dir="auto"]');
+    expect(repostSourceAuthor).toBeTruthy();
+    const repostSourceAuthorRange = repostSourceRow.ownerDocument.createRange();
+    repostSourceAuthorRange.selectNodeContents(repostSourceAuthor!);
+    expect(repostSourceAuthorRange.getBoundingClientRect().top).toBeGreaterThan(
+      repostAttributionBounds.bottom,
+    );
+    const repostSourceIconBounds = repostSourceIcon.getBoundingClientRect();
+    expect(
+      Math.abs(
+        repostSourceTextBounds.top +
+          repostSourceTextBounds.height / 2 -
+          (repostSourceIconBounds.top + repostSourceIconBounds.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(repostSourceIconBounds.left - repostSourceTextBounds.right).toBeGreaterThanOrEqual(3);
+    expect(repostSourceIconBounds.left - repostSourceTextBounds.right).toBeLessThanOrEqual(5);
     expect(
       repostSourceTimestamp!.compareDocumentPosition(repostSourceIcon) &
         Node.DOCUMENT_POSITION_FOLLOWING,

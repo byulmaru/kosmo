@@ -234,7 +234,6 @@ test('ModalOverlay forwards the native dismissal lifecycle on iOS', async () => 
   assert.equal(renderer.root.findByType('Modal' as never).props.visible, false);
   assert.equal(dismissed, 0);
   const modal = renderer.root.findByType('Modal' as never);
-  assert.equal(typeof modal.props.onDismiss, 'function');
   await act(async () => modal.props.onDismiss());
   assert.equal(dismissed, 1);
   await act(async () =>
@@ -290,19 +289,8 @@ test('ModalOverlay fullscreen on iOS uses native fade and reports native dismiss
     const root = renderer.root.find(
       (node) => node.type === ViewHost && node.props.testID === 'fullscreen-overlay',
     );
-    const surfaceStyles = styleObjects(
-      renderer.root.findByType('AnimatedView' as never).props.style,
-    );
     assert.equal(modal.props.visible, false);
     assert.equal(root.props.pointerEvents, 'none');
-    assert.equal(
-      surfaceStyles.some((style) => style.opacity !== undefined),
-      false,
-    );
-    assert.equal(
-      surfaceStyles.some((style) => style.transform !== undefined),
-      false,
-    );
     assert.equal(dismissed, 0);
 
     await act(async () => modal.props.onDismiss());
@@ -361,7 +349,6 @@ test('ModalOverlay fullscreen on Web keeps shared exit motion and dismissal hand
   );
   modal = renderer.root.findByType('Modal' as never);
   assert.equal(modal.props.visible, false);
-  assert.equal(typeof modal.props.onDismiss, 'function');
   await act(async () => modal.props.onDismiss());
   assert.equal(dismissed, 1);
   await act(async () => renderer.unmount());

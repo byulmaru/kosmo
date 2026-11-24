@@ -1,3 +1,8 @@
+{{- $alertEvaluator := .Values.monitoring.alertEvaluator | default "prometheus" -}}
+{{- if not (has $alertEvaluator (list "prometheus" "grafana")) -}}
+{{- fail "monitoring.alertEvaluator must be prometheus or grafana" -}}
+{{- end -}}
+{{- $postgresClusterName := include "kosmo.postgresName" . -}}
 {{- if eq .Values.env "prod" }}
 apiVersion: v1
 kind: ConfigMap
@@ -29,7 +34,7 @@ data:
                   to: 0
                 model:
                   expr: >-
-                    (absent((cnpg_pg_replication_in_recovery{namespace="kosmo-prod",cnpg_cluster="kosmo-postgres",cnpg_role="primary"} == 0) and on(namespace,pod) (cnpg_collector_up{namespace="kosmo-prod",cnpg_cluster="kosmo-postgres"} == 1) and on(namespace,pod) (up{namespace="kosmo-prod",cnpg_cluster="kosmo-postgres"} == 1) and on(namespace,pod) (timestamp(cnpg_pg_replication_in_recovery{namespace="kosmo-prod",cnpg_cluster="kosmo-postgres",cnpg_role="primary"}) > time() - 60))) or vector(0)
+                    (absent((cnpg_pg_replication_in_recovery{namespace="kosmo-prod",cnpg_cluster="{{ $postgresClusterName }}",cnpg_role="primary"} == 0) and on(namespace,pod) (cnpg_collector_up{namespace="kosmo-prod",cnpg_cluster="{{ $postgresClusterName }}"} == 1) and on(namespace,pod) (up{namespace="kosmo-prod",cnpg_cluster="{{ $postgresClusterName }}"} == 1) and on(namespace,pod) (timestamp(cnpg_pg_replication_in_recovery{namespace="kosmo-prod",cnpg_cluster="{{ $postgresClusterName }}",cnpg_role="primary"}) > time() - 60))) or vector(0)
                   instant: true
                   range: false
                   intervalMs: 1000
@@ -74,8 +79,10 @@ data:
             labels:
               severity: critical
               namespace: kosmo-prod
-              cnpg_cluster: kosmo-postgres
+              cnpg_cluster: {{ $postgresClusterName }}
             isPaused: false
+{{- if ne $alertEvaluator "grafana" }}
             notification_settings:
               receiver: platform-slack-monitoring
+{{- end }}
 {{- end }}

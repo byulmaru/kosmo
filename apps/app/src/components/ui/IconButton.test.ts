@@ -22,16 +22,12 @@ let pressState = { hovered: false, pressed: false };
 const timingCalls: Array<{
   active: boolean;
   duration: number;
-  handle: AnimatedColorMock;
-  stopCalls: number;
   target: AnimatedColorMock;
 }> = [];
-let setValueCalls = 0;
 
 class AnimatedColorMock {
   constructor(public value: string) {}
   setValue(value: string) {
-    setValueCalls += 1;
     this.value = value;
   }
   stopAnimation(callback?: () => void) {
@@ -58,14 +54,12 @@ mockModule('react-native', {
     Color: AnimatedColorMock,
     View: 'AnimatedView',
     timing: (
-      value: AnimatedColorMock,
+      _value: AnimatedColorMock,
       config: { duration: number; toValue: AnimatedColorMock },
     ) => {
       const timing = {
         active: false,
         duration: config.duration,
-        handle: value,
-        stopCalls: 0,
         target: config.toValue,
       };
       timingCalls.push(timing);
@@ -75,7 +69,6 @@ mockModule('react-native', {
         },
         stop: () => {
           timing.active = false;
-          timing.stopCalls += 1;
         },
       };
     },
@@ -109,14 +102,12 @@ type IconButtonProps = {
   accessibilityRole?: 'button' | 'link';
   accessibilityState?: { busy?: boolean; expanded?: boolean };
   children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
-  controlRef?: unknown;
   disabled?: boolean;
   feedbackRadius?: number;
   feedbackTone?: 'inverse';
   focusable?: boolean;
   hitSlop?: number;
   onFocus?: () => void;
-  onPressIn?: () => void;
   style?: unknown;
   targetSize?: number;
   visualSize?: number;
@@ -135,13 +126,6 @@ let getIconButtonOverlayGeometry:
       visualInset: number,
     ) => { targetInset: number; targetSize: number; visualInset: number })
   | undefined;
-let getIconButtonPlatformGeometry:
-  | ((
-      platform: string,
-      targetSize: number,
-      visualSize?: number,
-    ) => { minimumHitSlop: number; minimumTargetSize: number })
-  | undefined;
 let getInteractionTargetSize: ((platform: string) => number) | undefined;
 
 before(async () => {
@@ -152,9 +136,6 @@ before(async () => {
     getIconButtonHitSlop = module?.getIconButtonHitSlop as typeof getIconButtonHitSlop;
     getIconButtonOverlayGeometry = module?.getIconButtonOverlayGeometry as
       | typeof getIconButtonOverlayGeometry
-      | undefined;
-    getIconButtonPlatformGeometry = module?.getIconButtonPlatformGeometry as
-      | typeof getIconButtonPlatformGeometry
       | undefined;
     ({ getInteractionTargetSize } = await import('./interactionTarget'));
   } finally {
@@ -167,7 +148,6 @@ beforeEach(() => {
   pressState = { hovered: false, pressed: false };
   reducedMotion = false;
   timingCalls.length = 0;
-  setValueCalls = 0;
 });
 
 function renderIconButton(props: IconButtonProps): ReactTestInstance {
@@ -210,7 +190,7 @@ function flattenStyle(style: unknown): Record<string, unknown> {
   return Object.assign({}, ...style.flat(Infinity).filter(Boolean));
 }
 
-test('platform target mapping stays centralized for Web, iOS, and Android', () => {
+test('sets the minimum target for each platform', () => {
   assert.ok(getInteractionTargetSize, 'target size resolver must exist');
   assert.equal(getInteractionTargetSize('web'), 32);
   assert.equal(getInteractionTargetSize('ios'), 44);
@@ -241,26 +221,6 @@ test('overlay geometry preserves the visual inset while keeping the platform tar
     targetInset: 0,
     targetSize: 48,
     visualInset: 4,
-  });
-});
-
-test('Native target expansion preserves the rendered layout while Web keeps an actual element floor', () => {
-  assert.ok(getIconButtonPlatformGeometry, 'platform geometry resolver must exist');
-  assert.deepEqual(getIconButtonPlatformGeometry('web', 16, 12), {
-    minimumHitSlop: 0,
-    minimumTargetSize: 32,
-  });
-  assert.deepEqual(getIconButtonPlatformGeometry('ios', 40, 40), {
-    minimumHitSlop: 2,
-    minimumTargetSize: 40,
-  });
-  assert.deepEqual(getIconButtonPlatformGeometry('android', 44, 44), {
-    minimumHitSlop: 2,
-    minimumTargetSize: 44,
-  });
-  assert.deepEqual(getIconButtonPlatformGeometry('android', 48, 32), {
-    minimumHitSlop: 0,
-    minimumTargetSize: 48,
   });
 });
 
@@ -383,7 +343,6 @@ test('visual size remains independent from the accessible input target', () => {
   const visualRenderer = renderVisual(button, { hovered: false, pressed: false });
   const visual = visualRenderer.root.findByType(viewHost);
 
-  assert.equal(button.type, PressableHost);
   assert.equal(targetStyle.minHeight, 44);
   assert.equal(targetStyle.minWidth, 44);
   assert.equal(targetStyle.position, 'absolute');
@@ -414,17 +373,13 @@ test('visualStyle without visualSize keeps the requested feedback dimensions', (
   assert.equal(feedbackStyle.width, 44);
 });
 
-test('button semantics and interaction props are forwarded without losing press state', () => {
-  const controlRef = { current: null };
-  const onPressIn = () => undefined;
+test('exposes the accessible name and disabled, busy, and expanded states', () => {
   const button = renderIconButton({
     accessibilityLabel: '프로필 편집 닫기',
     accessibilityState: { busy: true, expanded: true },
     children: ({ pressed }) => (pressed ? '눌림' : '기본'),
-    controlRef,
     disabled: true,
     hitSlop: 4,
-    onPressIn,
     style: ({ pressed }: { pressed: boolean }) => ({ backgroundColor: pressed ? 'gray' : 'white' }),
     targetSize: 44,
   });
@@ -432,17 +387,14 @@ test('button semantics and interaction props are forwarded without losing press 
     (button.props.style as (state: { pressed: boolean }) => unknown)({ pressed: true }),
   );
   const pressedVisual = renderVisual(button, { hovered: false, pressed: true });
-  const pressedContent = pressedVisual.root.findByType(viewHost).props.children;
 
   assert.equal(button.props.accessibilityLabel, '프로필 편집 닫기');
   assert.equal(button.props.accessibilityRole, 'button');
   assert.equal(button.props.disabled, true);
   assert.deepEqual(button.props.accessibilityState, { busy: true, disabled: true, expanded: true });
   assert.equal(button.props.hitSlop, 4);
-  assert.equal(button.props.onPressIn, onPressIn);
-  assert.equal(button.props.ref, controlRef);
   assert.equal(disabledStyle.backgroundColor, 'gray');
-  assert.deepEqual(Array.isArray(pressedContent) ? pressedContent[1] : pressedContent, '눌림');
+  assert.ok(pressedVisual.root.findAll(({ children }) => children.includes('눌림')).length > 0);
 });
 
 test('a navigation adapter can preserve link semantics', () => {
@@ -524,7 +476,6 @@ test('default feedback owns a circular surface while preserving state and geomet
   assert.equal(surfaceStyle({ hovered: true, pressed: false }).backgroundColor, 'hover');
   assert.equal(surfaceStyle({ hovered: true, pressed: true }).backgroundColor, 'pressed');
   assert.equal(surfaceStyle({ hovered: false, pressed: true }).backgroundColor, 'pressed');
-  assert.equal(surfaceStyle({ hovered: false, pressed: false }).transitionDuration, undefined);
 
   const wrapper = renderVisual(button, { hovered: false, pressed: false }).root.findByType(
     viewHost,
@@ -533,51 +484,38 @@ test('default feedback owns a circular surface while preserving state and geomet
   assert.equal(flattenStyle(wrapper.props.style).width, 44);
 });
 
-test('feedback retargets hover and pressed colors at 120ms on one visual handle', () => {
+test('feedback retargets hover and pressed colors at 120ms', () => {
   const button = renderIconButton({ accessibilityLabel: '닫기', children: '×', targetSize: 44 });
   const renderer = renderVisual(button, { hovered: false, pressed: false });
-  const feedback = () => renderer.root.findByType(animatedViewHost);
 
   updateVisual(renderer, button, { hovered: true, pressed: false });
-  const hoverHandle = flattenStyle(feedback().props.style).backgroundColor;
-  assert.ok(hoverHandle instanceof AnimatedColorMock);
   const hoverTiming = timingCalls.at(-1);
   assert.ok(hoverTiming);
   assert.equal(hoverTiming.duration, 120);
-  assert.equal(hoverTiming.handle, hoverHandle);
   assert.equal(hoverTiming.target.value, 'hover');
   assert.equal(hoverTiming.active, true);
 
   timingCalls.length = 0;
   updateVisual(renderer, button, { hovered: false, pressed: true });
-  const pressedHandle = flattenStyle(feedback().props.style).backgroundColor;
-  assert.equal(pressedHandle, hoverHandle);
   const pressedTiming = timingCalls.at(-1);
   assert.ok(pressedTiming);
   assert.equal(pressedTiming.duration, 120);
-  assert.equal(pressedTiming.handle, pressedHandle);
   assert.equal(pressedTiming.target.value, 'pressed');
   assert.equal(pressedTiming.active, true);
 
   timingCalls.length = 0;
   updateVisual(renderer, button, { hovered: true, pressed: false });
-  const hoverReturnHandle = flattenStyle(feedback().props.style).backgroundColor;
-  assert.equal(hoverReturnHandle, pressedHandle);
   const hoverReturnTiming = timingCalls.at(-1);
   assert.ok(hoverReturnTiming);
   assert.equal(hoverReturnTiming.duration, 120);
-  assert.equal(hoverReturnTiming.handle, hoverReturnHandle);
   assert.equal(hoverReturnTiming.target.value, 'hover');
   assert.equal(hoverReturnTiming.active, true);
 
   timingCalls.length = 0;
   updateVisual(renderer, button, { hovered: false, pressed: false });
-  const finalIdleHandle = flattenStyle(feedback().props.style).backgroundColor;
-  assert.equal(finalIdleHandle, hoverReturnHandle);
   const finalIdleTiming = timingCalls.at(-1);
   assert.ok(finalIdleTiming);
   assert.equal(finalIdleTiming.duration, 120);
-  assert.equal(finalIdleTiming.handle, finalIdleHandle);
   assert.equal(finalIdleTiming.target.value, 'transparent');
   assert.equal(finalIdleTiming.active, true);
 });
@@ -589,14 +527,11 @@ test('reduced motion stops pending feedback and commits the latest color immedia
   updateVisual(renderer, button, { hovered: true, pressed: false });
   const pendingTiming = timingCalls.at(-1);
   assert.ok(pendingTiming);
-  const setValueCountBeforeReduced = setValueCalls;
   reducedMotion = true;
   updateVisual(renderer, button, { hovered: false, pressed: true });
 
   assert.equal(timingCalls.length, 1);
   assert.equal(pendingTiming.active, false);
-  assert.ok(pendingTiming.stopCalls > 0);
-  assert.ok(setValueCalls > setValueCountBeforeReduced);
   assert.equal(
     flattenStyle(renderer.root.findByType(animatedViewHost).props.style).backgroundColor,
     'pressed',

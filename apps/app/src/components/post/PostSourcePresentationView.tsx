@@ -1,6 +1,6 @@
 import { Link, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { graphql, useFragment } from 'react-relay';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';
 import { NavigationLink } from '@/components/shell/NavigationLink';
@@ -8,7 +8,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { TimestampText } from '@/components/ui/TimestampText';
 import { formatTimelineTimestamp } from '@/lib/date';
 import { useTheme } from '@/theme/ThemeProvider';
-import { fontFamilies, radii, spacing, typography } from '@/theme/tokens';
+import { radii, spacing, textStyles } from '@/theme/tokens';
 import { PostContentRenderer } from './PostContentRenderer';
 import { PostDetailBackground } from './PostDetailBackground';
 import { PostVisibilityIcon } from './PostVisibilityIcon';
@@ -176,7 +176,7 @@ export function PostSourcePresentationView({
   }
   const postHeader = (
     <PostDetailBackground onBackgroundPress={openPost} style={styles.authorHeader}>
-      <PostDetailBackground onBackgroundPress={openPost} style={styles.authorSlot}>
+      <View pointerEvents="box-none" style={styles.authorSlot}>
         <PresentationLink
           accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle} 프로필 보기`}
           href={postProfileHref}
@@ -185,8 +185,8 @@ export function PostSourcePresentationView({
         >
           <Author profile={post.profile} showAvatar={showPostAvatar} />
         </PresentationLink>
-      </PostDetailBackground>
-      <View style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
+      </View>
+      <View pointerEvents="box-none" style={[styles.timeMetadata, { paddingTop: authorTopInset }]}>
         <PresentationLink
           accessibilityLabel={`${post.profile.displayName ?? post.profile.relativeHandle}의 게시글 보기`}
           href={postDetailHref}
@@ -196,7 +196,9 @@ export function PostSourcePresentationView({
             {formatTimelineTimestamp(post.createdAt)}
           </TimestampText>
         </PresentationLink>
-        <PostVisibilityIcon visibility={post.visibility} />
+        <View pointerEvents="none" style={styles.visibilityIconAlignment}>
+          <PostVisibilityIcon visibility={post.visibility} />
+        </View>
       </View>
     </PostDetailBackground>
   );
@@ -272,10 +274,7 @@ export function PostSourcePreview({
         onBackgroundPress={interactive ? openSource : undefined}
         style={[styles.authorHeader, { marginTop: -authorTopInset }]}
       >
-        <PostDetailBackground
-          onBackgroundPress={interactive ? openSource : undefined}
-          style={styles.authorSlot}
-        >
+        <View pointerEvents="box-none" style={styles.authorSlot}>
           {interactive ? (
             <PresentationLink
               accessibilityLabel={`${source.profile.displayName ?? source.profile.relativeHandle} 프로필 보기`}
@@ -288,21 +287,21 @@ export function PostSourcePreview({
           ) : (
             <Author profile={source.profile} showAvatar />
           )}
-        </PostDetailBackground>
+        </View>
         {interactive ? (
-          <PresentationLink
-            accessibilityLabel="원문 게시글 보기"
-            href={sourcePostHref}
-            style={{ paddingTop: authorTopInset }}
-          >
-            <Text style={[styles.timestamp, { color: theme.foregroundSecondary }]}>
-              {formatTimelineTimestamp(source.createdAt)}
-            </Text>
-          </PresentationLink>
+          <View pointerEvents="box-none" style={{ paddingTop: authorTopInset }}>
+            <PresentationLink
+              accessibilityLabel="원문 게시글 보기"
+              href={sourcePostHref}
+              style={styles.timestampLink}
+            >
+              <TimestampText>{formatTimelineTimestamp(source.createdAt)}</TimestampText>
+            </PresentationLink>
+          </View>
         ) : (
-          <Text style={[styles.timestamp, { color: theme.foregroundSecondary }]}>
-            {formatTimelineTimestamp(source.createdAt)}
-          </Text>
+          <View style={styles.timestampLink}>
+            <TimestampText>{formatTimelineTimestamp(source.createdAt)}</TimestampText>
+          </View>
         )}
       </PostDetailBackground>
       {source.content && interactive ? (
@@ -393,7 +392,7 @@ function PresentationLink({
   );
 
   return resetScroll ? (
-    <NavigationLink resetScroll href={href} push={Platform.OS !== 'web'}>
+    <NavigationLink resetScroll href={href}>
       {trigger}
     </NavigationLink>
   ) : (
@@ -465,6 +464,7 @@ function Author({ profile, showAvatar }: { profile: AuthorProfile; showAvatar: b
           imageUri={profile.avatar?.url}
           label={profile.displayName || profile.relativeHandle}
           size={40}
+          style={styles.authorAvatar}
         />
       ) : null}
       <ProfileNameBlock profile={profile} style={styles.authorText} />
@@ -475,18 +475,19 @@ function Author({ profile, showAvatar }: { profile: AuthorProfile; showAvatar: b
 const styles = StyleSheet.create({
   root: { gap: spacing.sm, minWidth: 0 },
   author: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: spacing.sm,
     maxWidth: '100%',
     minHeight: 44,
     minWidth: 0,
   },
+  authorAvatar: { alignSelf: 'center' },
   authorText: { flex: -1, minWidth: 0 },
   authorHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, minWidth: 0 },
   authorSlot: { alignItems: 'flex-start', flex: 1, minWidth: 0 },
   timeMetadata: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flexDirection: 'row',
     flexShrink: 0,
     gap: spacing.xs,
@@ -495,18 +496,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     borderRadius: radii.sm,
     flexShrink: 0,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     minHeight: 44,
     minWidth: 44,
   },
-  timestamp: {
-    fontFamily: fontFamilies.ui,
-    minHeight: 44,
-    minWidth: 44,
-    paddingTop: 12,
-    textAlign: 'right',
-    ...typography.xsm,
-  },
+  visibilityIconAlignment: { height: textStyles.uiCopyM.lineHeight, justifyContent: 'center' },
   sourceBody: { justifyContent: 'center', minHeight: 44, minWidth: 0 },
   preview: { borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, padding: spacing.md },
   presentationLink: { maxWidth: '100%', minWidth: 0 },

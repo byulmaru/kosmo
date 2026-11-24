@@ -17,6 +17,7 @@ import {
   PostState,
   PostVisibility,
   ProfileMediaKind,
+  ProfileState,
 } from '@kosmo/core/enums';
 import {
   canonicalizePostContentDocument,
@@ -36,6 +37,7 @@ export type ProfilePostKind = 'POST' | 'REPLY' | 'QUOTE' | 'REPOST' | 'REPLY_QUO
 export interface ProfileListOptions {
   cursor?: string;
   direction?: 'next' | 'previous';
+  instanceDomain?: string;
   q?: string;
   origin?: ProfileOrigin;
   state?: ProfileReadState;
@@ -66,6 +68,7 @@ export interface ProfileDetail extends ProfileListRow {
   defaultPostVisibility: PostVisibility | null;
   headerUrl: string | null;
   remoteUrl: string | null;
+  suspensionReason: string | null;
   tags: string[];
   instanceDomain: string;
   createdAt: string;
@@ -112,11 +115,12 @@ const serializeInstant = (value: Temporal.Instant | null | undefined) => value?.
 
 const escapeLikePattern = (value: string) => value.replace(/[\\%_]/g, '\\$&');
 
-const profileFiltersWhere = ({ q, origin, state }: ProfileListOptions) => {
+const profileFiltersWhere = ({ instanceDomain, q, origin, state }: ProfileListOptions) => {
   const search = q?.trim();
   const pattern = search ? `%${escapeLikePattern(search)}%` : undefined;
 
   return and(
+    instanceDomain ? eq(Instances.domain, instanceDomain) : undefined,
     origin ? eq(Instances.kind, originToInstanceKind(origin)) : undefined,
     state ? eq(Profiles.state, state) : undefined,
     pattern ? or(ilike(Profiles.handle, pattern), ilike(Profiles.displayName, pattern)) : undefined,
@@ -245,11 +249,12 @@ const hasNextCursor = async (cursor: string, filters: ProfileListOptions): Promi
 export const listProfiles = async ({
   cursor,
   direction = 'next',
+  instanceDomain,
   q,
   origin,
   state,
 }: ProfileListOptions = {}) => {
-  const filters = { q, origin, state };
+  const filters = { instanceDomain, q, origin, state };
   const rows = await db
     .select({
       id: Profiles.id,
@@ -320,6 +325,7 @@ export const getProfile = async (id: string): Promise<ProfileDetail | undefined>
       originKind: Instances.kind,
       instanceDomain: Instances.domain,
       state: Profiles.state,
+      suspensionReason: Profiles.suspensionReason,
       followersCount: Profiles.followersCount,
       followingCount: Profiles.followingCount,
       createdAt: Profiles.createdAt,
@@ -352,10 +358,31 @@ export const getProfile = async (id: string): Promise<ProfileDetail | undefined>
     defaultPostVisibility: row.defaultPostVisibility,
     headerUrl: media.get(id)?.headerUrl ?? null,
     remoteUrl: origin === 'REMOTE' ? (row.actorProfileUrl ?? row.actorUri) : null,
+    suspensionReason: row.suspensionReason,
     tags,
     instanceDomain: row.instanceDomain,
     createdAt: row.createdAt.toString(),
   };
+};
+
+export const suspendProfile = async (id: string, reason: string | null): Promise<boolean> => {
+  const rows = await db
+    .update(Profiles)
+    .set({ state: ProfileState.SUSPENDED, suspensionReason: reason })
+    .where(and(eq(Profiles.id, id), eq(Profiles.state, ProfileState.ACTIVE)))
+    .returning({ id: Profiles.id });
+
+  return rows.length > 0;
+};
+
+export const restoreProfile = async (id: string): Promise<boolean> => {
+  const rows = await db
+    .update(Profiles)
+    .set({ state: ProfileState.ACTIVE, suspensionReason: null })
+    .where(and(eq(Profiles.id, id), eq(Profiles.state, ProfileState.SUSPENDED)))
+    .returning({ id: Profiles.id });
+
+  return rows.length > 0;
 };
 
 export const updateDefaultPostVisibility = async (

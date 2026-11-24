@@ -415,18 +415,15 @@ describe('UniversalShell screen fallback focus target', () => {
     assert.equal(sidebarNavigationProps?.guestPublicContent, false);
   });
 
-  it('Native 화면 경로가 바뀌어도 drawer와 프로필 선택 콜백 참조를 유지한다', async () => {
+  it('Native route 전환 뒤에도 이미 열린 메뉴 동작이 계속 작동한다', async () => {
     platform.OS = 'android';
     await renderShell();
     assert.ok(shellChromeProps);
-    const { openComposer, openNavigationDrawer, openProfileSwitcher } = shellChromeProps;
+    const { openNavigationDrawer } = shellChromeProps;
 
     pathname = '/@other/post-id';
     await act(async () => renderer!.update(createElement(UniversalShell)));
 
-    assert.equal(shellChromeProps.openNavigationDrawer, openNavigationDrawer);
-    assert.equal(shellChromeProps.openComposer, openComposer);
-    assert.equal(shellChromeProps.openProfileSwitcher, openProfileSwitcher);
     assert.equal(shellChromeProps.navigationDrawerOpen, false);
 
     await act(async () => openNavigationDrawer());

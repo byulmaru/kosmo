@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ModerationAction from '#lib/components/moderation-action.svelte';
   import { Badge } from '#lib/components/ui/badge/index.js';
   import { Button } from '#lib/components/ui/button/index.js';
   import * as Card from '#lib/components/ui/card/index.js';
@@ -98,11 +99,11 @@
             </select>
           </label>
           <Button type="submit" class="w-full sm:w-auto">Save default visibility</Button>
-          {#if form?.success}
+          {#if form && 'success' in form && form.success}
             <p role="status" class="text-sm text-muted-foreground sm:col-span-2">
               Default post visibility saved.
             </p>
-          {:else if form?.error}
+          {:else if form && 'error' in form && form.error}
             <p role="alert" class="text-sm text-destructive sm:col-span-2">{form.error}</p>
           {/if}
         </form>
@@ -135,12 +136,42 @@
         </div>
         <div class="grid gap-1 px-6 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-4">
           <dt class="text-sm font-medium text-muted-foreground">State</dt>
-          <dd>
+          <dd class="grid justify-items-start gap-2">
             <Badge variant={data.profile.state === 'ACTIVE' ? 'default' : 'outline'}>
               {data.profile.state}
             </Badge>
+            {#if data.profile.state === 'ACTIVE'}
+              <ModerationAction
+                action="suspend"
+                actionHref="?/suspend"
+                targetKind="profile"
+                targetName={data.profile.relativeHandle}
+              />
+            {:else if data.profile.state === 'SUSPENDED'}
+              <ModerationAction
+                action="restore"
+                actionHref="?/restore"
+                targetKind="profile"
+                targetName={data.profile.relativeHandle}
+              />
+            {/if}
+            {#if form && 'moderationSuccess' in form}
+              <p role="status" class="text-sm text-muted-foreground">
+                {form.moderationSuccess === 'suspended'
+                  ? 'Profile suspended.'
+                  : 'Profile restored.'}
+              </p>
+            {:else if form && 'moderationError' in form}
+              <p role="alert" class="text-sm text-destructive">{form.moderationError}</p>
+            {/if}
           </dd>
         </div>
+        {#if data.profile.state === 'SUSPENDED' && data.profile.suspensionReason}
+          <div class="grid gap-1 px-6 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-4">
+            <dt class="text-sm font-medium text-muted-foreground">Suspension reason</dt>
+            <dd class="whitespace-pre-wrap break-all">{data.profile.suspensionReason}</dd>
+          </div>
+        {/if}
         <div class="grid gap-1 px-6 py-4 sm:grid-cols-[12rem_minmax(0,1fr)] sm:gap-4">
           <dt class="text-sm font-medium text-muted-foreground">Instance domain</dt>
           <dd class="break-all">{data.profile.instanceDomain || '—'}</dd>

@@ -5,16 +5,16 @@
 ## 관리 범위
 
 - 기존 Firebase 활성화와 Android/iOS 앱 등록 (`moe.kos`)
-- Firebase Cloud Messaging API, 전용 keyless sender service account와 EKS Worker Workload Identity Federation
+- Firebase Cloud Messaging API, 전용 keyless sender service account와 EKS·OKE Worker Workload Identity Federation
 - Google Play Developer API 활성화, Android Publisher 전용 service account와 최소 WIF 권한
 - Native Store Distribution이 Firebase Android/iOS client config를 빌드 시점에 읽을 수 있는 전용 service account와 최소 WIF 권한
 - 각 store workflow에 필요한 GitHub Actions Workload Identity Federation. Native Store Distribution의 Android job은 `main`의 정확한 workflow와 기존 `prod` Environment만 허용한다.
 - Terraform plan/apply가 공유하는 GitHub Actions WIF 서비스 계정
 - GitHub에서 직접 관리하는 Actions environment와 변수 (`terraform-apply`, 승인형 `prod` release)
 - `byulmaru-kosmo-prod-postgresql-backups-822638974464` PostgreSQL backup bucket과 `byulmaru-kosmo-prod-postgres-backup` EKS Pod Identity role
-- Argo CD `kosmo` ApplicationSet이 생성하는 `kosmo-dev` Application과 별도 `kosmo-prod` Application의 선언
+- AWS Argo CD의 `kosmo-prod` Application
 
-`kosmo-dev`의 ApplicationSet은 기본 source와 values를 소유하고, `Deploy Dev`는 release-time `targetRevision`과 Helm `parameters`를 설정한다. ApplicationSet은 이 두 release-time 경로의 차이를 무시해 자동 sync가 배포 대상을 되돌리지 않도록 한다. Workflow 성공은 이 설정 갱신의 성공을 뜻하며, 후속 자동 sync나 rollout 완료의 증거가 아니다.
+OKE의 `kosmo-dev` ApplicationSet은 `byulmaru/infrastructure`가 관리한다. `Deploy Dev`는 OKE Argo CD에서 `targetRevision`과 Helm `parameters`를 갱신한다. OKE ApplicationSet은 두 필드의 차이를 무시하므로 배포 설정이 유지된다. 배포 상태는 Argo CD의 sync와 rollout 결과에서 확인한다.
 
 Firebase를 Google Cloud 프로젝트에 추가하는 작업은 되돌릴 수 없다. 앱 리소스에는 `PREVENT` 삭제 정책을 적용한다.
 

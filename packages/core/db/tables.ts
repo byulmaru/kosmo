@@ -223,6 +223,7 @@ export const Instances = pgTable(
     canonicalOrigin: text('canonical_origin'),
     kind: Enum.instanceKind('kind').notNull(),
     state: Enum.instanceState('state').notNull().default('ACTIVE'),
+    suspensionReason: text('suspension_reason'),
     activityPubKeyPairs:
       jsonb('activitypub_key_pairs').$type<
         { publicKeyJwk: JsonWebKeyRecord; privateKeyJwk: JsonWebKeyRecord }[]
@@ -553,6 +554,7 @@ export const Profiles = pgTable(
       .notNull()
       .references(() => Instances.id),
     state: Enum.profileState('state').notNull().default('ACTIVE'),
+    suspensionReason: text('suspension_reason'),
     handle: text('handle').notNull(),
     normalizedHandle: text('normalized_handle').notNull(),
     displayName: text('display_name').notNull(),

@@ -1,129 +1,148 @@
 import assert from 'node:assert/strict';
-import { afterEach, before, describe, it, mock } from 'node:test';
-import { createElement, Suspense, useState } from 'react';
+import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
+import { createElement } from 'react';
+import * as Relay from 'react-relay';
 import { act, create } from 'react-test-renderer';
-import type { PropsWithChildren, ReactNode } from 'react';
+import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
+import { post } from '@/stories/fixtures';
+import PostDetailThreadFragment from './__generated__/PostDetailThread_post.graphql';
+import PostMediaViewerThreadQueryNode from './__generated__/PostMediaViewerThreadQuery.graphql';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import type { GraphQLResponse } from 'relay-runtime';
+import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
 import type { PostMediaViewerThread as PostMediaViewerThreadComponent } from './PostMediaViewerThread';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-let queryData = validQueryData();
-let queryFetchKey: string | number | undefined;
-let queryVariables: Record<string, unknown> | undefined;
+type Request = {
+  mediaOwnerPostId: unknown;
+  respond: (data: ReturnType<typeof threadResponse>) => void;
+};
+
 let renderer: ReactTestRenderer | null = null;
-
-mock.module('react-relay', {
-  exports: {
-    graphql: () => ({}),
-    useLazyLoadQuery: (
-      _query: unknown,
-      variables: Record<string, unknown>,
-      options?: { fetchKey?: string | number },
-    ) => {
-      queryVariables = variables;
-      queryFetchKey = options?.fetchKey;
-      return queryData;
-    },
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-
-mock.module('@/components/RouteBoundary', {
-  exports: {
-    RouteBoundary: ({ children, loading }: PropsWithChildren<{ loading: ReactNode }>) =>
-      createElement(Suspense, { fallback: loading }, children),
-    useRouteBoundary: () => {
-      const [fetchKey, setFetchKey] = useState(0);
-      const refetch = () => setFetchKey((key) => key + 1);
-      return { fetchKey, refetch };
-    },
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-
-mock.module('@/components/ui/StateView', {
-  exports: {
-    StateView: (props: Record<string, unknown>) => createElement('StateView', props),
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-
-mock.module('./PostDetailThread', {
-  exports: {
-    PostDetailThread: (props: Record<string, unknown>) =>
-      createElement('PostDetailThread', { ...props, testID: 'viewer-post-detail-thread' }),
-  },
-} as unknown as Parameters<typeof mock.module>[1]);
-
 let PostMediaViewerThread: typeof PostMediaViewerThreadComponent;
+const requests: Request[] = [];
+
+const mockModule = (specifier: string | URL, exports: object) =>
+  mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+
+mockModule('react-relay', { ...Relay, graphql: () => PostMediaViewerThreadQueryNode });
+mockModule('react-native', { Platform: { OS: 'web' } });
+mockModule('@/components/ui/StateView', {
+  StateView: (props: object) => createElement('StateView', props),
+});
+mockModule(new URL('./PostDetailThread.tsx', import.meta.url), {
+  PostDetailThread: ({
+    onReplyCreated,
+    post: thread,
+  }: {
+    onReplyCreated: () => void;
+    post: PostDetailThread_post$key;
+  }) => {
+    const { replyDescendants } = Relay.useFragment(PostDetailThreadFragment, thread);
+    return createElement(
+      'Thread',
+      { testID: 'viewer-reply-thread', replyCount: replyDescendants.edges.length },
+      createElement('Button', { accessibilityLabel: '답글 작성 완료', onPress: onReplyCreated }),
+    );
+  },
+});
 
 before(async () => {
   ({ PostMediaViewerThread } = await import('./PostMediaViewerThread'));
 });
 
+beforeEach(() => mock.timers.enable({ apis: ['setTimeout'] }));
+
 afterEach(async () => {
-  if (renderer) {
-    await act(async () => renderer?.unmount());
-    renderer = null;
-  }
-  queryData = validQueryData();
-  queryFetchKey = undefined;
-  queryVariables = undefined;
+  await act(async () => renderer?.unmount());
+  await act(async () => mock.timers.tick(300_001));
+  mock.timers.reset();
+  renderer = null;
+  requests.length = 0;
 });
 
 describe('PostMediaViewerThread', () => {
-  it('같은 Post·Content의 기존 detail thread를 Viewer presentation으로 렌더한다', async () => {
+  it('refreshes the media owner’s replies after a reply is created', async () => {
     await render();
+    assert.equal(requests[0]?.mediaOwnerPostId, 'post-1');
+    await act(async () => requests[0]?.respond(threadResponse()));
+    assert.equal(thread().props.replyCount, 0);
 
-    const thread = renderer!.root.findByProps({ testID: 'viewer-post-detail-thread' });
-    assert.equal(thread.props.presentation, 'viewer');
-    assert.equal(thread.props.post, queryData.node.thread);
-    assert.equal(thread.props.replyProfile, queryData.currentSession.selectedProfile);
-    assert.equal(thread.props.currentPostReplyAvailable, false);
-    assert.equal(thread.props.currentPostReplySurfaceId, 'surface-post');
-    assert.equal(queryFetchKey, 'post-1:content-1:0');
-    assert.deepEqual(queryVariables, { mediaOwnerPostId: 'post-1' });
+    await act(async () =>
+      thread().findByProps({ accessibilityLabel: '답글 작성 완료' }).props.onPress(),
+    );
+    assert.equal(requests[1]?.mediaOwnerPostId, 'post-1');
+    await act(async () => requests[1]?.respond(threadResponse({ includeReply: true })));
+    assert.equal(thread().props.replyCount, 1);
   });
 
-  it('Reply 작성 뒤 같은 Post detail operation을 새 fetch key로 갱신한다', async () => {
+  it('hides the thread when the response belongs to a different content revision', async () => {
     await render();
-    const thread = renderer!.root.findByProps({ testID: 'viewer-post-detail-thread' });
+    assert.ok(requests[0]);
+    await act(async () => requests[0].respond(threadResponse({ contentId: 'content-other' })));
 
-    await act(async () => thread.props.onReplyCreated());
-
-    assert.equal(queryFetchKey, 'post-1:content-1:1');
-  });
-
-  it('조회된 Post·Content identity가 현재 projection과 다르면 thread만 숨긴다', async () => {
-    queryData = validQueryData({ contentId: 'content-other' });
-
-    await render();
-
-    assert.equal(renderer!.root.findAllByProps({ testID: 'viewer-post-detail-thread' }).length, 0);
+    assert.equal(renderer!.root.findAllByProps({ testID: 'viewer-reply-thread' }).length, 0);
+    assert.equal(renderer!.root.findAll((node) => String(node.type) === 'StateView').length, 0);
   });
 });
 
+function thread() {
+  assert.ok(renderer);
+  return renderer.root.findByProps({ testID: 'viewer-reply-thread' });
+}
+
 async function render() {
+  const environment = new Environment({
+    network: Network.create((_request, variables) =>
+      Observable.create<GraphQLResponse>((sink) => {
+        requests.push({
+          mediaOwnerPostId: variables.mediaOwnerPostId,
+          respond: (data) => {
+            sink.next({ data });
+            sink.complete();
+          },
+        });
+      }),
+    ),
+    store: new Store(new RecordSource()),
+  });
+
   await act(async () => {
     renderer = create(
-      createElement(PostMediaViewerThread, {
-        contentId: 'content-1',
-        mediaOwnerPostId: 'post-1',
-        replyAvailable: false,
-        replySurfacePostId: 'surface-post',
+      createElement(Relay.RelayEnvironmentProvider, {
+        environment,
+        children: createElement(PostMediaViewerThread, {
+          contentId: 'content-post-1',
+          mediaOwnerPostId: 'post-1',
+          replyAvailable: true,
+          replySurfacePostId: 'post-1',
+        }),
       }),
     );
   });
-  assert.ok(renderer);
 }
 
-function validQueryData({ contentId = 'content-1' }: { contentId?: string } = {}) {
+function threadResponse({
+  contentId = 'content-post-1',
+  includeReply = false,
+}: { contentId?: string; includeReply?: boolean } = {}) {
+  const mediaOwner = post({ id: 'post-1' });
+  const reply = post({
+    id: 'reply-1',
+    replyParent: { __typename: 'Post', id: mediaOwner.id, profile: mediaOwner.profile },
+  });
   return {
-    currentSession: { selectedProfile: { id: 'profile-selected' } },
+    currentSession: null,
     node: {
-      __typename: 'Post' as const,
-      content: { id: contentId },
-      id: 'post-1',
-      state: 'ACTIVE',
-      thread: { id: 'thread-fragment' },
+      ...mediaOwner,
+      content: { ...mediaOwner.content, id: contentId },
+      viewerReactions: [],
+      replyAncestors: [],
+      replyDescendants: {
+        edges: includeReply ? [{ cursor: 'reply-1', node: { ...reply, viewerReactions: [] } }] : [],
+        pageInfo: { endCursor: includeReply ? 'reply-1' : null, hasNextPage: false },
+      },
     },
   };
 }

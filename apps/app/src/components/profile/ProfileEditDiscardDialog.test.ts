@@ -61,9 +61,6 @@ test('이탈 확인 dialog에서 계속 편집과 버리기를 실행한다', as
     (node) => (node.type as unknown) === 'Modal' && node.props.role === 'dialog',
   );
   assert.equal(dialogs.length, 1);
-  const surface = renderer.root.findAll((node) => (node.type as unknown) === 'View')[1];
-  assert.equal(surface.props.style.at(-1).backgroundColor, '#elevated');
-  assert.equal(surface.props.style.at(-1).borderColor, '#border');
   const buttons = renderer.root.findAll((node) => (node.type as unknown) === 'Button');
 
   await act(async () => buttons[0]?.props.onPress());

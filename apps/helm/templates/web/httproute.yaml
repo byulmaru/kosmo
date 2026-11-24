@@ -12,8 +12,8 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   parentRefs:
-    - name: "public"
-      namespace: "gateway"
+    - name: {{ .Values.gateway.name | quote }}
+      namespace: {{ .Values.gateway.namespace | quote }}
   hostnames:
     - {{ $hostname | quote }}
   rules:

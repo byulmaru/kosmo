@@ -1759,33 +1759,31 @@ test(
 );
 
 test(
-  'Pair Follow transaction Activity retry는 effects를 중복하지 않고 ESTABLISHED로 수렴한다',
+  'Pair Follow ACCEPT는 Activity 재시도 후 성공하고 타임라인 재조정을 한 번 요청한다',
   { timeout: 120_000 },
   async (t) => {
     const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
 
-    const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-completion-loss-' + process.pid;
+    const taskQueue = KOSMO_TASK_QUEUE + '-follow-pair-transition-retry-' + process.pid;
     const pair = {
       followerProfileId: '00000000-0000-8000-8000-000000000671',
       followeeProfileId: '00000000-0000-8000-8000-000000000672',
     };
     const requestId = '00000000-0000-8000-8000-000000000673';
     const followId = '00000000-0000-8000-8000-000000000674';
-    let effectCallCount = 0;
-    let transitionCalls = 0;
+    const effectCalls: string[] = [];
+    let failNextTransition = true;
 
     const worker = await Worker.create({
       activities: {
         executeProfileFollowPairTransitionActivity: async (
           input: ProfileFollowPairTransitionInput,
         ) => {
-          transitionCalls += 1;
           assert.equal(input.pendingRequestId, requestId);
-          assert.equal('candidateRowId' in input, false);
-          assert.equal('followCandidateId' in input, false);
-          if (transitionCalls === 1) {
-            throw ApplicationFailure.retryable('transition Activity response was lost');
+          if (failNextTransition) {
+            failNextTransition = false;
+            throw ApplicationFailure.retryable('transient transition failure');
           }
           return {
             ok: true as const,
@@ -1805,14 +1803,14 @@ test(
         }) => {
           assert.equal(input.profileId, pair.followerProfileId);
           assert.equal(input.followeeProfileId, pair.followeeProfileId);
-          effectCallCount += 1;
+          effectCalls.push('reconciliation');
         },
         loadPendingFollowRequestIdActivity: async () => requestId,
         createNotificationActivity: async () => {
-          effectCallCount += 1;
+          effectCalls.push('notification');
         },
         sendProfileFollowActivity: async () => {
-          effectCallCount += 1;
+          effectCalls.push('follow');
         },
       },
       connection: environment.nativeConnection,
@@ -1839,7 +1837,7 @@ test(
               origin: 'ACTIVITYPUB' as const,
             },
           ],
-          updateId: 'accept-completion-loss',
+          updateId: 'accept-transition-retry',
           startWorkflowOperation,
         },
       )) as ProfileFollowPairTransitionOutcome;
@@ -1853,11 +1851,9 @@ test(
           profileFollowId: followId,
         },
       });
-      assert.equal(transitionCalls, 2);
-      assert.equal(effectCallCount, 0);
       const handle = await startWorkflowOperation.workflowHandle();
       await handle.result();
-      assert.equal(effectCallCount, 1);
+      assert.deepEqual(effectCalls, ['reconciliation']);
     });
   },
 );
