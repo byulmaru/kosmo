@@ -13,6 +13,15 @@ spec:
     storageClass: oci-bv
   resources:
 {{ toYaml .Values.postgres.resources.prod | indent 4 }}
+  postgresql:
+    parameters:
+      archive_timeout: 4min
+  serviceAccountName: kosmo-postgres-backup
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: kosmo-postgres-backup
   bootstrap:
     initdb:
       database: kosmo
