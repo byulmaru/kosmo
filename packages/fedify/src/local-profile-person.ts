@@ -1,4 +1,4 @@
-import { Endpoints, Image, Person } from '@fedify/vocab';
+import { Endpoints, Image, Link, Person } from '@fedify/vocab';
 import { ProfileFollowPolicy } from '@kosmo/core/enums';
 import { isHttpUri } from './activitypub-uri';
 import type { ActorKeyPair, Context } from '@fedify/fedify';
@@ -52,10 +52,27 @@ export const createLocalProfilePerson = <TContextData>({
   const migrationSourceAliases = profile.migrationSourceUri
     ? [new URL(profile.migrationSourceUri)]
     : [];
+  // Temporary Threads probe: expose both formats for this actor's avatar.
+  const avatar =
+    profile.id === '019fb763-35f7-717b-937f-7b0f6d90eb3c' &&
+    profile.avatar !== null &&
+    profile.avatar.url ===
+      'https://media.byulma.run/original/u_14abb012-6fd7-4b1f-9acb-1571997643c9.jpg' &&
+    profile.avatar.mediaType === 'image/jpeg'
+      ? new Image({
+          urls: [
+            new Link({
+              href: new URL(profile.avatar.url.replace(/\.jpg$/, '.webp')),
+              mediaType: 'image/webp',
+            }),
+            new Link({ href: new URL(profile.avatar.url), mediaType: 'image/jpeg' }),
+          ],
+        })
+      : createProfileImage(profile.avatar);
 
   return new Person({
     id: actorUri,
-    icon: createProfileImage(profile.avatar),
+    icon: avatar,
     image: createProfileImage(profile.header),
     preferredUsername: profile.handle,
     name: profile.name,
