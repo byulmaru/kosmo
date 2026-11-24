@@ -1094,7 +1094,6 @@ test(
       unrelatedAuthor.id,
       'malformed decision value',
     );
-    const legacyOnly = await createContentfulPost(unrelatedAuthor.id, 'legacy-only decision');
     await db.update(Posts).set({ state: PostState.DELETED }).where(eq(Posts.id, deletedPost.id));
     await db.insert(NaturalLanguageMuteRules).values({
       ownerProfileId: viewer.profile.id,
@@ -1107,7 +1106,6 @@ test(
       return 0.99;
     });
     const hashKey = naturalMuteDecisionHashKey(viewer.profile.id);
-    const legacyKey = naturalMuteDecisionKey(viewer.profile.id, legacyOnly.id);
     const homeTimelineKey = `kosmo:home-timeline:profile:${viewer.profile.id}`;
     const decisionCacheKeys = [hashKey];
     try {
@@ -1148,11 +1146,6 @@ test(
           },
           { expiration: { type: 'EX', value: 604_800 } },
         ),
-      );
-      await runRedisCommand((client) =>
-        client.set(legacyKey, JSON.stringify({ decision: 'include', probability: 0.68 }), {
-          EX: 60,
-        }),
       );
 
       await runRedisCommand((client) =>
@@ -1198,16 +1191,6 @@ test(
           homeCacheTtlAfter <= homeCacheTtlBefore,
       );
       assert.ok(hashTtlAfter !== undefined && hashTtlAfter > 0 && hashTtlAfter <= hashTtlBefore);
-
-      const legacyProbability = await requestGraphQL<{
-        readonly node: { readonly smartFilterProbability: number | null } | null;
-      }>(
-        `query LegacyPostProbability($id: ID!) { node(id: $id) { ... on Post { smartFilterProbability } } }`,
-        { id: encodeGlobalId('Post', legacyOnly.id) },
-        viewer.token,
-      );
-      assert.equal(legacyProbability.errors, undefined, JSON.stringify(legacyProbability.errors));
-      assert.equal(legacyProbability.data?.node?.smartFilterProbability, 0.68);
 
       const negativeFirst = await requestSmartFilterResults(viewer.token, { first: -1 });
       assert.ok(negativeFirst.errors?.length);
@@ -1387,15 +1370,13 @@ test(
       );
     } finally {
       restoreModel();
-      await runRedisCommand((client) =>
-        client.unlink([...decisionCacheKeys, legacyKey, homeTimelineKey]),
-      );
+      await runRedisCommand((client) => client.unlink([...decisionCacheKeys, homeTimelineKey]));
     }
   },
 );
 
 test(
-  'reads legacy selected-profile Smart Filter probabilities without extending cache expiry',
+  'reads selected-profile Smart Filter probabilities without extending cache expiry',
   { skip: !testRedisUrl },
   async () => {
     const viewer = await createAuth();
@@ -1423,41 +1404,25 @@ test(
       condition: 'exclude cached result misses',
     });
 
-    const sourceKey = naturalMuteDecisionKey(viewer.profile.id, source.id);
+    const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
     const homeTimelineKey = `kosmo:home-timeline:profile:${viewer.profile.id}`;
     const values = [
-      [sourceKey, { decision: 'exclude', probability: 0.91 }],
-      [
-        naturalMuteDecisionKey(viewer.profile.id, quote.id),
-        { decision: 'include', probability: 0.37 },
-      ],
-      [
-        naturalMuteDecisionKey(viewer.profile.id, repost.id),
-        { decision: 'include', probability: 0.14 },
-      ],
-      [
-        naturalMuteDecisionKey(viewer.profile.id, ownPost.id),
-        { decision: 'exclude', probability: 0.99 },
-      ],
-      [
-        naturalMuteDecisionKey(viewer.profile.id, ownQuote.id),
-        { decision: 'include', probability: 0.72 },
-      ],
-      [
-        naturalMuteDecisionKey(viewer.profile.id, ownSource.id),
-        { decision: 'exclude', probability: 0.83 },
-      ],
-      [
-        naturalMuteDecisionKey(viewer.profile.id, ownRepost.id),
-        { decision: 'include', probability: 0.22 },
-      ],
+      [source.id, { decision: 'exclude', probability: 0.91 }],
+      [quote.id, { decision: 'include', probability: 0.37 }],
+      [repost.id, { decision: 'include', probability: 0.14 }],
+      [ownPost.id, { decision: 'exclude', probability: 0.99 }],
+      [ownQuote.id, { decision: 'include', probability: 0.72 }],
+      [ownSource.id, { decision: 'exclude', probability: 0.83 }],
+      [ownRepost.id, { decision: 'include', probability: 0.22 }],
     ] as const;
-    const cacheKeys = values.map(([key]) => key);
-    for (const [key, value] of values) {
-      await runRedisCommand((client) =>
-        client.set(key, JSON.stringify(value), { EX: key === sourceKey ? 60 : 604_800 }),
-      );
-    }
+    const cacheKeys = [decisionHashKey];
+    await runRedisCommand((client) =>
+      client.hSetEx(
+        decisionHashKey,
+        Object.fromEntries(values.map(([postId, value]) => [postId, JSON.stringify(value)])),
+        { expiration: { type: 'EX', value: 60 } },
+      ),
+    );
     await runRedisCommand((client) =>
       client.zAdd(homeTimelineKey, { score: 123, value: source.id }),
     );
@@ -1469,7 +1434,8 @@ test(
       ?.value;
     assert.deepEqual(homeCacheBefore, [{ value: source.id, score: 123 }]);
     assert.ok(homeCacheTtlBefore !== undefined && homeCacheTtlBefore > 50);
-    const ttlBefore = (await runRedisCommand((client) => client.ttl(sourceKey)))?.value;
+    const ttlBefore = (await runRedisCommand((client) => client.hTTL(decisionHashKey, [source.id])))
+      ?.value[0];
     assert.ok(ttlBefore !== undefined && ttlBefore > 50);
 
     const modelRequests: NaturalMuteRequest[] = [];
@@ -1520,7 +1486,9 @@ test(
           homeCacheTtlAfter > 0 &&
           homeCacheTtlAfter <= homeCacheTtlBefore,
       );
-      const ttlAfter = (await runRedisCommand((client) => client.ttl(sourceKey)))?.value;
+      const ttlAfter = (
+        await runRedisCommand((client) => client.hTTL(decisionHashKey, [source.id]))
+      )?.value[0];
       assert.ok(ttlAfter !== undefined && ttlAfter > 0 && ttlAfter <= ttlBefore);
 
       const secondProfile = await createProfile('smart-filter-results-second-profile');
@@ -1533,13 +1501,11 @@ test(
         followerProfileId: secondProfile.id,
         followeeProfileId: sourceAuthor.id,
       });
-      const secondProfileKey = naturalMuteDecisionKey(secondProfile.id, source.id);
-      cacheKeys.push(secondProfileKey);
-      await runRedisCommand((client) =>
-        client.set(secondProfileKey, JSON.stringify({ decision: 'include', probability: 0.42 }), {
-          EX: 60,
-        }),
-      );
+      cacheKeys.push(naturalMuteDecisionHashKey(secondProfile.id));
+      await cacheNaturalLanguageMuteDecision(secondProfile.id, source.id, {
+        decision: 'include',
+        probability: 0.42,
+      });
       await db
         .update(Sessions)
         .set({ activeProfileId: secondProfile.id })
@@ -2176,24 +2142,14 @@ test(
     });
 
     const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
-    const legacyDecisionKeys = [
-      ownPost.id,
-      ownQuote.id,
-      source.id,
-      ...reposts.map(({ id }) => id),
-    ].map((postId) => naturalMuteDecisionKey(viewer.profile.id, postId));
-    const decisionKeys = [decisionHashKey, ...legacyDecisionKeys];
     const staleOwnDecision = JSON.stringify({ decision: 'exclude', probability: 0.99 });
     const staleRepostDecision = JSON.stringify({ decision: 'include', probability: 0.1 });
     await runRedisCommand((client) =>
-      client.set(naturalMuteDecisionKey(viewer.profile.id, ownPost.id), staleOwnDecision, {
-        EX: 604_800,
-      }),
-    );
-    await runRedisCommand((client) =>
-      client.set(naturalMuteDecisionKey(viewer.profile.id, reposts[0]!.id), staleRepostDecision, {
-        EX: 604_800,
-      }),
+      client.hSetEx(
+        decisionHashKey,
+        { [ownPost.id]: staleOwnDecision, [reposts[0]!.id]: staleRepostDecision },
+        { expiration: { type: 'EX', value: 604_800 } },
+      ),
     );
 
     const modelRequests: NaturalMuteRequest[] = [];
@@ -2214,19 +2170,11 @@ test(
       assert.ok(!input.includes('exclude-me own post'));
       assert.ok(!input.includes('exclude-me own quote'));
       assert.equal(
-        (
-          await runRedisCommand((client) =>
-            client.get(naturalMuteDecisionKey(viewer.profile.id, ownPost.id)),
-          )
-        )?.value,
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, ownPost.id)))?.value,
         staleOwnDecision,
       );
       assert.equal(
-        (
-          await runRedisCommand((client) =>
-            client.get(naturalMuteDecisionKey(viewer.profile.id, ownQuote.id)),
-          )
-        )?.value,
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, ownQuote.id)))?.value,
         null,
       );
       assert.equal(
@@ -2234,34 +2182,18 @@ test(
         JSON.stringify({ decision: 'exclude', probability: 0.99 }),
       );
       assert.equal(
-        (
-          await runRedisCommand((client) =>
-            client.get(naturalMuteDecisionKey(viewer.profile.id, source.id)),
-          )
-        )?.value,
-        null,
-      );
-      assert.equal(
-        (
-          await runRedisCommand((client) =>
-            client.get(naturalMuteDecisionKey(viewer.profile.id, reposts[0]!.id)),
-          )
-        )?.value,
+        (await runRedisCommand((client) => client.hGet(decisionHashKey, reposts[0]!.id)))?.value,
         staleRepostDecision,
       );
       for (const repost of reposts.slice(1)) {
         assert.equal(
-          (
-            await runRedisCommand((client) =>
-              client.get(naturalMuteDecisionKey(viewer.profile.id, repost.id)),
-            )
-          )?.value,
+          (await runRedisCommand((client) => client.hGet(decisionHashKey, repost.id)))?.value,
           null,
         );
       }
     } finally {
       restoreModel();
-      await runRedisCommand((client) => client.unlink(decisionKeys));
+      await runRedisCommand((client) => client.unlink(decisionHashKey));
     }
   },
 );
@@ -2284,10 +2216,6 @@ test(
     });
 
     const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
-    const legacyDecisionKeys = [source.id, repost.id].map((postId) =>
-      naturalMuteDecisionKey(viewer.profile.id, postId),
-    );
-    const decisionKeys = [decisionHashKey, ...legacyDecisionKeys];
     let calls = 0;
     const restoreModel = installNaturalMuteModel(() => {
       calls += 1;
@@ -2301,9 +2229,6 @@ test(
         [encodeGlobalId('Post', source.id), encodeGlobalId('Post', repost.id)].sort(),
       );
       assert.equal(calls, 0);
-      for (const key of legacyDecisionKeys) {
-        assert.equal((await runRedisCommand((client) => client.get(key)))?.value, null);
-      }
       for (const postId of [source.id, repost.id]) {
         assert.equal(
           (await runRedisCommand((client) => client.hGet(decisionHashKey, postId)))?.value,
@@ -2312,7 +2237,7 @@ test(
       }
     } finally {
       restoreModel();
-      await runRedisCommand((client) => client.unlink(decisionKeys));
+      await runRedisCommand((client) => client.unlink(decisionHashKey));
     }
   },
 );
@@ -2337,9 +2262,6 @@ test(
 
     const quoteAuthor = await createProfile('natural-mute-independent-quote-author');
     const quote = await createQuote(quoteAuthor.id, source.id, 'independent quote body');
-    const quoteKey = naturalMuteDecisionKey(viewer.profile.id, quote.id);
-    const sourceKey = naturalMuteDecisionKey(viewer.profile.id, source.id);
-    const repostKey = naturalMuteDecisionKey(viewer.profile.id, repost.id);
     const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
     const modelRequests: NaturalMuteRequest[] = [];
     const restoreModel = installNaturalMuteModel((request) => {
@@ -2356,7 +2278,6 @@ test(
         (await runRedisCommand((client) => client.hGet(decisionHashKey, source.id)))?.value,
         JSON.stringify({ decision: 'exclude', probability: 0.99 }),
       );
-      assert.equal((await runRedisCommand((client) => client.get(sourceKey)))?.value, null);
 
       await db.insert(ProfileFollows).values({
         followerProfileId: viewer.profile.id,
@@ -2376,17 +2297,13 @@ test(
         (await runRedisCommand((client) => client.hGet(decisionHashKey, quote.id)))?.value,
         JSON.stringify({ decision: 'include', probability: 0.1 }),
       );
-      assert.equal((await runRedisCommand((client) => client.get(quoteKey)))?.value, null);
       assert.equal(
         (await runRedisCommand((client) => client.hGet(decisionHashKey, repost.id)))?.value,
         null,
       );
-      assert.equal((await runRedisCommand((client) => client.get(repostKey)))?.value, null);
     } finally {
       restoreModel();
-      await runRedisCommand((client) =>
-        client.unlink([decisionHashKey, quoteKey, sourceKey, repostKey]),
-      );
+      await runRedisCommand((client) => client.unlink(decisionHashKey));
     }
   },
 );
@@ -2411,9 +2328,6 @@ test(
       condition: 'exclude this Quote',
     });
 
-    const quoteKey = naturalMuteDecisionKey(viewer.profile.id, quote.id);
-    const sourceKey = naturalMuteDecisionKey(viewer.profile.id, source.id);
-    const repostKey = naturalMuteDecisionKey(viewer.profile.id, repost.id);
     const decisionHashKey = naturalMuteDecisionHashKey(viewer.profile.id);
     const modelRequests: NaturalMuteRequest[] = [];
     const restoreModel = installNaturalMuteModel((request) => {
@@ -2432,7 +2346,6 @@ test(
         (await runRedisCommand((client) => client.hGet(decisionHashKey, quote.id)))?.value,
         JSON.stringify({ decision: 'exclude', probability: 0.99 }),
       );
-      assert.equal((await runRedisCommand((client) => client.get(quoteKey)))?.value, null);
       assert.equal(
         (await runRedisCommand((client) => client.hGet(decisionHashKey, source.id)))?.value,
         null,
@@ -2441,13 +2354,9 @@ test(
         (await runRedisCommand((client) => client.hGet(decisionHashKey, repost.id)))?.value,
         null,
       );
-      assert.equal((await runRedisCommand((client) => client.get(sourceKey)))?.value, null);
-      assert.equal((await runRedisCommand((client) => client.get(repostKey)))?.value, null);
     } finally {
       restoreModel();
-      await runRedisCommand((client) =>
-        client.unlink([decisionHashKey, quoteKey, sourceKey, repostKey]),
-      );
+      await runRedisCommand((client) => client.unlink(decisionHashKey));
     }
   },
 );
@@ -3304,10 +3213,6 @@ function naturalMuteInputText(request: NaturalMuteRequest): string {
       content.flatMap(({ text, type }) => (type === 'input_text' && text ? [text] : [])),
     )
     .join('\n');
-}
-
-function naturalMuteDecisionKey(profileId: string, postId: string): string {
-  return `kosmo:home-timeline:natural-language-mute:profile:${profileId}:post:${postId}`;
 }
 
 function naturalMuteDecisionHashKey(profileId: string): string {

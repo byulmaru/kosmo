@@ -203,6 +203,9 @@ let evalResult = 0;
 let publishedEvents = [];
 
 const client = {
+  async zRangeWithScores() {
+    return [];
+  },
   async zScore() {
     return null;
   },
@@ -211,10 +214,6 @@ const client = {
     const transaction = {
       eval() {
         results.push(() => 0);
-        return transaction;
-      },
-      zRangeWithScores() {
-        results.push(() => []);
         return transaction;
       },
       zScore() {
