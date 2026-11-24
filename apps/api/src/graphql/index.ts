@@ -3,6 +3,7 @@ import { createYoga, useExecutionCancellation } from 'graphql-yoga';
 import { Hono } from 'hono';
 import { applySelectedProfileExtension } from '../context';
 import { useError } from './plugins/error';
+import { useHomeTimelineMetrics } from './plugins/home-timeline-metrics';
 import { useMutationPrimaryDatabase } from './plugins/primary-database';
 import { useSentryTracing } from './plugins/sentry-tracing';
 import { useSubscriptionInvalidation } from './plugins/subscription-invalidation';
@@ -41,6 +42,7 @@ const app = createYoga<{ c: ServerContext }, UserContext>({
     useMutationPrimaryDatabase(),
     useSentryTracing(),
     useError(),
+    useHomeTimelineMetrics(),
   ],
 });
 

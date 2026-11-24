@@ -11,6 +11,7 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, eq, exists, getColumns, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { builder } from '@/graphql/builder';
+import { trackHomeTimelineRequest } from '@/graphql/plugins/home-timeline-metrics';
 import { markCachedHomeTimelinePost, Post, PostConnection } from '../ref';
 import type { HomeTimelineEntry } from '@kosmo/core/home-timeline/cache';
 
@@ -207,7 +208,9 @@ builder.queryField('homeTimeline', (t) =>
       type: Post,
       nullable: true,
       unauthorizedResolver: () => null,
-      resolve: async (_, args, ctx) => {
+      resolve: async (_, args, ctx, info) => {
+        trackHomeTimelineRequest(ctx, info.path.key);
+
         let scoresByRow = new WeakMap<PostRow, number>();
         let includedPostIds = new Set<string>();
 
