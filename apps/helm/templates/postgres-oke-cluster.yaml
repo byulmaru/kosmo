@@ -1,4 +1,4 @@
-{{- if eq .Values.postgres.existingCluster "kosmo-postgres-aws-replica" }}
+{{- if eq .Values.postgres.existingCluster "kosmo-postgres" }}
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
@@ -14,27 +14,7 @@ spec:
   resources:
 {{ toYaml .Values.postgres.resources.prod | indent 4 }}
   bootstrap:
-    pg_basebackup:
-      source: kosmo-postgres-aws-replica
+    initdb:
       database: kosmo
       owner: kosmo
-  replica:
-    enabled: true
-    source: kosmo-postgres-aws-replica
-  externalClusters:
-    - name: kosmo-postgres-aws-replica
-      connectionParameters:
-        host: kosmo-postgres-aws-replica-rw.{{ .Release.Namespace }}.svc
-        user: streaming_replica
-        dbname: postgres
-        sslmode: verify-full
-      sslKey:
-        name: kosmo-postgres-aws-replica-replication
-        key: tls.key
-      sslCert:
-        name: kosmo-postgres-aws-replica-replication
-        key: tls.crt
-      sslRootCert:
-        name: kosmo-postgres-aws-replica-ca
-        key: ca.crt
 {{- end }}
