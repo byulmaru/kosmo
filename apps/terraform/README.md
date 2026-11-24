@@ -39,7 +39,6 @@ GCP 리소스를 적용한 뒤 store Environment와 변수는 각 workflow의 bo
 
 Main에 저장된 release workflow를 `main` ref에서 `workflow_dispatch`로 실행하면 `target_sha`를 선택할 수 있다. 입력하면 repository에 존재하는 정확한 40자리 commit SHA를 production target으로 사용하고, 비워 두면 preflight가 최신 `main`을 resolve한 뒤 성공한 canonical Docker Build run과 `sha-<target SHA>` GHCR tag digest를 검증·고정한다. Dispatch 경로는 `prod` Environment 승인 전에는 target checkout·prod Vault/Sentry credential 접근·image build를 하지 않으며, 승인 뒤 preflight가 확정한 target SHA와 digest를 같은 migration·workload 경로로 재빌드·재조회 없이 배포한다. Workflow summary에는 requester, workflow definition ref, trigger, canonical build run·SHA tag·digest와 resolved target SHA를 남기고, 명시적 `target_sha` 입력과 dispatch의 `github.sha` 구분은 Actions run/event metadata에서 확인한다. Git tag, `production` branch와 일반 branch push는 production source·approval·배포를 시작하지 않으며, production workload identity는 tag가 아니라 full SHA와 preflight 고정 GHCR digest다. SHA tag 재빌드로 Dev와 Production digest가 달라질 수 있다.
 
-
 ## Google Play 내부 테스트 bootstrap
 
 Android store 배포는 [Google Play Developer API](https://developers.google.com/android-publisher/getting_started)와 Google Play Console을 사용한다. Terraform은 API 활성화, 전용 service account, `main`의 정확한 workflow와 기존 `prod` Environment만 신뢰하는 WIF provider, 그리고 해당 service account의 `roles/iam.workloadIdentityUser` binding만 관리한다. Play Console app·첫 AAB·app signing·upload key·tester·track·권한과 `supply` 선행 조건은 [앱의 Android Google Play 배포 절차](../app/README.md)에서 수동으로 관리한다. 정적 service account JSON key는 만들거나 저장하지 않는다.
