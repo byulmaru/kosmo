@@ -1,0 +1,129 @@
+{{- if and (eq .Values.env "prod") (eq (.Values.monitoring.alertEvaluator | default "prometheus") "grafana") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kosmo-public-alerts
+  labels:
+    grafana_alert: "1"
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  kosmo-public-alerts.yaml: |
+    apiVersion: 1
+    groups:
+      - orgId: 1
+        name: kosmo.public
+        folder: KOSMO
+        interval: 30s
+        rules:
+          - uid: kosmo-public-down
+            title: KosmoPublicEndpointDown
+            condition: B
+            data:
+              - refId: A
+                datasourceUid: prometheus
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                model:
+                  expr: >-
+                    ((avg_over_time(probe_success{job="kosmo-public"}[5m]) < bool 0.9) and on (target, instance) (count_over_time(probe_success{job="kosmo-public"}[5m]) >= 6)) or absent_over_time(probe_success{job="kosmo-public", target="kosmo-web"}[5m]) or absent_over_time(probe_success{job="kosmo-public", target="kosmo-api"}[5m])
+                  instant: true
+                  range: false
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                model:
+                  expression: A
+                  type: threshold
+                  conditions:
+                    - evaluator:
+                        type: gt
+                        params:
+                          - 0
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - B
+                      reducer:
+                        type: last
+                        params: []
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+            noDataState: OK
+            execErrState: Alerting
+            for: 1m
+            labels:
+              severity: critical
+            annotations:
+              summary: Kosmo public endpoint is unavailable
+              description: The {{ `{{ $labels.target }}` }} health endpoint has had less than 90% successful probes over the last 5 minutes from the Prometheus blackbox probe (at least 6 samples). Confirm the public URL from a second location, then inspect Cloudflare, the Kosmo ingress/origin, and the in-cluster probe.
+              owner: Platform/SRE
+          - uid: kosmo-public-latency
+            title: KosmoPublicEndpointHighLatency
+            condition: B
+            data:
+              - refId: A
+                datasourceUid: prometheus
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                model:
+                  expr: >-
+                    (avg_over_time(probe_duration_seconds{job="kosmo-public"}[5m]) > 2 and on (target, instance) count_over_time(probe_duration_seconds{job="kosmo-public"}[5m]) >= 3 and on (target, instance) min_over_time(probe_success{job="kosmo-public"}[5m]) == 1)
+                  instant: true
+                  range: false
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: A
+              - refId: B
+                datasourceUid: __expr__
+                relativeTimeRange:
+                  from: 0
+                  to: 0
+                model:
+                  expression: A
+                  type: threshold
+                  conditions:
+                    - evaluator:
+                        type: gt
+                        params:
+                          - 0
+                      operator:
+                        type: and
+                      query:
+                        params:
+                          - B
+                      reducer:
+                        type: last
+                        params: []
+                      type: query
+                  datasource:
+                    type: __expr__
+                    uid: __expr__
+                  intervalMs: 1000
+                  maxDataPoints: 43200
+                  refId: B
+            noDataState: OK
+            execErrState: Alerting
+            for: 1m
+            labels:
+              severity: warning
+            annotations:
+              summary: Kosmo public endpoint latency is high
+              description: The {{ `{{ $labels.target }}` }} health endpoint has averaged more than 2 seconds from the Prometheus blackbox probe for approximately 5 minutes. Confirm the public URL from a second location, then inspect Cloudflare, the Kosmo ingress/origin, and the in-cluster probe.
+              owner: Platform/SRE
+{{- end }}

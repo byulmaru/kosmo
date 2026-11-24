@@ -7,19 +7,27 @@ test('Home timeline invalidation rejects Redis failures and retries successfully
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 
-let calls = 0;
-let scanKeys = [];
-let steps = [];
-const commands = [];
+const cacheKeyPrefix = 'kosmo:home-timeline:profile:';
 const cachedKeys = new Set();
+let unavailableOperation;
+
+const failIfUnavailable = (operation) => {
+  if (unavailableOperation !== operation) return;
+  unavailableOperation = undefined;
+  throw new Error('Redis unavailable');
+};
 
 const client = {
   async scan(cursor, options) {
-    commands.push('scan');
-    return { cursor: '0', keys: scanKeys };
+    failIfUnavailable('scan');
+    const prefix = options.MATCH.slice(0, -1);
+    return {
+      cursor: '0',
+      keys: [...cachedKeys].filter((key) => key.startsWith(prefix)),
+    };
   },
   async unlink(keys) {
-    commands.push('unlink');
+    failIfUnavailable('unlink');
     let deleted = 0;
     for (const key of keys) {
       deleted += Number(cachedKeys.delete(key));
@@ -31,79 +39,58 @@ const client = {
 mock.module(new URL('../redis/client.ts', import.meta.url), {
   exports: {
     runRedisCommand: async (command) => {
-      calls += 1;
-      const step = steps.shift();
-      assert.ok(step, 'unexpected Redis command');
-      if (!step.execute) {
+      if (!process.env.REDIS_URL?.trim()) return null;
+      try {
+        return { value: await command(client) };
+      } catch {
         return null;
       }
-      const value = await command(client);
-      return step.result === 'null' ? null : { value };
     },
   },
 });
 
 const { invalidateHomeTimelines } = await import('./cache.ts');
-const reset = ({ keys = [] } = {}) => {
-  calls = 0;
-  commands.length = 0;
-  steps = [];
-  scanKeys = keys;
-  cachedKeys.clear();
-};
+
+const targetedKey = cacheKeyPrefix + 'targeted';
+const globalKey = cacheKeyPrefix + 'global';
+const retryKey = cacheKeyPrefix + 'retry';
+cachedKeys.add(targetedKey);
+cachedKeys.add(globalKey);
+cachedKeys.add(cacheKeyPrefix + 'unrelated');
+cachedKeys.add('kosmo:other-cache:retained');
 
 delete process.env.REDIS_URL;
 await invalidateHomeTimelines({ profileIds: ['unconfigured'] });
 await invalidateHomeTimelines();
 process.env.REDIS_URL = '  ';
 await invalidateHomeTimelines({ profileIds: ['blank'] });
-assert.equal(calls, 0, 'unconfigured invalidation should not call Redis');
+assert.ok(cachedKeys.has(targetedKey));
+assert.ok(cachedKeys.has(globalKey));
 
 process.env.REDIS_URL = 'redis://mock';
-const failures = [
-  {
-    name: 'targeted UNLINK cold response',
-    input: { profileIds: ['targeted'] },
-    steps: [{ execute: false }],
-    expectedCommands: [],
-  },
-  {
-    name: 'global SCAN cold response',
-    input: {},
-    steps: [{ execute: false }],
-    expectedCommands: [],
-  },
-  {
-    name: 'global UNLINK unavailable response',
-    input: {},
-    keys: ['kosmo:home-timeline:profile:global'],
-    steps: [{ execute: true }, { execute: true, result: 'null' }],
-    expectedCommands: ['scan', 'unlink'],
-  },
-];
+unavailableOperation = 'unlink';
+await assert.rejects(invalidateHomeTimelines({ profileIds: ['targeted'] }), Error);
+assert.ok(cachedKeys.has(targetedKey));
+await invalidateHomeTimelines({ profileIds: ['targeted'] });
+assert.ok(!cachedKeys.has(targetedKey));
+assert.ok(cachedKeys.has(globalKey));
 
-for (const { name, input, keys, steps: caseSteps, expectedCommands } of failures) {
-  reset({ keys });
-  steps.push(...caseSteps);
-  await assert.rejects(invalidateHomeTimelines(input), Error, name);
-  assert.deepEqual(commands, expectedCommands, name);
-}
+unavailableOperation = 'scan';
+await assert.rejects(invalidateHomeTimelines(), Error);
+assert.ok(cachedKeys.has(globalKey));
+await invalidateHomeTimelines();
+assert.ok(!cachedKeys.has(globalKey));
+assert.ok(!cachedKeys.has(cacheKeyPrefix + 'unrelated'));
+assert.ok(cachedKeys.has('kosmo:other-cache:retained'));
 
-reset();
-steps.push({ execute: true });
-await invalidateHomeTimelines({ profileIds: ['already-absent'] });
-assert.deepEqual(commands, ['unlink'], 'UNLINK returning zero should succeed');
-
-reset();
-const retryKey = 'kosmo:home-timeline:profile:retry';
 cachedKeys.add(retryKey);
-steps.push({ execute: false }, { execute: true });
-await assert.rejects(invalidateHomeTimelines({ profileIds: ['retry'] }), Error);
-assert.equal(cachedKeys.has(retryKey), true);
-await invalidateHomeTimelines({ profileIds: ['retry'] });
-assert.equal(cachedKeys.has(retryKey), false, 'a retry should remove the cached key');
-assert.deepEqual(commands, ['unlink']);
-assert.equal(calls, 2);
+unavailableOperation = 'unlink';
+await assert.rejects(invalidateHomeTimelines(), Error);
+assert.ok(cachedKeys.has(retryKey));
+await invalidateHomeTimelines();
+assert.ok(!cachedKeys.has(retryKey));
+
+await invalidateHomeTimelines({ profileIds: ['already-absent'] });
 `;
 
   const result = spawnSync(

@@ -21,6 +21,9 @@
     if (data.filters.state) {
       params.set('state', data.filters.state);
     }
+    if (data.filters.instanceDomain) {
+      params.set('instanceDomain', data.filters.instanceDomain);
+    }
     params.set('cursor', cursor);
     if (direction) {
       params.set('direction', direction);
@@ -43,11 +46,22 @@
   <form
     method="GET"
     action={resolve('/profiles')}
-    class="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_12rem_12rem_auto] lg:items-end"
+    class="grid gap-3 rounded-lg border p-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_8rem_9rem_auto] xl:items-end"
   >
     <label for="profile-search" class="grid gap-2 text-sm font-medium">
       검색
       <Input id="profile-search" type="search" name="q" value={data.filters.q ?? ''} />
+    </label>
+
+    <label for="profile-instance-domain" class="grid gap-2 text-sm font-medium">
+      Instance domain
+      <Input
+        id="profile-instance-domain"
+        type="search"
+        name="instanceDomain"
+        placeholder="All instances"
+        value={data.filters.instanceDomain ?? ''}
+      />
     </label>
 
     <label for="profile-origin" class="grid gap-2 text-sm font-medium">

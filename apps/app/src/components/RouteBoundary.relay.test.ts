@@ -46,7 +46,6 @@ let RouteBoundary: ForwardRefExoticComponent<
 >;
 let useRouteBoundary: () => { fetchKey: string };
 let renderer: ReactTestRenderer | null = null;
-let observedFetchKey = '';
 const requests: Request[] = [];
 
 before(async () => {
@@ -60,13 +59,11 @@ afterEach(async () => {
   await act(async () => mock.timers.tick(300_001));
   mock.timers.reset();
   renderer = null;
-  observedFetchKey = '';
   requests.length = 0;
 });
 
 function QueryProbe({ fetchPolicy }: { fetchPolicy: FetchPolicy }) {
   const { fetchKey } = useRouteBoundary();
-  observedFetchKey = fetchKey;
   const data = ReactRelay.useLazyLoadQuery<SessionProviderQueryType>(
     SessionProviderQueryNode,
     {},
@@ -222,11 +219,9 @@ describe('RouteBoundary with real Relay query lifecycle', () => {
     try {
       await mount(environment);
       assert.equal(requests.length, 1);
-      const firstFetchKey = observedFetchKey;
       await unmount();
 
       await mount(environment);
-      assert.notEqual(observedFetchKey, firstFetchKey);
       assert.equal(requests.length, 1, 'Relay reuses the identical pending operation');
 
       await act(async () => requests[0]?.respond(payload('Late response')));

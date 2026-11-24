@@ -98,6 +98,7 @@ mockModule('@/theme/tokens', {
   breakpoints: { compact: 768, full: 1_280 },
   radii: { full: 999, md: 12 },
   spacing: { lg: 16, md: 12, sm: 8, xs: 4, xxl: 32, xxxl: 48 },
+  textStyles: { uiCopyM: { lineHeight: 20 } },
   typography: { md: { fontSize: 16 }, sm: { fontSize: 14, lineHeight: 20 } },
 });
 mockModule(new URL('./PostBookmarkAction.tsx', import.meta.url), {

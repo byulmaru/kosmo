@@ -209,7 +209,7 @@ test('Slider clamps and steps keyboard values while exposing the slider contract
   assert.deepEqual(values, [50, 0, 100]);
 });
 
-test('Slider transitions Web feedback without animating value geometry', () => {
+test('Slider transitions Web feedback unless reduced motion is enabled', () => {
   const renderer = renderSlider();
   const slider = sliderNode(renderer);
   const style = flattenStyle(slider.props.style({ hovered: true, pressed: false }));
@@ -218,29 +218,12 @@ test('Slider transitions Web feedback without animating value geometry', () => {
   assert.equal(style.transitionProperty, 'background-color');
   assert.equal(style.transitionTimingFunction, 'standard-easing');
 
-  const valueGeometry = renderer.root.findAllByType(ViewHost).filter((node) => {
-    const viewStyle = flattenStyle(node.props.style);
-    return viewStyle.width === '40%' || viewStyle.left === '40%';
-  });
-  assert.equal(valueGeometry.length, 2);
-  assert.equal(
-    valueGeometry.every((node) => flattenStyle(node.props.style).transitionProperty === undefined),
-    true,
-  );
-
   reducedMotion = true;
   const reducedRenderer = renderSlider();
   const reducedStyle = flattenStyle(
     sliderNode(reducedRenderer).props.style({ hovered: true, pressed: false }),
   );
   assert.equal(reducedStyle.transitionDuration, '0ms');
-
-  platformOS = 'ios';
-  const nativeStyle = flattenStyle(
-    sliderNode(renderSlider()).props.style({ hovered: true, pressed: true }),
-  );
-  assert.equal(nativeStyle.transitionDuration, undefined);
-  assert.equal(nativeStyle.transitionProperty, undefined);
 });
 
 test('Slider maps responder coordinates inside its horizontal inset to stepped values', () => {

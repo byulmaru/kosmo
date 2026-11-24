@@ -118,7 +118,7 @@ spec:
             periodSeconds: 5
           resources:
             requests:
-              cpu: 100m
+              cpu: {{ ternary "250m" "100m" (eq .Values.env "prod") }}
               memory: 256Mi
             limits:
               cpu: 500m

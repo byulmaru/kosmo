@@ -1,5 +1,6 @@
 <script lang="ts">
   import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
+  import ServerIcon from '@lucide/svelte/icons/server';
   import UserRoundIcon from '@lucide/svelte/icons/user-round';
   import UsersIcon from '@lucide/svelte/icons/users';
   import * as Sidebar from '#lib/components/ui/sidebar/index.js';
@@ -51,6 +52,23 @@
                 >
                   <LayoutDashboardIcon />
                   <span>Overview</span>
+                </a>
+              {/snippet}
+            </Sidebar.MenuButton>
+          </Sidebar.MenuItem>
+          <Sidebar.MenuItem>
+            <Sidebar.MenuButton
+              isActive={page.url.pathname.startsWith('/instances')}
+              tooltipContent="Instances"
+            >
+              {#snippet child({ props })}
+                <a
+                  {...props}
+                  aria-current={page.url.pathname.startsWith('/instances') ? 'page' : undefined}
+                  href={resolve('/instances')}
+                >
+                  <ServerIcon />
+                  <span>Instances</span>
                 </a>
               {/snippet}
             </Sidebar.MenuButton>

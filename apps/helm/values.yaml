@@ -2,6 +2,13 @@ env:
 image: ghcr.io/byulmaru/kosmo
 imageDigest: ''
 version: main
+gateway:
+  name: public
+  namespace: gateway
+  httpsSectionName: https-kos-moe-wildcard
+secrets:
+  vaultKubernetesRole: vso-kubernetes-sync
+  vaultKubernetesAudiences: []
 # Allow up to five minutes for startup; readiness and liveness start after the first success.
 startupProbe:
   periodSeconds: 10
@@ -44,7 +51,7 @@ fedify:
 temporal:
   frontendAddress: temporal-frontend.temporal.svc.cluster.local:7233
   adminTools:
-    image: temporalio/admin-tools
+    image: docker.io/temporalio/admin-tools
     digest: sha256:dbc5fcd6ee8f0f4d808bf765af9a87dea9d8a283abfdcfbd2fc148496ba66107
   namespace:
     ownerEmail: dev@byulmaru.co
@@ -55,6 +62,10 @@ temporal:
       dev: 3d
       prod: 30d
 postgres:
+  existingCluster: ''
+  storage:
+    size: 10Gi
+    storageClass: ''
   resources:
     dev:
       requests:
@@ -83,3 +94,7 @@ postgres:
       limits:
         cpu: 250m
         memory: 128Mi
+monitoring:
+  alertEvaluator: prometheus
+  podMonitor:
+    enabled: true

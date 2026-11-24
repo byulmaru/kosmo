@@ -31,7 +31,7 @@ jobs:
       id-token: write
     env:
       ARGOCD_CLI_VERSION: 3.4.2
-      ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net
+      ARGOCD_SERVER: argocd.tail1fdd55.ts.net
       TARGET_SHA: ${{ needs.canonical_preflight.outputs.target_sha }}
       CANONICAL_BUILD_RUN_ID: ${{ needs.canonical_preflight.outputs.build_run_id }}
       CANONICAL_BUILD_RUN_URL: ${{ needs.canonical_preflight.outputs.build_run_url }}

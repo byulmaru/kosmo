@@ -124,7 +124,7 @@ off다. AI 학습 거부 file metadata와는 별도 선택이다. 선택한 이�
 새 Local Media는 같은 `issueMediaUploadUrl`과 업로드 `PUT` 경로를 사용하며 파일 크기를 별도로 제출하지 않는다. 서버는
 실제 수신 byte를 기준으로 파일당 16 MiB 제한을 적용한 뒤 private staging에 저장하고, staging byte는 공개하지 않는다.
 다른 소비자의 명시적 `completeMediaUpload` 호출은 그대로 유지하며, 이 요청은 Media Storage Service의 최종 저장 결과가
-확인된 뒤 완료된다. 기존 Ready Media와 전환 전에 발급된 업로드 완료 호환성에는 영향을 주지 않는다.
+확인된 뒤 완료된다. 전환 전에 발급돼 아직 Ready가 되지 않은 업로드는 새로 첨부해야 한다.
 
 이미 Ready인 Local Media의 반복 완료 요청은 외부 저장 확인이나 persistence write를 반복하지 않고 같은 Media
 identity와 최초 Ready At을 반환한다.

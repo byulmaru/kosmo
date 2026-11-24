@@ -1,14 +1,5 @@
-import {
-  Accept,
-  Create,
-  Delete,
-  Note,
-  PUBLIC_COLLECTION,
-  QuoteAuthorization,
-  QuoteRequest,
-  Reject,
-  Update,
-} from '@fedify/vocab';
+import { quoteInteraction } from '@fedify/interaction-controls';
+import { Create, Delete, Note, PUBLIC_COLLECTION, Update } from '@fedify/vocab';
 import {
   ActivityPubActors,
   db,
@@ -311,12 +302,12 @@ export const sendLocalPostQuoteRequest = async (effect: QuoteConsentEffect): Pro
   if (!instrument || instrument.id?.href !== consent.quoteUri) {
     return;
   }
-  const activity = new QuoteRequest({
+  const activity = quoteInteraction.createRequest({
     actor: context.getActorUri(quote.profileId),
     id: new URL(consent.requestUri),
     instrument,
     object: new URL(consent.sourceUri),
-    tos: [new URL(source.actorUri)],
+    to: [new URL(source.actorUri)],
   });
   await dispatchActivityPubActivity({
     activity,
@@ -361,7 +352,7 @@ export const sendLocalPostQuoteDecision = async (effect: QuoteConsentEffect): Pr
   const actor = new URL(consent.sourceAuthorActorUri),
     quoteActor = new URL(consent.quoteAuthorActorUri),
     requestUri = new URL(effect.requestUri);
-  const request = new QuoteRequest({
+  const request = quoteInteraction.createRequest({
     actor: quoteActor,
     id: requestUri,
     instrument: new Note({
@@ -371,27 +362,29 @@ export const sendLocalPostQuoteDecision = async (effect: QuoteConsentEffect): Pr
       quoteUrl: new URL(consent.sourceUri),
     }),
     object: new URL(consent.sourceUri),
-    tos: [actor],
+    to: [actor],
   });
   const activity =
     consent.status === PostQuoteConsentStatus.APPROVED
-      ? new Accept({
+      ? quoteInteraction.createAccept({
+          mode: 'polite',
           actor,
           id: new URL(`#accept-${encodeURIComponent(effect.effectId)}`, requestUri),
-          object: request,
-          result: new QuoteAuthorization({
-            attribution: actor,
+          request,
+          authorization: quoteInteraction.createAuthorization({
+            attributedTo: actor,
             id: new URL(`/ap/quote-authorization/${effect.postId}`, source.canonicalOrigin),
             interactingObject: new URL(consent.quoteUri),
             interactionTarget: new URL(consent.sourceUri),
           }),
-          tos: [quoteActor],
+          to: [quoteActor],
         })
-      : new Reject({
+      : quoteInteraction.createReject({
+          mode: 'polite',
           actor,
           id: new URL(`#reject-${encodeURIComponent(effect.effectId)}`, requestUri),
-          object: request,
-          tos: [quoteActor],
+          request,
+          to: [quoteActor],
         });
   await dispatchActivityPubActivity({
     activity,
