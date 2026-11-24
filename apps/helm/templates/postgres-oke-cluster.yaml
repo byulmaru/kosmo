@@ -1,0 +1,61 @@
+{{- if eq .Values.postgres.existingCluster "kosmo-postgres-aws-replica" }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "kosmo.postgresName" . }}
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=confirm
+  labels:
+    helm.sh/chart: {{ include "kosmo.chart" . }}
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  instances: 3
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.7-system-trixie@sha256:b4bbd2e623f1a8833e9a2a4210480ef215b6d13fc0988b06786a778a5c699a20
+  imagePullPolicy: IfNotPresent
+  postgresUID: 26
+  postgresGID: 26
+  storage:
+    size: 50Gi
+    storageClass: oci-bv
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  affinity:
+    topologyKey: topology.kubernetes.io/zone
+  primaryUpdateMethod: switchover
+  primaryUpdateStrategy: unsupervised
+  stopDelay: 1800
+  logLevel: info
+  enableSuperuserAccess: true
+  enablePDB: true
+  postgresql: null
+  monitoring:
+    disableDefaultQueries: false
+    tls:
+      enabled: false
+  bootstrap:
+    pg_basebackup:
+      source: pgBaseBackupSource
+      database: kosmo
+      owner: kosmo
+  externalClusters:
+    - name: pgBaseBackupSource
+      connectionParameters:
+        host: kosmo-postgres-aws.kosmo-prod.svc.cluster.local
+        port: "5432"
+        user: streaming_replica
+        dbname: postgres
+        sslmode: verify-ca
+      sslKey:
+        name: kosmo-aws-replication
+        key: tls.key
+      sslCert:
+        name: kosmo-aws-replication
+        key: tls.crt
+      sslRootCert:
+        name: kosmo-aws-replication
+        key: ca.crt
+{{- end }}
