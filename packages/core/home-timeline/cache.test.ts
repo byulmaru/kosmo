@@ -1047,12 +1047,6 @@ test(
       assert.equal((await runRedisCommand((client) => client.exists(key)))?.value, 0);
 
       assert.ok(
-        await runRedisCommand((client) => client.zAdd(key, { score: -1, value: '__ready__' })),
-      );
-      assert.equal(await readHomeTimelineCache({ profileId, limit: 10 }), null);
-      assert.equal((await runRedisCommand((client) => client.exists(key)))?.value, 0);
-
-      assert.ok(
         await runRedisCommand((client) =>
           client.zAdd(key, [
             { score: 100, value: olderPostId },
@@ -1230,7 +1224,6 @@ test(
     await cacheHomeTimelinePage({ profileId, postIds });
 
     assert.equal((await runRedisCommand((client) => client.zCard(key)))?.value, 1_000);
-    assert.equal((await runRedisCommand((client) => client.zScore(key, '__ready__')))?.value, null);
     const seeded = await readHomeTimelineCache({ profileId, limit: 1 });
     const tailId = seeded?.oldestPostId;
     assert.ok(tailId);

@@ -14,7 +14,6 @@ import {
 } from './query';
 
 const feedKeyPrefix = feedKey('');
-const legacyReadyMember = '__ready__';
 const maximumEntries = 1_000;
 const keyLifetimeSeconds = 604_800;
 const candidateBatchSize = 100;
@@ -104,7 +103,6 @@ export const readHomeTimelineCache = async ({
   const stop = inverted ? maximum : minimum;
   const result = await runRedisCommand(async (client) => {
     const transaction = client.multi();
-    transaction.zRem(feedKey(profileId), legacyReadyMember);
     transaction.zRangeWithScores(feedKey(profileId), start, stop, {
       BY: 'SCORE',
       LIMIT: { offset: 0, count: limit },
@@ -129,8 +127,7 @@ export const readHomeTimelineCache = async ({
     return null;
   }
 
-  const [, cachedRows, oldestRows] = result.value as unknown as [
-    number,
+  const [cachedRows, oldestRows] = result.value as unknown as [
     { value: string; score: number }[],
     { value: string; score: number }[],
   ];
@@ -140,10 +137,9 @@ export const readHomeTimelineCache = async ({
           result.value as unknown as [
             unknown,
             unknown,
-            unknown,
             { value: string; score: number }[] | undefined,
           ]
-        )[3]
+        )[2]
       : undefined;
 
   const entries = parseEntries(cachedRows);
@@ -166,14 +162,13 @@ export const readHomeTimelineCache = async ({
 };
 
 const cacheHomeTimelinePageScript = `
-redis.call('ZREM', KEYS[1], ARGV[1])
-local afterId = ARGV[2]
-local pageCount = tonumber(ARGV[3])
-local ttl = ARGV[5]
+local afterId = ARGV[1]
+local pageCount = tonumber(ARGV[2])
+local ttl = ARGV[4]
 if afterId == '' then
-  local score = tonumber(ARGV[4])
+  local score = tonumber(ARGV[3])
   for index = 1, pageCount do
-    redis.call('ZADD', KEYS[1], 'NX', score - (index - 1), ARGV[index + 5])
+    redis.call('ZADD', KEYS[1], 'NX', score - (index - 1), ARGV[index + 4])
   end
 else
   local tailRows = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
@@ -190,7 +185,7 @@ else
     startIndex = 1
   else
     for index = 1, pageCount do
-      if ARGV[index + 5] == tailId then
+      if ARGV[index + 4] == tailId then
         startIndex = index + 1
         break
       end
@@ -204,7 +199,7 @@ else
     return 0
   end
   for index = startIndex, pageCount do
-    redis.call('ZADD', KEYS[1], 'NX', tailScore - (index - startIndex + 1), ARGV[index + 5])
+    redis.call('ZADD', KEYS[1], 'NX', tailScore - (index - startIndex + 1), ARGV[index + 4])
   end
 end
 redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -1001)
@@ -231,7 +226,6 @@ export const cacheHomeTimelinePage = async ({
     return client.eval(cacheHomeTimelinePageScript, {
       keys: [feedKey(profileId)],
       arguments: [
-        legacyReadyMember,
         after ?? '',
         String(pageIds.length),
         String(insertionScore),
@@ -243,12 +237,11 @@ export const cacheHomeTimelinePage = async ({
 };
 
 const fanoutScript = `
-redis.call('ZREM', KEYS[1], ARGV[3])
 local added = redis.call('ZADD', KEYS[1], 'NX', ARGV[1], ARGV[2])
 if added == 1 then
   redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -1001)
   if redis.call('TTL', KEYS[1]) == -1 then
-    redis.call('EXPIRE', KEYS[1], ARGV[4])
+    redis.call('EXPIRE', KEYS[1], ARGV[3])
   end
 end
 return added
@@ -322,7 +315,7 @@ export const fanoutHomeTimelinePost = async ({
       for (const profileId of writableProfileIds) {
         transaction.eval(fanoutScript, {
           keys: [feedKey(profileId)],
-          arguments: [String(score), postId, legacyReadyMember, String(keyLifetimeSeconds)],
+          arguments: [String(score), postId, String(keyLifetimeSeconds)],
         });
       }
       return transaction.exec();
@@ -432,7 +425,6 @@ export const insertHomeTimelinePost = async ({
       arguments: [
         String(Temporal.Now.instant().epochMilliseconds),
         postId,
-        legacyReadyMember,
         String(keyLifetimeSeconds),
       ],
     }),
@@ -511,25 +503,16 @@ export const reconcileHomeTimelineFollow = async ({
   }
 
   const key = feedKey(profileId);
-  const cacheResult = await runRedisCommand((client) => {
-    const transaction = client.multi();
-    transaction.zRem(key, legacyReadyMember);
-    transaction.zRangeWithScores(key, '0', '+inf', {
+  const cacheResult = await runRedisCommand((client) =>
+    client.zRangeWithScores(key, '0', '+inf', {
       BY: 'SCORE',
       LIMIT: { offset: 0, count: maximumEntries },
-    });
-    return transaction.exec();
-  });
+    }),
+  );
   if (cacheResult === null) {
     throw new Error('Redis unavailable while reconciling Home timeline');
   }
-
-  const [, cachedRows] = cacheResult.value as unknown as [
-    number,
-    { value: string; score: number }[],
-  ];
-
-  const cachedEntries = parseEntries(cachedRows);
+  const cachedEntries = parseEntries(cacheResult.value);
   if (cachedEntries === null || cachedEntries.length === 0) {
     return;
   }
