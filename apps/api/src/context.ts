@@ -9,11 +9,11 @@ import {
 } from '@kosmo/core/db';
 import { AccountState, SessionState } from '@kosmo/core/enums';
 import { decodeGlobalId } from '@kosmo/core/global-id';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import DataLoader from 'dataloader';
 import { and, eq } from 'drizzle-orm';
 import stringify from 'fast-json-stable-stringify';
 import * as R from 'remeda';
-import { visibleProfileWhere } from './profile/visibility';
 import type { AccountProfileRole } from '@kosmo/core/enums';
 import type { Context as HonoContext } from 'hono';
 
@@ -40,7 +40,6 @@ type DefaultContext = {
   >(
     params: LoaderParams<Key, Result, SortKey, Nullability, Many>,
   ) => DataLoader<Key, FinalResult, string>;
-  $loaders: Map<string, DataLoader<unknown, unknown>>;
 };
 
 export type SessionContext = {
@@ -165,13 +164,11 @@ export const applySelectedProfileExtension = async (
 };
 
 const createContext = (): Context => {
-  const ctx = {
-    $loaders: new Map<string, DataLoader<unknown, unknown>>(),
-  } as Context;
+  const loaders = new Map<string, DataLoader<unknown, unknown>>();
 
-  ctx.loader = (params) => {
+  const getLoader: Context['loader'] = (params) => {
     const { name, nullable, many, load, key } = params;
-    const cached = ctx.$loaders.get(name);
+    const cached = loaders.get(name);
     if (cached) {
       return cached as never;
     }
@@ -201,10 +198,10 @@ const createContext = (): Context => {
       { cache: false },
     );
 
-    ctx.$loaders.set(name, loader);
+    loaders.set(name, loader);
 
     return loader as never;
   };
 
-  return ctx;
+  return { loader: getLoader };
 };

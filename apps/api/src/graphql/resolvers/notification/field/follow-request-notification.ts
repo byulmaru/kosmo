@@ -1,5 +1,5 @@
 import { builder } from '@/graphql/builder';
-import { Profile, ProfileFollowRequest } from '@/graphql/resolvers/profile';
+import { Profile, ProfileFollowRequest } from '@/graphql/resolvers/profile/ref';
 import { FollowRequestNotification, getNotificationSourceMetadata } from '../ref';
 
 builder.objectField(FollowRequestNotification, 'profile', (t) =>

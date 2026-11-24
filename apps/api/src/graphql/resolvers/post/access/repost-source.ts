@@ -1,8 +1,11 @@
 import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
-import { profileBlockVisibilityWhere, visiblePostWhere } from '@kosmo/core/visibility';
+import {
+  profileBlockVisibilityWhere,
+  visiblePostWhere,
+  visibleProfileWhere,
+} from '@kosmo/core/visibility';
 import { and, eq, exists, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { visibleProfileWhere } from '@/profile/visibility';
 import type { SQL } from 'drizzle-orm';
 import type { UserContext } from '@/context';
 

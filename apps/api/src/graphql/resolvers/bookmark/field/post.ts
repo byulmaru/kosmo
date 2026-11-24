@@ -1,6 +1,6 @@
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { builder } from '@/graphql/builder';
-import { Post } from '@/graphql/resolvers/post';
+import { Post } from '@/graphql/resolvers/post/ref';
 import { viewerBookmarkLoader } from '../loader/viewer-bookmark';
 import { Bookmark } from '../ref';
 

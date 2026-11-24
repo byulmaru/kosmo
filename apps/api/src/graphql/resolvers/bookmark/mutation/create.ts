@@ -4,8 +4,8 @@ import { NotFoundError } from '@kosmo/core/error';
 import { createBookmark } from '@kosmo/core/services';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Post } from '@/graphql/resolvers/post';
 import { directPostAccessWhere } from '@/graphql/resolvers/post/access';
+import { Post } from '@/graphql/resolvers/post/ref';
 import { Bookmark } from '../ref';
 
 builder.mutationField('createBookmark', (t) =>

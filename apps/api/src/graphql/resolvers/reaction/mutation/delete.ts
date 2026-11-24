@@ -2,7 +2,7 @@ import { AccountProfileRole } from '@kosmo/core/enums';
 import { deleteReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { builder } from '@/graphql/builder';
-import { Post } from '@/graphql/resolvers/post';
+import { Post } from '@/graphql/resolvers/post/ref';
 import { Reaction } from '../ref';
 
 type DeleteReactionPayload = {

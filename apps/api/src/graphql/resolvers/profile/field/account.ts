@@ -1,8 +1,8 @@
 import { AccountProfiles, db, Instances, Profiles } from '@kosmo/core/db';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, asc, eq, getColumns } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Account } from '@/graphql/resolvers/account';
-import { visibleProfileWhere } from '@/profile/visibility';
+import { Account } from '@/graphql/resolvers/account/ref';
 import { Profile } from '../ref';
 
 builder.objectField(Account, 'profiles', (t) =>

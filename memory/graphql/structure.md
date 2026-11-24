@@ -10,7 +10,8 @@ kosmo GraphQL resolver를 구현하거나 리뷰할 때 이 메모를 참고한�
 - GraphQL 오브젝트는 `createObjectRef` 기반 loadable Node ref로 정의한다.
 - GraphQL resolver가 이미 대상 row를 가지고 있으면 그 row를 반환해도 된다. 다만 Node 전체를 반환하기 위해 추가 query를 만들 필요는 없고, 그 경우에는 Node `id`만 반환해 loadable Node ref가 로딩하게 한다.
 - GraphQL type name과 DB table loader 연결은 `ref.ts`에서 한다.
-- resolver 파일은 작게 유지하고, 각 디렉터리의 `index.ts`는 import 조립과 public export만 담당한다.
+- `schema.ts`는 resolver 등록을 시작한다. 각 기능의 `resolvers/<module>/index.ts`는 필드·쿼리·뮤테이션 등의 등록만 조립한다.
+- resolver에서 다른 GraphQL 타입을 참조할 때는 해당 기능의 `ref.ts`를 가져온다. 등록 진입점에 의존하면 양방향 관계 필드가 서로의 등록을 실행해 import 순환을 만든다.
 - GraphQL schema shape는 normalized cache와 도메인 소유 관계를 기준으로 정한다.
 - top-level query보다 object field가 캐시 갱신에 더 적합하면 object field를 우선한다. 예를 들어 계정이 소유한 profile 목록은 `Account.profiles`로 둔다.
 - DB column이 있다고 API field로 자동 노출하지 않는다. 실제 UI/API 사용 사례가 있고 접근 정책이 분명한 필드만 노출한다.

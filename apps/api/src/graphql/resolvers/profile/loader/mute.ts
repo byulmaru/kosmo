@@ -1,6 +1,6 @@
 import { db, Instances, ProfileMutes, Profiles } from '@kosmo/core/db';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, getColumns, inArray, isNull } from 'drizzle-orm';
-import { visibleProfileWhere } from '@/profile/visibility';
 import type { UserContext } from '@/context';
 import type { ProfileMuteRow } from '../ref';
 

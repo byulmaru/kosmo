@@ -3,9 +3,9 @@ import {
   activeViewerProfileWhere,
   profileBlockVisibilityWhere,
   visiblePostWhere,
+  visibleProfileWhere,
 } from '@kosmo/core/visibility';
 import { and, sql } from 'drizzle-orm';
-import { visibleProfileWhere } from '@/profile/visibility';
 import type { UserContext } from '@/context';
 
 export const directPostVisibilityAccessWhere = ({ ctx }: { readonly ctx: UserContext }) =>

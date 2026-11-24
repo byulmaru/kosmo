@@ -5,8 +5,8 @@ import { addReaction } from '@kosmo/core/services';
 import { reactionTypeSchema } from '@kosmo/core/validation';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Post } from '../../post';
 import { postAccessWhere } from '../../post/access';
+import { Post } from '../../post/ref';
 import { Reaction } from '../ref';
 
 builder.mutationField('addReaction', (t) =>

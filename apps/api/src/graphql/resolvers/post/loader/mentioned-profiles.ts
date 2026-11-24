@@ -1,7 +1,7 @@
 import { db, Instances, PostContents, Profiles } from '@kosmo/core/db';
 import { getPostContentMentionProfileIds } from '@kosmo/core/post-content/server';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
-import { visibleProfileWhere } from '@/profile/visibility';
 import type { UserContext } from '@/context';
 
 type MentionedProfileRow = typeof Profiles.$inferSelect & {

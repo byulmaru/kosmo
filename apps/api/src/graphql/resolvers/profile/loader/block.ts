@@ -1,6 +1,6 @@
 import { db, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
-import { visibleProfileWhere } from '@/profile/visibility';
 import type { UserContext } from '@/context';
 
 export type ProfileBlockRow = typeof ProfileBlocks.$inferSelect;

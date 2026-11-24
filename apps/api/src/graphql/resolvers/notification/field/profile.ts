@@ -3,7 +3,7 @@ import { PermissionDeniedError } from '@kosmo/core/error';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, count, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Profile } from '@/graphql/resolvers/profile';
+import { Profile } from '@/graphql/resolvers/profile/ref';
 import { visibleViewerNotificationWhere } from '../access/visibility';
 import { Notification, NotificationConnection } from '../ref';
 import type { Database } from '@kosmo/core/db';

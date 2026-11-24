@@ -1,10 +1,10 @@
 import { db, Instances, ProfileMutes, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile, ProfileMute, ProfileMuteConnection } from '../ref';
 import type { ProfileMuteRow } from '../ref';
 

@@ -5,7 +5,7 @@ import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { directPostAccessWhere } from '@/graphql/resolvers/post/access';
-import { Profile } from '@/graphql/resolvers/profile';
+import { Profile } from '@/graphql/resolvers/profile/ref';
 import { Bookmark, BookmarkConnection } from '../ref';
 import type { BookmarkRow } from '../ref';
 

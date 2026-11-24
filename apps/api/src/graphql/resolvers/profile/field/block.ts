@@ -1,10 +1,10 @@
 import { db, Instances, ProfileBlocks, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile, ProfileBlock, ProfileBlockConnection } from '../ref';
 import type { ProfileBlockRow } from '../loader/block';
 

@@ -1,6 +1,6 @@
 import { builder } from '@/graphql/builder';
-import { Post } from '@/graphql/resolvers/post';
-import { Profile } from '@/graphql/resolvers/profile';
+import { Post } from '@/graphql/resolvers/post/ref';
+import { Profile } from '@/graphql/resolvers/profile/ref';
 import { getNotificationSourceMetadata, QuoteNotification } from '../ref';
 
 builder.objectFields(QuoteNotification, (t) => ({

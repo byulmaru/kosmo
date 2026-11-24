@@ -1,5 +1,5 @@
 import { builder } from '@/graphql/builder';
-import { Profile } from '@/graphql/resolvers/profile';
+import { Profile } from '@/graphql/resolvers/profile/ref';
 import { mentionedProfilesLoader } from '../loader/mentioned-profiles';
 import { PostContent } from '../ref';
 

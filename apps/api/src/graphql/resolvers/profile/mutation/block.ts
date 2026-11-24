@@ -12,10 +12,10 @@ import {
   profileUnblockUpdateId,
   profileUnblockWorkflow,
 } from '@kosmo/core/temporal/profile-block';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { ApplicationFailure } from '@temporalio/client';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { visibleProfileWhere } from '@/profile/visibility';
 import { profileBlockByIdLoader } from '../loader/block';
 import { Profile, ProfileBlock } from '../ref';
 

@@ -1,8 +1,8 @@
 import { AccountProfiles, db, firstOrThrowWith, Instances, Profiles } from '@kosmo/core/db';
 import { AccountProfileRole, AccountProfileRoleOrder } from '@kosmo/core/enums';
 import { PermissionDeniedError } from '@kosmo/core/error';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq } from 'drizzle-orm';
-import { visibleProfileWhere } from './visibility';
 import type { SessionContext } from '@/context';
 
 export const resolveComposerProfileId = async (ctx: SessionContext, profileId?: string) => {

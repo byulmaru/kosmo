@@ -1,4 +1,3 @@
 import './field';
 import './mutation';
-
-export { Bookmark } from './ref';
+import './ref';

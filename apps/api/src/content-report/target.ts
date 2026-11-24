@@ -11,10 +11,9 @@ import {
 import { ContentReportTargetType, InstanceKind, ProfileState } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
-import { postVisibilityCondition } from '@kosmo/core/visibility';
+import { postVisibilityCondition, visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, exists, isNotNull } from 'drizzle-orm';
 import { formatRelativeHandle } from '@/profile/identity';
-import { visibleProfileWhere } from '@/profile/visibility';
 import type { ContentReportReason } from '@kosmo/core/enums';
 import type { UserContext } from '@/context';
 
