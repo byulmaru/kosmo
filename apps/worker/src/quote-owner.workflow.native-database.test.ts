@@ -127,7 +127,9 @@ test(
   'production Quote owner는 실제 DB fence·FIFO·ABA reconciliation·Continue-As-New·effect retry를 실행한다',
   { timeout: 120000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createTimeSkipping();
+    const environment = await TestWorkflowEnvironment.createLocal({
+      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
+    });
     process.env.TEMPORAL_ADDRESS = environment.address;
     process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
     const production = await import('./activities/quote-owner');
@@ -529,7 +531,7 @@ test(
               interactionTarget: new URL(pending.source.uri),
             }).toJsonLd({ format: 'expand', contextLoader: getDocumentLoader() }),
           );
-          await environment.sleep('1 minute');
+          await environment.sleep('40 seconds');
           await waitFor(
             async () =>
               (await pendingHandle.query<{ phase: string }>('quoteOwnerWork')).phase === 'IDLE',
