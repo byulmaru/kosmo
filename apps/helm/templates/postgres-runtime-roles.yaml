@@ -1,22 +1,9 @@
 {{- $releaseName := .Release.Name | trunc 47 | trimSuffix "-" }}
-{{- $isOKEPostgres := eq .Values.postgres.existingCluster "kosmo-postgres" }}
-{{- $apiRoleResourceName := printf "%s-postgres-api" $releaseName }}
-{{- $queueRoleResourceName := include "kosmo.fedifyQueueResourceName" . }}
-{{- $queueDatabaseResourceName := printf "%s-postgres-fedify-queue-database" (.Release.Name | trunc 32 | trimSuffix "-") }}
-{{- $workerRoleResourceName := include "kosmo.workerDatabasePasswordSecretName" . }}
-{{- $runtimeRoleResourceName := include "kosmo.runtimeDatabasePasswordSecretName" . }}
-{{- if $isOKEPostgres }}
-{{- $apiRoleResourceName = "kosmo-postgres-role-api" }}
-{{- $queueRoleResourceName = "kosmo-postgres-role-fedify-queue" }}
-{{- $queueDatabaseResourceName = "kosmo-postgres-database-fedify-queue" }}
-{{- $workerRoleResourceName = "kosmo-postgres-role-worker" }}
-{{- $runtimeRoleResourceName = "kosmo-postgres-role-runtime" }}
-{{- end }}
 ---
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: {{ $apiRoleResourceName }}
+  name: {{ printf "%s-postgres-api" $releaseName }}
   annotations:
     argocd.argoproj.io/sync-options: Prune=confirm
   labels:
@@ -43,7 +30,7 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: {{ $queueRoleResourceName }}
+  name: {{ include "kosmo.fedifyQueueResourceName" . }}
   annotations:
     argocd.argoproj.io/sync-options: Prune=confirm
     argocd.argoproj.io/sync-wave: "-2"
@@ -71,7 +58,7 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: Database
 metadata:
-  name: {{ $queueDatabaseResourceName }}
+  name: {{ printf "%s-postgres-fedify-queue-database" (.Release.Name | trunc 32 | trimSuffix "-") }}
   annotations:
     argocd.argoproj.io/sync-options: Prune=confirm
     argocd.argoproj.io/sync-wave: "-1"
@@ -90,7 +77,7 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: {{ $workerRoleResourceName }}
+  name: {{ include "kosmo.workerDatabasePasswordSecretName" . }}
   annotations:
     argocd.argoproj.io/sync-options: Prune=confirm
   labels:
@@ -117,7 +104,7 @@ spec:
 apiVersion: postgresql.cnpg.io/v1
 kind: DatabaseRole
 metadata:
-  name: {{ $runtimeRoleResourceName }}
+  name: {{ include "kosmo.runtimeDatabasePasswordSecretName" . }}
   annotations:
     argocd.argoproj.io/sync-options: Prune=confirm
   labels:
