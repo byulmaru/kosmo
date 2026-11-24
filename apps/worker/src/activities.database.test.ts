@@ -167,8 +167,7 @@ before(async () => {
   ({ reprocessLocalPostContentActivity } = await import('./activities/post-content-reprocessing'));
   ({ temporalClient } = await import('@kosmo/core/temporal/client'));
   ({ repostPost } = await import('@kosmo/core/services'));
-  const { createPostPersisted, deletePostPersisted } =
-    await import('../../../packages/core/services/post');
+  const { createPostPersisted, deletePostPersisted } = await import('@kosmo/core/post/persistence');
   createCorePost = createPostPersisted;
   deletePost = async (input) => {
     const { result } = await deletePostPersisted(input);

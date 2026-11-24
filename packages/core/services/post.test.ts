@@ -40,12 +40,8 @@ import {
   postContentDocumentFromTextAndMedia,
 } from '../post-content/server';
 import { temporalClient } from '../temporal/client';
-import {
-  createPost,
-  createPost as createPostWithEffects,
-  createPostInTransaction,
-  createPostPersisted,
-} from './post';
+import { createPost, createPost as createPostWithEffects } from './post';
+import { createPostInTransaction, createPostPersisted } from './post-persistence';
 import { ProfilePairBlockedError } from './profile-block-policy';
 import { updateProfile } from './profile-update';
 

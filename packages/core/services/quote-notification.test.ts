@@ -32,7 +32,8 @@ import {
   ProfileFollowPolicy,
   ProfileState,
 } from '../enums';
-import { createPost, createPostPersisted } from './post';
+import { createPost } from './post';
+import { createPostPersisted } from './post-persistence';
 import { createQuoteNotification } from './quote-notification';
 
 const profileIds: string[] = [];

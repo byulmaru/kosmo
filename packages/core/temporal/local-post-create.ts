@@ -1,4 +1,4 @@
-import type { LocalPostInput } from '../services/post';
+import type { LocalPostInput } from '../post/inputs';
 import type { WorkflowUpdateDefinition } from './client';
 
 export const LOCAL_POST_CREATE_WORKFLOW_TYPE = 'localPostCreateWorkflow';

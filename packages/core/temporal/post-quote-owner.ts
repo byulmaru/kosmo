@@ -1,7 +1,10 @@
 import type { PostQuoteConsentStatus } from '../enums';
 import type { ErrorCode } from '../error';
-import type { LegacyLocalPostInput, LocalPostInput } from '../services/post';
-import type { ApplyPostQuoteConsentInput } from '../services/post-quote-consent';
+import type {
+  ApplyPostQuoteConsentInput,
+  LegacyLocalPostInput,
+  LocalPostInput,
+} from '../post/inputs';
 import type { WorkflowUpdateDefinition } from './client';
 
 export type QuoteOwnerCommand = { readonly postId: string; readonly commandId: string } & (

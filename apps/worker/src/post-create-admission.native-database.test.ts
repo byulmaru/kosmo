@@ -15,7 +15,7 @@ import { TestWorkflowEnvironment } from '@temporalio/testing';
 import { Worker } from '@temporalio/worker';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { pg as corePg } from '@kosmo/core/db';
-import type { LegacyLocalPostInput, LocalPostInput } from '../../../packages/core/services/post';
+import type { LegacyLocalPostInput, LocalPostInput } from '@kosmo/core/services';
 
 process.env.DATABASE_URL ??= 'postgres://kosmo:kosmo@localhost:54329/kosmo_test';
 const databaseUrl = new URL(process.env.DATABASE_URL);

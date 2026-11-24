@@ -6,7 +6,7 @@ import {
   ValidationError,
 } from '../error';
 import type { ErrorCode } from '../error';
-import type { LegacyLocalPostInput } from '../services/post';
+import type { LegacyLocalPostInput } from '../post/inputs';
 import type { WorkflowUpdateDefinition } from './client';
 
 export type PostCreateInput = LegacyLocalPostInput & { readonly admissionId: string };

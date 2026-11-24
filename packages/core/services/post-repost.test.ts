@@ -28,12 +28,8 @@ import {
 } from '../enums';
 import { NotFoundError, PermissionDeniedError, ValidationError } from '../error';
 import { postContentDocumentFromText } from '../post-content/server';
-import {
-  createPost,
-  deletePost as deletePostAction,
-  deletePostPersisted,
-  repostPost as repostPostAction,
-} from './post';
+import { createPost, deletePost as deletePostAction, repostPost as repostPostAction } from './post';
+import { deletePostPersisted } from './post-persistence';
 import { ProfilePairBlockedError } from './profile-block-policy';
 
 const publicOrigin = 'http://127.0.0.1:4173';

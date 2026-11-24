@@ -8,7 +8,7 @@ import {
   validateLocalPostContentDocument,
 } from '../post-content/server';
 import { postCreateInputKey } from './post';
-import type { LegacyLocalPostInput, LocalPostInput } from '../services/post';
+import type { LegacyLocalPostInput, LocalPostInput } from '../post/inputs';
 import type { PostCreateInput } from './post';
 import type { PostCreateWorkflowArgs } from './post-create';
 
