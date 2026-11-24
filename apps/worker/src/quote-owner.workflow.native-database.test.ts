@@ -38,9 +38,9 @@ const deferred = () => {
   const promise = new Promise<void>((r) => (resolve = r));
   return { promise, resolve };
 };
-const waitFor = async (predicate: () => boolean) => {
+const waitFor = async (predicate: () => boolean | Promise<boolean>) => {
   const until = Date.now() + 15000;
-  while (!predicate()) {
+  while (!(await predicate())) {
     if (Date.now() > until) {
       throw new Error('Observation deadline exceeded');
     }
@@ -127,9 +127,7 @@ test(
   'production Quote owner는 실제 DB fence·FIFO·ABA reconciliation·Continue-As-New·effect retry를 실행한다',
   { timeout: 120000 },
   async (t) => {
-    const environment = await TestWorkflowEnvironment.createLocal({
-      server: { executable: { type: 'cached-download', version: 'v1.8.2' } },
-    });
+    const environment = await TestWorkflowEnvironment.createTimeSkipping();
     process.env.TEMPORAL_ADDRESS = environment.address;
     process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
     const production = await import('./activities/quote-owner');
@@ -160,11 +158,11 @@ test(
     const contextMock = mock.method(federation, 'createContext', (origin: URL, data: undefined) =>
       Object.assign(originalContext(origin, data), {
         quoteAuthorizationDocumentLoader: async (url: string) => {
-          assert.ok(documents.has(url));
           readsByUri.set(url, (readsByUri.get(url) ?? 0) + 1);
           if (failOnce.delete(url)) {
             throw new Error('Simulated transient issuer timeout');
           }
+          assert.ok(documents.has(url));
           proofReads++;
           events.push('proof');
           if (gated) {
@@ -491,18 +489,9 @@ test(
         await staleHandle.signal('finishQuoteOwner');
         await staleHandle.result();
       });
-      await t.test('중복 Create는 현재 PENDING 승인 재검증을 취소하지 않는다', async () => {
+      await t.test('대기 중인 Quote는 새 원격 승인 이벤트를 받은 뒤 승인된다', async () => {
         const pending = await fixture();
         fixtures.push(pending);
-        documents.set(
-          pending.approval,
-          await new QuoteAuthorization({
-            id: new URL(pending.approval),
-            attribution: new URL(pending.source.actor),
-            interactingObject: new URL(pending.quote.uri),
-            interactionTarget: new URL(pending.source.uri),
-          }).toJsonLd({ format: 'expand', contextLoader: getDocumentLoader() }),
-        );
         failOnce.add(pending.approval);
         const pendingHandle = await environment.client.workflow.start('postQuoteOwnerWorkflow', {
           workflowId: `post-quote:${pending.quote.post.id}`,
@@ -520,33 +509,62 @@ test(
           authorizationUpdate: false,
           duplicateCreate: false,
         };
-        const result = await pendingHandle.executeUpdate<
-          { retryable: boolean },
-          [QuoteOwnerCommand]
-        >('quoteCommand', { args: [first], updateId: first.commandId });
-        assert.equal(result.retryable, true);
-        await pendingHandle.executeUpdate('quoteCommand', {
-          args: [
-            {
-              ...first,
-              commandId: 'duplicate-pending-create',
-              approvalUri: null,
-              duplicateCreate: true,
-            },
-          ],
-          updateId: 'duplicate-pending-create',
-        });
-        await waitFor(() => readsByUri.get(pending.approval) === 2);
-        await delay(300);
-        const row = await db
-          .select()
-          .from(Posts)
-          .where(eq(Posts.id, pending.quote.post.id))
-          .then(firstOrThrow);
-        assert.equal(row.quoteConsentStatus, PostQuoteConsentStatus.APPROVED);
-        assert.equal(row.quoteConsentApprovalUri, pending.approval);
-        await pendingHandle.signal('finishQuoteOwner');
-        await pendingHandle.result();
+        try {
+          const result = await pendingHandle.executeUpdate<
+            { status: PostQuoteConsentStatus | null },
+            [QuoteOwnerCommand]
+          >('quoteCommand', { args: [first], updateId: first.commandId });
+          assert.equal(result.status, PostQuoteConsentStatus.PENDING);
+
+          await waitFor(
+            async () =>
+              (await pendingHandle.query<{ phase: string }>('quoteOwnerWork')).phase === 'IDLE',
+          );
+          documents.set(
+            pending.approval,
+            await new QuoteAuthorization({
+              id: new URL(pending.approval),
+              attribution: new URL(pending.source.actor),
+              interactingObject: new URL(pending.quote.uri),
+              interactionTarget: new URL(pending.source.uri),
+            }).toJsonLd({ format: 'expand', contextLoader: getDocumentLoader() }),
+          );
+          await environment.sleep('1 minute');
+          await waitFor(
+            async () =>
+              (await pendingHandle.query<{ phase: string }>('quoteOwnerWork')).phase === 'IDLE',
+          );
+
+          const waiting = await db
+            .select()
+            .from(Posts)
+            .where(eq(Posts.id, pending.quote.post.id))
+            .then(firstOrThrow);
+          assert.equal(waiting.quoteConsentStatus, PostQuoteConsentStatus.PENDING);
+          assert.equal(waiting.quoteConsentApprovalUri, pending.approval);
+
+          const update: QuoteOwnerCommand = {
+            ...first,
+            commandId: 'fresh-approval-note',
+            authorizationUpdate: true,
+          };
+          const approved = await pendingHandle.executeUpdate<
+            { status: PostQuoteConsentStatus | null },
+            [QuoteOwnerCommand]
+          >('quoteCommand', { args: [update], updateId: update.commandId });
+          assert.equal(approved.status, PostQuoteConsentStatus.APPROVED);
+
+          const row = await db
+            .select()
+            .from(Posts)
+            .where(eq(Posts.id, pending.quote.post.id))
+            .then(firstOrThrow);
+          assert.equal(row.quoteConsentStatus, PostQuoteConsentStatus.APPROVED);
+          assert.equal(row.quoteConsentApprovalUri, pending.approval);
+        } finally {
+          await pendingHandle.signal('finishQuoteOwner').catch(() => undefined);
+          await pendingHandle.result().catch(() => undefined);
+        }
       });
       await t.test(
         'Source 없는 Quote가 READ 뒤 삭제되면 PENDING 쓰기를 적용하지 않는다',
