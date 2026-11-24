@@ -493,7 +493,8 @@ test('ordinary Posts and Quote admissions use the shared Post Create execution c
     ordinaryInput,
     ordinaryInput,
     quoteInput,
-    quoteInput,
+    { ...quoteInput, quotePolicy: 'EVERYONE' },
+    { ...quoteInput, quotePolicy: 'FOLLOWERS' },
     {
       ...quoteInput,
       bodyText: 'changed quote',
@@ -504,12 +505,14 @@ test('ordinary Posts and Quote admissions use the shared Post Create execution c
   }
 
   assert.equal(execute.mock.callCount(), 2);
-  assert.equal(admit.mock.callCount(), 3);
+  assert.equal(admit.mock.callCount(), 4);
   assert.notEqual(submitted[0]!.requestId, submitted[1]!.requestId);
   assert.equal(quotes[0]!.requestId, quotes[1]!.requestId);
   assert.equal(quotes[0]!.submissionFingerprint, quotes[1]!.submissionFingerprint);
   assert.equal(quotes[0]!.requestId, quotes[2]!.requestId);
   assert.notEqual(quotes[0]!.submissionFingerprint, quotes[2]!.submissionFingerprint);
+  assert.equal(quotes[0]!.requestId, quotes[3]!.requestId);
+  assert.notEqual(quotes[0]!.submissionFingerprint, quotes[3]!.submissionFingerprint);
   assert.deepEqual(quotes[0]!.input, {
     admissionId: quoteInput.admissionId,
     accountId,
@@ -521,6 +524,7 @@ test('ordinary Posts and Quote admissions use the shared Post Create execution c
     profileId,
     replyParentId: undefined,
     repostSourceId: sourceId,
+    quotePolicy: 'EVERYONE',
     sensitiveMedia: false,
     visibility: 'PUBLIC',
   });
@@ -530,7 +534,7 @@ test('ordinary Posts and Quote admissions use the shared Post Create execution c
   assert.ok(error instanceof ValidationError);
   assert.equal(error.field, 'admissionId');
   assert.equal(execute.mock.callCount(), 2);
-  assert.equal(admit.mock.callCount(), 3);
+  assert.equal(admit.mock.callCount(), 4);
 });
 
 test('rejects impossible Mention counts before querying target Profiles', async (t) => {

@@ -33,14 +33,18 @@ mockModule(require.resolve('react-native'), {
   View: 'View',
 });
 mockModule(require.resolve('lucide-react-native'), {
+  ArrowLeftIcon: 'ArrowLeftIcon',
   AtSignIcon: 'AtSignIcon',
   ChartNoAxesColumnIncreasingIcon: 'ChartNoAxesColumnIncreasingIcon',
+  CheckIcon: 'CheckIcon',
   ChevronDownIcon: 'ChevronDownIcon',
+  ChevronRightIcon: 'ChevronRightIcon',
   ExpandIcon: 'ExpandIcon',
   GlobeIcon: 'GlobeIcon',
   ImagePlusIcon: 'ImagePlusIcon',
   LockIcon: 'LockIcon',
   MoonIcon: 'MoonIcon',
+  QuoteIcon: 'QuoteIcon',
   SmileIcon: 'SmileIcon',
   TriangleAlertIcon: 'TriangleAlertIcon',
   XIcon: 'XIcon',

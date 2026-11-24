@@ -84,6 +84,7 @@ const schema = z.discriminatedUnion('kind', [
         replyParentId: z.uuid().optional(),
         document: z.custom(isPostContentDocumentV1),
         authoredBodyText: z.string().optional(),
+        quotePolicy: z.enum(['EVERYONE', 'FOLLOWERS', 'AUTHOR']).nullish(),
         visibility: z.enum(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']),
         repostSourceId: z.uuid(),
         media: z
@@ -98,6 +99,7 @@ const schema = z.discriminatedUnion('kind', [
         bodyText: z.string(),
         contentWarning: z.string().nullable().optional(),
         sensitiveMedia: z.boolean().optional(),
+        quotePolicy: z.enum(['EVERYONE', 'FOLLOWERS', 'AUTHOR']).nullish(),
         visibility: z.enum(['PUBLIC', 'UNLISTED', 'FOLLOWERS', 'DIRECT']),
         repostSourceId: z.uuid(),
         media: z.array(z.object({ mediaId: z.uuid(), altText: z.string().nullable() })).optional(),

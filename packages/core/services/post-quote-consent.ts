@@ -2,19 +2,23 @@ import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
   ActivityPubActors,
   ActivityPubPosts,
+  first,
   getDatabaseConnection,
   Instances,
   Posts,
   ProfileBlocks,
+  ProfileFollows,
   Profiles,
 } from '../db';
 import {
   InstanceKind,
   InstanceState,
   PostQuoteConsentStatus,
+  PostQuotePolicy,
   PostState,
   ProfileState,
 } from '../enums';
+import { ValidationError } from '../error';
 import type { DatabaseHandle, Transaction } from '../db';
 import type { PostQuoteConsentStatus as PostQuoteConsentStatusType } from '../enums';
 
@@ -499,11 +503,14 @@ export const revokePostQuoteConsentsForSource = async (tx: Transaction, sourcePo
   return affected.sort((left, right) => left.id.localeCompare(right.id));
 };
 
+export const defaultPostQuotePolicy = PostQuotePolicy.EVERYONE;
+
 export const isLocalQuoteAllowedByPolicy = async (
   tx: Transaction,
   {
     actorProfileId,
     sourceAuthorProfileId,
+    sourcePostId,
   }: {
     readonly actorProfileId: string;
     readonly sourceAuthorProfileId: string;
@@ -535,5 +542,41 @@ export const isLocalQuoteAllowedByPolicy = async (
     return false;
   }
 
-  return true;
+  const policy =
+    (
+      await tx
+        .select({ policy: Posts.quotePolicy })
+        .from(Posts)
+        .where(eq(Posts.id, sourcePostId))
+        .limit(1)
+        .then(first)
+    )?.policy ?? defaultPostQuotePolicy;
+
+  if (policy === PostQuotePolicy.EVERYONE) {
+    return true;
+  }
+  if (policy === PostQuotePolicy.AUTHOR) {
+    return false;
+  }
+
+  return Boolean(
+    await tx
+      .select({ id: ProfileFollows.id })
+      .from(ProfileFollows)
+      .where(
+        and(
+          eq(ProfileFollows.followerProfileId, actorProfileId),
+          eq(ProfileFollows.followeeProfileId, sourceAuthorProfileId),
+        ),
+      )
+      .limit(1)
+      .then(first),
+  );
+};
+
+export const assertPostQuotePolicy = (policy: string): PostQuotePolicy => {
+  if (!Object.hasOwn(PostQuotePolicy, policy)) {
+    throw new ValidationError('Invalid quote policy', { field: 'quotePolicy' });
+  }
+  return policy as PostQuotePolicy;
 };

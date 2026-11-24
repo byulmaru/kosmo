@@ -5220,6 +5220,7 @@ describe('GraphQL remote profile boundary', () => {
       { visibility: PostVisibility.DIRECT, visible: false },
       { visibility: PostVisibility.PUBLIC, state: PostState.DELETED, visible: false },
       { visibility: PostVisibility.PUBLIC, hiddenAuthor: true, visible: false },
+      { visibility: PostVisibility.PUBLIC, consent: null, visible: false },
       {
         visibility: PostVisibility.PUBLIC,
         consent: PostQuoteConsentStatus.APPROVED,
@@ -5255,12 +5256,13 @@ describe('GraphQL remote profile boundary', () => {
         profileId: author.id,
         repostSourceId: source.id,
       });
-      if (scenario.consent) {
-        await db
-          .update(Posts)
-          .set({ quoteConsentStatus: scenario.consent })
-          .where(eq(Posts.id, quote.id));
-      }
+      await db
+        .update(Posts)
+        .set({
+          quoteConsentStatus:
+            scenario.consent === undefined ? PostQuoteConsentStatus.APPROVED : scenario.consent,
+        })
+        .where(eq(Posts.id, quote.id));
       expected.unshift({
         id: globalId('Post', quote.id),
         content: { id: globalId('PostContent', quote.currentContentId!) },

@@ -1,5 +1,5 @@
 import { db, Instances, Profiles } from '@kosmo/core/db';
-import { InstanceKind } from '@kosmo/core/enums';
+import { InstanceKind, PostQuotePolicy } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { MediaUsePermission } from '@kosmo/core/media-metadata';
@@ -44,6 +44,7 @@ export type LocalPostMutationInput = {
   repostSourceId?: { readonly id: string } | null;
   replyParentId?: { readonly id: string } | null;
   sensitiveMedia?: boolean | null;
+  quotePolicy?: PostQuotePolicy | null;
   visibility: PostVisibility;
 };
 
@@ -311,6 +312,7 @@ export async function prepareLocalPostInput(
     replyParentId: input.replyParentId?.id,
     repostSourceId: input.repostSourceId?.id,
     sensitiveMedia: input.sensitiveMedia ?? false,
+    quotePolicy: input.quotePolicy ?? PostQuotePolicy.EVERYONE,
     visibility: input.visibility,
   };
 }

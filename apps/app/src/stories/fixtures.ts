@@ -1,4 +1,5 @@
 import { Temporal } from 'temporal-polyfill';
+import type { PostQuotePolicy } from '@kosmo/core/enums';
 import type { PostContentBodyDocumentV1 } from '@kosmo/core/post-content';
 
 export type StoryProfile = {
@@ -151,6 +152,7 @@ export type StoryPost = {
   id: string;
   isPinned: boolean;
   profile: StoryProfile;
+  quotePolicy: PostQuotePolicy;
   reactionCounts: Array<{ count: number; type: string }>;
   repostCount: number;
   replyCount: number;
@@ -171,6 +173,7 @@ export function post({
   isPinned = false,
   media = [],
   profile: author = profile(),
+  quotePolicy = 'EVERYONE',
   reactionCounts = [],
   repostCount = 0,
   replyCount = 0,
@@ -191,6 +194,7 @@ export function post({
     }
   > | null;
   profile?: StoryProfile;
+  quotePolicy?: StoryPost['quotePolicy'];
   reactionCounts?: StoryPost['reactionCounts'];
   repostCount?: number;
   replyCount?: number;
@@ -226,6 +230,7 @@ export function post({
     id,
     isPinned,
     profile: author,
+    quotePolicy,
     reactionCounts,
     repostCount,
     replyCount,
