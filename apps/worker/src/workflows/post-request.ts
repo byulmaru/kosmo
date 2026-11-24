@@ -1,5 +1,4 @@
 import { PostVisibility } from '@kosmo/core/enums';
-import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
 import { postCreateWorkflowV2 } from '@kosmo/core/temporal/post-create';
 import {
   POST_REQUEST_CANCEL_UPDATE,
@@ -11,12 +10,11 @@ import {
 import {
   ApplicationFailure,
   CancellationScope,
-  ChildWorkflowCancellationType,
   createNexusServiceClient,
+  deprecatePatch,
   defineQuery,
   defineUpdate,
   NexusOperationCancellationType,
-  ParentClosePolicy,
   patched,
   proxyActivities,
   setHandler,
@@ -130,22 +128,6 @@ const workflowArgsSchema = z
 
 const { generatePostIdActivity, getPostRequestMediaStateActivity, reconcilePostRequestActivity } =
   proxyActivities<typeof activities>(workflowActivityOptions);
-const { waitForPostRequestMediaUploadActivity } = proxyActivities<typeof activities>({
-  ...workflowActivityOptions,
-  heartbeatTimeout: '1 minute',
-  scheduleToCloseTimeout: '76 hours',
-  startToCloseTimeout: '76 hours',
-});
-const { checkPostRequestMediaUploadActivity } = proxyActivities<typeof activities>({
-  retry: {
-    backoffCoefficient: 1,
-    initialInterval: '5 seconds',
-    maximumAttempts: 0,
-    maximumInterval: '5 seconds',
-  },
-  scheduleToCloseTimeout: '76 hours',
-  startToCloseTimeout: '10 seconds',
-});
 
 const queryState = defineQuery<PostRequestState>(POST_REQUEST_STATE_QUERY);
 const cancelRequest = defineUpdate<PostRequestState>(POST_REQUEST_CANCEL_UPDATE);
@@ -269,17 +251,6 @@ const isKnownDomainFailure = (
 ): failure is ApplicationFailure =>
   failure !== undefined && domainErrorCodes.includes(failure.type as ErrorCode);
 
-const isWorkflowAlreadyStarted = (error: unknown): boolean => {
-  let current = error;
-  while (current instanceof Error) {
-    if (current.name === 'WorkflowExecutionAlreadyStartedError') {
-      return true;
-    }
-    current = current.cause;
-  }
-  return false;
-};
-
 const isTerminalStatus = (status: PostRequestState['status']): boolean =>
   status === PostRequestStatus.CANCELLED ||
   status === PostRequestStatus.FAILED ||
@@ -307,55 +278,23 @@ const uploadMedia = async (
     cancellationScope: CancellationScope,
   ): Promise<void> => {
     const media = mediaById.get(mediaId)!;
-    const childArgs = {
+    const uploadArgs = {
       accountId: snapshot.input.accountId,
       applyNightshade: media.applyNightshade,
       mediaId,
     };
     try {
-      if (patched('post-request-media-nexus-v1')) {
-        const client = createNexusServiceClient({
-          endpoint: `${workflowInfo().namespace}-media-upload`,
-          service: mediaUploadService,
-        });
-        await cancellationScope.run(() =>
-          client.executeOperation('processUpload', childArgs, {
-            cancellationType: NexusOperationCancellationType.ABANDON,
-            scheduleToCloseTimeout: '76 hours',
-          }),
-        );
-      } else {
-        try {
-          await cancellationScope.run(() =>
-            runChildWorkflow(mediaUploadWorkflow, {
-              args: [childArgs],
-              cancellationType: ChildWorkflowCancellationType.ABANDON,
-              mode: 'execute',
-              parentClosePolicy: ParentClosePolicy.ABANDON,
-              workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
-            }),
-          );
-        } catch (error) {
-          if (!isWorkflowAlreadyStarted(error)) {
-            throw error;
-          }
-          if (patched('post-request-media-retry-poll-v1')) {
-            await cancellationScope.run(() =>
-              checkPostRequestMediaUploadActivity({
-                accountId: snapshot.input.accountId,
-                mediaId,
-              }),
-            );
-          } else {
-            await cancellationScope.run(() =>
-              waitForPostRequestMediaUploadActivity({
-                accountId: snapshot.input.accountId,
-                mediaId,
-              }),
-            );
-          }
-        }
-      }
+      deprecatePatch('post-request-media-nexus-v1');
+      const client = createNexusServiceClient({
+        endpoint: `${workflowInfo().namespace}-media-upload`,
+        service: mediaUploadService,
+      });
+      await cancellationScope.run(() =>
+        client.executeOperation('processUpload', uploadArgs, {
+          cancellationType: NexusOperationCancellationType.ABANDON,
+          scheduleToCloseTimeout: '76 hours',
+        }),
+      );
     } catch (error) {
       if (!patched('post-request-media-ready-recovery-v1') || isCancelled()) {
         throw error;
