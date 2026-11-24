@@ -232,7 +232,7 @@ function seedTimelineQueries(environment: Environment, ownerId = selectedProfile
   };
   const data = {
     currentSession: { id: `session-${ownerId}`, selectedProfile: profile },
-    me: { id: 'account', name: 'Owner', profiles: [{ id: ownerId }] },
+    me: { id: 'account', name: 'Owner', profiles: [{ id: ownerId }], metadata: [] },
     homeTimeline: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
     localTimeline: { edges: [], pageInfo: { endCursor: null, hasNextPage: false } },
   };
