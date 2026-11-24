@@ -37,25 +37,7 @@ spec:
     tls:
       enabled: false
   bootstrap:
-    pg_basebackup:
-      source: pgBaseBackupSource
+    initdb:
       database: kosmo
       owner: kosmo
-  externalClusters:
-    - name: pgBaseBackupSource
-      connectionParameters:
-        host: kosmo-postgres-aws.kosmo-prod.svc.cluster.local
-        port: "5432"
-        user: streaming_replica
-        dbname: postgres
-        sslmode: verify-ca
-      sslKey:
-        name: kosmo-aws-replication
-        key: tls.key
-      sslCert:
-        name: kosmo-aws-replication
-        key: tls.crt
-      sslRootCert:
-        name: kosmo-aws-replication
-        key: ca.crt
 {{- end }}
