@@ -61,7 +61,7 @@ jobs:
             if (domain.protocol !== 'https:' || !domain.hostname.endsWith('.identity.oraclecloud.com')) {
               throw new Error('Expected an OCI Identity Domain HTTPS URL');
             }
-            const jwt = await core.getIDToken('https://github.com/byulmaru/infrastructure');
+            const jwt = await core.getIDToken();
             core.setSecret(jwt);
             const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
             const credentials = Buffer.from(`${OCI_OIDC_CLIENT_ID}:${OCI_OIDC_CLIENT_SECRET}`).toString('base64');
