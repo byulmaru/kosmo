@@ -75,6 +75,9 @@ mockModule('@/components/post/PostDetailThread', {
     createElement('View', null, header, children),
   PostDetailThread: ({ header }: { header: ReactNode }) => header,
 });
+mockModule('@/components/post/PostMediaViewerHost', {
+  PostMediaViewerHostProvider: ({ children }: PropsWithChildren) => children,
+});
 mockModule('@/components/shell/PrimaryNavigationScrollContext', {
   usePrimaryNavigationScroll: () => ({ isHistoryEntryRestoration: () => false }),
 });

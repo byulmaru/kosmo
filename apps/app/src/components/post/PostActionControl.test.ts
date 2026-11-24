@@ -122,7 +122,7 @@ mockModule(new URL('./PostBody.tsx', import.meta.url), { PostBody: 'PostBody' })
 mockModule(new URL('./PostComposerCoordinator.tsx', import.meta.url), {
   usePostComposerBinding: () => undefined,
 });
-mockModule(new URL('./PostMediaViewerHost.tsx', import.meta.url), {
+mockModule(new URL('./PostMediaViewerContext.ts', import.meta.url), {
   usePostMediaViewerHost: () => () => undefined,
 });
 mockModule(new URL('./PostReplySurface.tsx', import.meta.url), {

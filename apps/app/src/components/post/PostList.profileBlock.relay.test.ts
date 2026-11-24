@@ -180,6 +180,8 @@ for (const [file, name] of [
 }
 stub(new URL('./PostMediaViewerHost.tsx', import.meta.url), {
   PostMediaViewerHostProvider: ({ children }: { children?: ReactNode }) => children,
+});
+stub(new URL('./PostMediaViewerContext.ts', import.meta.url), {
   usePostMediaViewerHost: () => () => undefined,
 });
 stub(new URL('./PostActionSurface.tsx', import.meta.url), { PostActionSurface: () => null });

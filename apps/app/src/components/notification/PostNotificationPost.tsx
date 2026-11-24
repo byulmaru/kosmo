@@ -5,7 +5,7 @@ import { graphql, useFragment } from 'react-relay';
 import { PostActionSurface } from '@/components/post/PostActionSurface';
 import { PostBody } from '@/components/post/PostBody';
 import { PostComposerCoordinatorContext } from '@/components/post/PostComposerCoordinator';
-import { usePostMediaViewerHost } from '@/components/post/PostMediaViewerHost';
+import { usePostMediaViewerHost } from '@/components/post/PostMediaViewerContext';
 import { usePostReplySurface } from '@/components/post/PostReplySurface';
 import { PostSourcePreview } from '@/components/post/PostSourcePresentationView';
 import { ProfileNameBlock } from '@/components/profile/ProfileNameBlock';

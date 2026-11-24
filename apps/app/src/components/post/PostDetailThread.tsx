@@ -7,7 +7,6 @@ import { PostActionAuthenticationProvider } from '@/components/post/PostActionAu
 import { PostComposerCoordinatorProvider } from '@/components/post/PostComposerCoordinator';
 import { PostLayout } from '@/components/post/PostLayout';
 import { PostListItem } from '@/components/post/PostListItem';
-import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { Button } from '@/components/ui/Button';
 import { getShellLayout } from '../shell/shellLayout';
 import { PostThreadLayout } from './PostThreadLayout';
@@ -25,6 +24,7 @@ import type { PostListItem_post$key } from './__generated__/PostListItem_post.gr
 import type { ReplyComposerSurface_profile$key } from './__generated__/ReplyComposerSurface_profile.graphql';
 import type { PostComposerCreatedPost } from './PostComposerController';
 import type { PostListPresentation } from './postListMetrics';
+import type { PostMediaViewerHostComponent } from './PostMediaViewerContext';
 
 const PostDetailThreadFragment = graphql`
   fragment PostDetailThread_post on Post
@@ -119,6 +119,7 @@ export function PostDetailThread({
   currentPostReplySurfaceId,
   header,
   identity,
+  mediaViewerHost,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
@@ -133,6 +134,7 @@ export function PostDetailThread({
   currentPostReplySurfaceId?: string;
   header: ReactNode;
   identity: string;
+  mediaViewerHost: PostMediaViewerHostComponent;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
@@ -149,6 +151,7 @@ export function PostDetailThread({
       currentPostReplySurfaceId={currentPostReplySurfaceId}
       header={header}
       key={identity}
+      mediaViewerHost={mediaViewerHost}
       onReplyCreated={onReplyCreated}
       onPostDeleted={onPostDeleted}
       post={postKey}
@@ -166,6 +169,7 @@ function PostDetailThreadContent({
   currentPostReplyOnPress,
   currentPostReplySurfaceId,
   header,
+  mediaViewerHost: MediaViewerHost,
   onReplyCreated,
   onPostDeleted,
   post: postKey,
@@ -179,6 +183,7 @@ function PostDetailThreadContent({
   currentPostReplyOnPress?: () => void;
   currentPostReplySurfaceId?: string;
   header: ReactNode;
+  mediaViewerHost: PostMediaViewerHostComponent;
   onReplyCreated?: (post: PostComposerCreatedPost) => void;
   onPostDeleted?: () => void;
   post: PostDetailThread_post$key;
@@ -472,7 +477,7 @@ function PostDetailThreadContent({
         owner="detail"
         profile={replyProfile ?? null}
       >
-        <PostMediaViewerHostProvider>
+        <MediaViewerHost>
           {presentation === 'viewer' ? (
             <ScrollView
               {...nativeScrollProps}
@@ -502,7 +507,7 @@ function PostDetailThreadContent({
               {thread}
             </PostDetailFrame>
           )}
-        </PostMediaViewerHostProvider>
+        </MediaViewerHost>
       </PostComposerCoordinatorProvider>
     </PostActionAuthenticationProvider>
   );

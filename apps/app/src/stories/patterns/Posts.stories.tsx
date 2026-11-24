@@ -6860,7 +6860,7 @@ function PostDetailThreadIdentityFailureStory() {
       >
         <Text>다른 actor query로 전환</Text>
       </Pressable>
-      <PostDetailThread {...threadProps} />
+      <PostDetailThread {...threadProps} mediaViewerHost={PostMediaViewerHostProvider} />
     </>
   );
 }
@@ -6881,6 +6881,7 @@ function PostDetailThreadReplyOwnerStory() {
     <PostDetailThread
       header={<Text>게시글</Text>}
       identity="reply-owner:0"
+      mediaViewerHost={PostMediaViewerHostProvider}
       post={post}
       replyProfile={replyProfile}
     />
