@@ -150,7 +150,7 @@ test('화면을 연 뒤 이미 폐기된 Session도 로그아웃 성공으로 �
   await page.goto('/home');
   const logout = await logoutControl(page, 'full sidebar');
   await expect(logout).toBeVisible();
-  await page.waitForLoadState('networkidle');
+  await expect(logout).toBeEnabled();
   await db
     .update(Sessions)
     .set({ state: SessionState.REVOKED })

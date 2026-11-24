@@ -23,9 +23,11 @@ test('모바일 route 헤더와 fallback 메뉴는 drawer 닫힘 후 포커스�
       await expect(page.getByRole('heading', { name: title, exact: true })).toHaveCount(1);
     }
     await trigger.click();
-    await expect(page.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
+    const drawer = page.getByRole('dialog', { name: '메뉴' });
+    await expect(drawer.getByRole('navigation', { name: '주요 메뉴' })).toBeVisible();
+    await expect(drawer.and(page.locator(':focus-within'))).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.locator('#mobile-sidebar')).toHaveCount(0);
+    await expect(drawer).toBeHidden();
     await expect(trigger).toBeFocused();
   }
 });
