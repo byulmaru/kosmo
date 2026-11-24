@@ -1,4 +1,4 @@
-import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { trackAnalytics } from '@/analytics/client';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
@@ -122,6 +122,8 @@ function SearchConversionFixture({ startPath = '/search' }: { startPath?: string
   );
 }
 
+const mutationRequestObserver = fn();
+
 const events = () =>
   mocked(trackAnalytics).mock.calls.filter(([name]) =>
     ['search_result_selected', 'profile_view_succeeded', 'follow_succeeded'].includes(name),
@@ -135,10 +137,16 @@ const meta = {
   component: SearchConversionFixture,
   beforeEach: () => {
     mocked(trackAnalytics).mockReset();
+    mutationRequestObserver.mockClear();
     return () => mocked(trackAnalytics).mockReset();
   },
   parameters: {
-    relay: { actorBoundary: true, data, mutationResponse: followResponse() },
+    relay: {
+      actorBoundary: true,
+      data,
+      mutationResponse: followResponse(),
+      mutationRequestObserver,
+    },
     controls: { disable: true },
   },
 } satisfies Meta<typeof SearchConversionFixture>;
@@ -229,6 +237,12 @@ export const FollowRequestExcluded: Story = {
     await selectResult(canvasElement);
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
+    await waitFor(() =>
+      expect(mutationRequestObserver).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'FollowButtonFollowProfileMutation' }),
+        { id: target.id },
+      ),
+    );
     await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeEnabled();
     await waitFor(() => expect(events().map(([name]) => name)).toContain('follow_succeeded'));
     expect(events().find(([name]) => name === 'follow_succeeded')?.[1]).toMatchObject({
@@ -242,6 +256,12 @@ export const FollowRelationshipIncluded: Story = {
     await selectResult(canvasElement);
     const canvas = within(canvasElement);
     await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
+    await waitFor(() =>
+      expect(mutationRequestObserver).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'FollowButtonFollowProfileMutation' }),
+        { id: target.id },
+      ),
+    );
     await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
     await waitFor(() => expect(events().map(([name]) => name)).toContain('follow_succeeded'));
     expect(events().find(([name]) => name === 'follow_succeeded')?.[1]).toMatchObject({
