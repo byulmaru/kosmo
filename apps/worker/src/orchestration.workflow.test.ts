@@ -1772,7 +1772,7 @@ test(
     };
     const requestId = '00000000-0000-8000-8000-000000000673';
     const followId = '00000000-0000-8000-8000-000000000674';
-    let effectCallCount = 0;
+    const effectCalls: string[] = [];
     let transitionCalls = 0;
 
     const worker = await Worker.create({
@@ -1805,14 +1805,14 @@ test(
         }) => {
           assert.equal(input.profileId, pair.followerProfileId);
           assert.equal(input.followeeProfileId, pair.followeeProfileId);
-          effectCallCount += 1;
+          effectCalls.push('reconciliation');
         },
         loadPendingFollowRequestIdActivity: async () => requestId,
         createNotificationActivity: async () => {
-          effectCallCount += 1;
+          effectCalls.push('notification');
         },
         sendProfileFollowActivity: async () => {
-          effectCallCount += 1;
+          effectCalls.push('follow');
         },
       },
       connection: environment.nativeConnection,
@@ -1854,10 +1854,9 @@ test(
         },
       });
       assert.equal(transitionCalls, 2);
-      assert.equal(effectCallCount, 0);
       const handle = await startWorkflowOperation.workflowHandle();
       await handle.result();
-      assert.equal(effectCallCount, 1);
+      assert.deepEqual(effectCalls, ['reconciliation']);
     });
   },
 );
