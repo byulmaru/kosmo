@@ -12,9 +12,7 @@ spec:
     size: 50Gi
     storageClass: oci-bv
   resources:
-    requests:
-      cpu: 250m
-      memory: 512Mi
+{{ toYaml .Values.postgres.resources.prod | indent 4 }}
   bootstrap:
     pg_basebackup:
       source: kosmo-postgres-aws-replica
