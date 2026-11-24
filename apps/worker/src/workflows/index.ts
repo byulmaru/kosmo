@@ -10,7 +10,6 @@ export { homeTimelineFollowReconciliationWorkflow } from './home-timeline-follow
 export { homeTimelineInsertWorkflow } from './home-timeline-insert';
 export { homeTimelineInsertBatchWorkflow } from './home-timeline-insert-batch';
 export { linkPreviewCollectionWorkflow } from './link-preview';
-export { localPostCreateWorkflow } from './local-post-create';
 export { mediaUploadWorkflow } from './media-upload';
 export { mediaUploadWithMetadataWorkflow } from './media-upload-with-metadata';
 export { naturalLanguageMuteRuleWorkflow } from './natural-language-mute-rule';

@@ -4,11 +4,7 @@ import { ActivityPubActors, db, first, Instances, ProfileFollows, Profiles } fro
 import { InstanceKind, InstanceState, ProfileState } from '@kosmo/core/enums';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { REMOTE_POST_LOOKUP_MAX_DOCUMENT_BYTES } from '@kosmo/core/temporal/workflows';
-import {
-  collectRemoteFeaturedItemUris,
-  collectRemoteFeaturedPostIds,
-  federation,
-} from '@kosmo/fedify';
+import { collectRemoteFeaturedItemUris, federation } from '@kosmo/fedify';
 import { and, eq, isNotNull } from 'drizzle-orm';
 import { createBoundedDocumentLoader } from './remote-document';
 import type { RemoteProfileFeaturedSyncInput } from '../workflows/remote-profile-featured';
@@ -65,22 +61,7 @@ const getRemoteFeaturedContext = async (input: RemoteProfileFeaturedSyncInput) =
     ? await context.getDocumentLoader({ identifier: follower.id })
     : context.documentLoader;
 
-  return { context, documentLoader, signingProfileId: follower?.id };
-};
-
-export const collectRemoteFeaturedActivity = async (
-  input: RemoteProfileFeaturedSyncInput,
-): Promise<string[] | null> => {
-  const featuredContext = await getRemoteFeaturedContext(input);
-  if (featuredContext === null) {
-    return null;
-  }
-
-  return collectRemoteFeaturedPostIds({
-    ...input,
-    context: featuredContext.context,
-    documentLoader: featuredContext.documentLoader,
-  });
+  return { documentLoader, signingProfileId: follower?.id };
 };
 
 export const collectRemoteFeaturedItemsActivity = async (

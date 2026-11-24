@@ -16,7 +16,6 @@ import {
 import { ApplicationFailure } from '@temporalio/activity';
 import { and, eq } from 'drizzle-orm';
 import type {
-  RemoteProfileActorLookupInput,
   RemoteProfileHandleLookupInput,
   RemoteProfileMaterializationInput,
 } from '@kosmo/core/temporal/workflows';
@@ -328,51 +327,6 @@ export const recoverRemoteProfileActorActivity = async (
     if (stored) {
       await reactivateStoredRemoteProfileActor(stored);
     }
-  } catch (error) {
-    return rethrowRemoteProfileMaterializationError(error);
-  }
-};
-
-const fetchAndApplyRemoteProfileActor = async (input: RemoteProfileMaterializationInput) => {
-  const document = await fetchRemoteProfileActorActivity(input);
-  return applyRemoteProfileActorActivity({ actorUri: input.actorUri, ...document });
-};
-
-// Temporal histories record these Activity names. Keep them for histories without
-// `remote-profile-activity-split-v1`; remove them after those histories drain.
-export const refreshRemoteProfileActorActivity = async (
-  input: RemoteProfileMaterializationInput,
-): Promise<string> => {
-  try {
-    const stored = await getRemoteProfileActorStateActivity({ actorUri: input.actorUri });
-    if (stored && !stored.needsRefresh) {
-      return stored.profileId;
-    }
-
-    return await fetchAndApplyRemoteProfileActor(input);
-  } catch (error) {
-    return rethrowRemoteProfileMaterializationError(error);
-  }
-};
-
-// Temporal histories record this Activity name. Keep it for lookup histories without
-// `remote-profile-activity-split-v1`; remove it after those histories drain.
-export const materializeRemoteProfileActorActivity = async (
-  input: RemoteProfileActorLookupInput,
-): Promise<RemoteProfileActorState | null> => {
-  try {
-    const stored = await getRemoteProfileActorStateActivity({ actorUri: input.actorUri });
-    if (input.receipt && stored) {
-      await recoverRemoteProfileActorActivity({ actorUri: input.actorUri });
-    }
-    if (stored) {
-      return stored;
-    }
-
-    return {
-      needsRefresh: false,
-      profileId: await fetchAndApplyRemoteProfileActor(input),
-    };
   } catch (error) {
     return rethrowRemoteProfileMaterializationError(error);
   }

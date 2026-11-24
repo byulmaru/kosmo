@@ -29,22 +29,14 @@ import {
   ProfileState,
 } from '@kosmo/core/enums';
 import { postContentDocumentFromText } from '@kosmo/core/post-content/server';
-import { KOSMO_TASK_QUEUE } from '@kosmo/core/temporal/task-queue';
-import { ApplicationFailure, WithStartWorkflowOperation } from '@temporalio/client';
-import { Worker } from '@temporalio/worker';
+import { ApplicationFailure } from '@temporalio/client';
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { createTestWorkflowEnvironment, testWorkflowSource } from '../temporal-test-environment.js';
-import { createLocalPostActivity, generateLocalPostIdActivity } from './local-post-create';
 import { createPostActivity, generatePostIdActivity } from './post-create';
 import { getPostRequestMediaStateActivity, reconcilePostRequestActivity } from './post-request';
-import type {
-  LocalPostCreateInput,
-  LocalPostCreateResult,
-} from '@kosmo/core/temporal/local-post-create';
+import type { LocalPostInput } from '@kosmo/core/services';
 import type {
   ActivityPubPostCreateInput,
   PostCreateActivityInput,
-  PostCreateActivityResult,
 } from '@kosmo/core/temporal/post-create';
 
 const profileIds = new Set<string>();
@@ -155,7 +147,7 @@ const createReadyMedia = async (accountId: string, profileId: string) => {
       readyAt: Temporal.Now.instant(),
       source: MediaSource.LOCAL,
       state: MediaState.READY,
-      storageReference: `local-post-create:${crypto.randomUUID()}`,
+      storageReference: `test-media:${crypto.randomUUID()}`,
       uploadExpiresAt: Temporal.Now.instant().add({ minutes: 5 }),
       url: `https://media.example/${crypto.randomUUID()}.webp`,
     })
@@ -186,8 +178,8 @@ test('generatePostIdActivity uses remote publication time and keeps the local de
 
 const localInput = (
   author: Awaited<ReturnType<typeof createAuthor>>,
-  overrides: Partial<LocalPostCreateInput> = {},
-): LocalPostCreateInput => ({
+  overrides: Partial<LocalPostInput> = {},
+): LocalPostInput => ({
   accountId: author.account.id,
   bodyText: 'An original post',
   origin: 'LOCAL',
@@ -269,107 +261,8 @@ afterEach(async () => {
 
 after(async () => pg.end());
 
-test(
-  'Local Post UWS retries a committed Activity response loss with the same allocated ID',
-  { timeout: 120_000 },
-  async () => {
-    const environment = await createTestWorkflowEnvironment();
-    process.env.TEMPORAL_ADDRESS = environment.address;
-    process.env.TEMPORAL_NAMESPACE = environment.namespace ?? 'default';
-    let worker: Worker | undefined;
-    let workerRun: Promise<void> | undefined;
-    try {
-      const [{ LOCAL_POST_CREATE_UPDATE_NAME, localPostCreateWorkflow }, activities] =
-        await Promise.all([
-          import('@kosmo/core/temporal/local-post-create'),
-          import('../activities'),
-        ]);
-      const author = await createAuthor('response-loss');
-      const requestId = crypto.randomUUID();
-      const workflowId = localPostCreateWorkflow.workflowIdFromArgs({ requestId });
-      const attemptPostIds: string[] = [];
-      let firstPostId: string | undefined;
-      worker = await Worker.create({
-        activities: {
-          ...activities,
-          createPostActivity: async (
-            input: PostCreateActivityInput,
-          ): Promise<PostCreateActivityResult> => {
-            attemptPostIds.push(input.postId);
-            const result = await activities.createPostActivity(input);
-            if (result.ok && attemptPostIds.length === 1) {
-              firstPostId = input.postId;
-              postIds.add(input.postId);
-              throw ApplicationFailure.retryable('Activity completion response was lost');
-            }
-            return result;
-          },
-          createMentionNotificationActivity: async () => {},
-          createNotificationActivity: async () => {},
-          createQuoteNotificationActivity: async () => {},
-          createReplyNotificationActivity: async () => {},
-          sendLocalPostCreateActivity: async () => {},
-        },
-        connection: environment.nativeConnection,
-        namespace: environment.namespace,
-        taskQueue: KOSMO_TASK_QUEUE,
-        ...testWorkflowSource,
-      });
-      workerRun = worker.run();
-
-      const result = (await environment.client.workflow.executeUpdateWithStart(
-        LOCAL_POST_CREATE_UPDATE_NAME,
-        {
-          args: [localInput(author)],
-          updateId: crypto.randomUUID(),
-          startWorkflowOperation: new WithStartWorkflowOperation(localPostCreateWorkflow.workflow, {
-            args: [{ requestId }],
-            taskQueue: KOSMO_TASK_QUEUE,
-            workflowId,
-            workflowIdConflictPolicy: 'USE_EXISTING',
-            workflowIdReusePolicy: 'REJECT_DUPLICATE',
-          }),
-        },
-      )) as LocalPostCreateResult;
-      assert.ok(firstPostId);
-      const committedPostId = firstPostId;
-      assert.deepEqual(result, { postId: committedPostId });
-      assert.equal(attemptPostIds.length, 2);
-      assert.deepEqual(attemptPostIds, [committedPostId, committedPostId]);
-
-      await environment.client.workflow.getHandle(workflowId).result();
-      const post = await db
-        .select()
-        .from(Posts)
-        .where(eq(Posts.id, result.postId))
-        .then(firstOrThrow);
-      assert.equal(post.profileId, author.profile.id);
-      assert.notEqual(post.currentContentId, null);
-      assert.equal(
-        await db
-          .select()
-          .from(PostContents)
-          .where(eq(PostContents.postId, result.postId))
-          .then((rows) => rows.length),
-        1,
-      );
-    } finally {
-      if (worker?.getState() === 'RUNNING') {
-        worker.shutdown();
-      }
-      if (workerRun !== undefined) {
-        await workerRun;
-      }
-      await environment.teardown();
-    }
-  },
-);
-
-test('Local Post ID Activity gets a database UUIDv7 without writing a Post', async () => {
-  const [first, second] = await Promise.all([
-    generateLocalPostIdActivity(),
-    generateLocalPostIdActivity(),
-  ]);
+test('Post ID Activity gets a database UUIDv7 without writing a Post', async () => {
+  const [first, second] = await Promise.all([generatePostIdActivity(), generatePostIdActivity()]);
   postIds.add(first);
   postIds.add(second);
   assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -384,12 +277,12 @@ test('Local Post ID Activity gets a database UUIDv7 without writing a Post', asy
   );
 });
 
-test('Local Post Activity returns a committed retry before revalidating changed parent and media', async () => {
+test('Post Activity returns a committed retry before revalidating changed parent and media', async () => {
   const author = await createAuthor('author');
   const other = await createAuthor('other');
   const parent = await createParentPost(other.profile.id, PostVisibility.PUBLIC);
   const media = await createReadyMedia(author.account.id, author.profile.id);
-  const postId = await generateLocalPostIdActivity();
+  const postId = await generatePostIdActivity();
   postIds.add(postId);
   const input = localInput(author, {
     bodyText: 'Original body',
@@ -397,8 +290,11 @@ test('Local Post Activity returns a committed retry before revalidating changed 
     replyParentId: parent,
   });
 
-  const committed = await createLocalPostActivity(input, postId);
-  assert.deepEqual(committed, { ok: true, result: { postId } });
+  const committed = await createPostActivity({ input, postId });
+  assert.deepEqual(committed, {
+    ok: true,
+    result: { authorProfileId: author.profile.id, postId, status: 'created' },
+  });
   const originalContent = await db
     .select({ document: PostContents.document })
     .from(PostContents)
@@ -411,7 +307,7 @@ test('Local Post Activity returns a committed retry before revalidating changed 
     .set({ accountId: other.account.id, altText: 'Changed after commit' })
     .where(eq(Media.id, media.id));
 
-  assert.deepEqual(await createLocalPostActivity(input, postId), committed);
+  assert.deepEqual(await createPostActivity({ input, postId }), committed);
   assert.deepEqual(
     await db
       .select({ document: PostContents.document })
@@ -447,9 +343,9 @@ test('Local Post Activity returns a committed retry before revalidating changed 
   );
 });
 
-test('Concurrent Local Post Activity retries converge on one Post and content row', async () => {
+test('Concurrent Post Activity retries converge on one Post and content row', async () => {
   const author = await createAuthor('concurrent');
-  const postId = await generateLocalPostIdActivity();
+  const postId = await generatePostIdActivity();
   postIds.add(postId);
   const input = localInput(author);
 
@@ -462,8 +358,8 @@ test('Concurrent Local Post Activity retries converge on one Post and content ro
   });
   await postTableLocked.promise;
   const concurrent = Promise.all([
-    createLocalPostActivity(input, postId),
-    createLocalPostActivity(input, postId),
+    createPostActivity({ input, postId }),
+    createPostActivity({ input, postId }),
   ]);
   let overlapObserved = false;
   try {
@@ -491,8 +387,14 @@ test('Concurrent Local Post Activity retries converge on one Post and content ro
 
   assert.equal(overlapObserved, true, 'Both Post inserts should wait behind the test table lock');
   assert.deepEqual(results, [
-    { ok: true, result: { postId } },
-    { ok: true, result: { postId } },
+    {
+      ok: true,
+      result: { authorProfileId: author.profile.id, postId, status: 'created' },
+    },
+    {
+      ok: true,
+      result: { authorProfileId: author.profile.id, postId, status: 'created' },
+    },
   ]);
   assert.equal(
     await db
@@ -512,22 +414,22 @@ test('Concurrent Local Post Activity retries converge on one Post and content ro
   );
 });
 
-test('Local Post Activity rollback removes its claim and content and restores media ALT on failure', async () => {
+test('Post Activity rollback removes its claim and content and restores media ALT on failure', async () => {
   const author = await createAuthor('rollback');
   const hiddenAuthor = await createAuthor('hidden');
   const parent = await createParentPost(hiddenAuthor.profile.id, PostVisibility.DIRECT);
   const media = await createReadyMedia(author.account.id, author.profile.id);
-  const postId = await generateLocalPostIdActivity();
+  const postId = await generatePostIdActivity();
   postIds.add(postId);
 
-  const result = await createLocalPostActivity(
-    localInput(author, {
+  const result = await createPostActivity({
+    input: localInput(author, {
       bodyText: 'This must roll back',
       media: [{ altText: 'Must not persist', mediaId: media.id }],
       replyParentId: parent,
     }),
     postId,
-  );
+  });
 
   assert.equal(result.ok, false);
   if (result.ok) {
@@ -561,20 +463,20 @@ test('Local Post Activity rollback removes its claim and content and restores me
   );
 });
 
-test('Local Post Activity rejects a claimed ID owned by another account or profile', async () => {
+test('Post Activity rejects a reused ID owned by another account or profile', async () => {
   const author = await createAuthor('identity-owner');
   const other = await createAuthor('identity-other');
-  const postId = await generateLocalPostIdActivity();
+  const postId = await generatePostIdActivity();
   postIds.add(postId);
 
-  assert.deepEqual(await createLocalPostActivity(localInput(author), postId), {
+  assert.deepEqual(await createPostActivity({ input: localInput(author), postId }), {
     ok: true,
-    result: { postId },
+    result: { authorProfileId: author.profile.id, postId, status: 'created' },
   });
-  const conflicting = await createLocalPostActivity(localInput(other), postId);
+  const conflicting = await createPostActivity({ input: localInput(other), postId });
   assert.equal(conflicting.ok, false);
   if (conflicting.ok) {
-    assert.fail('Expected a reused Local Post ID to conflict');
+    assert.fail('Expected a reused Post ID to conflict');
   }
   assert.equal(conflicting.error.code, 'CONFLICT');
   assert.equal(
