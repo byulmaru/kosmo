@@ -6,16 +6,8 @@ import { runWorkflow } from '@kosmo/core/temporal/client';
 import { mediaUploadWorkflow } from '@kosmo/core/temporal/media-upload';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { and, eq } from 'drizzle-orm';
-import { z } from 'zod';
 import { builder } from '@/graphql/builder';
 import { Media } from '../ref';
-
-const representationResponseSchema = z.object({
-  mediaType: z.string().min(1),
-  url: z.httpUrl(),
-});
-
-const MEDIA_STORAGE_REQUEST_TIMEOUT_MS = 10_000;
 
 builder.mutationField('completeMediaUpload', (t) =>
   t.withAuth({ profileRole: AccountProfileRole.MEMBER }).fieldWithInput({
@@ -29,7 +21,6 @@ builder.mutationField('completeMediaUpload', (t) =>
       applyAiProhibitFilter: t.input.boolean({ required: false, defaultValue: false }),
     },
     resolve: async (_, { input }, ctx) => {
-      const applyNightshade = input.applyAiProhibitFilter ?? false;
       const media = await db
         .select()
         .from(MediaTable)
@@ -49,6 +40,9 @@ builder.mutationField('completeMediaUpload', (t) =>
       if (media.storageReference === null) {
         throw new Error('Uploading Local Media is missing its storage reference');
       }
+      if (!isNexusMediaUpload(media.storageReference)) {
+        throw new ConflictError({ message: '이미지를 다시 첨부해 주세요' });
+      }
 
       const findReadyMedia = () =>
         db
@@ -65,87 +59,25 @@ builder.mutationField('completeMediaUpload', (t) =>
           .limit(1)
           .then(first);
 
-      if (isNexusMediaUpload(media.storageReference)) {
-        try {
-          await runWorkflow(mediaUploadWorkflow, {
-            args: [{ mediaId: media.id, accountId: ctx.session.accountId, applyNightshade }],
-            mode: 'execute',
-            workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
-            workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
-          });
-        } catch (error) {
-          const readyMedia = await findReadyMedia().catch(() => undefined);
-          if (readyMedia) {
-            return { media: readyMedia };
-          }
-          throw error;
+      try {
+        await runWorkflow(mediaUploadWorkflow, {
+          args: [
+            {
+              mediaId: media.id,
+              accountId: ctx.session.accountId,
+              applyNightshade: input.applyAiProhibitFilter ?? false,
+            },
+          ],
+          mode: 'execute',
+          workflowIdConflictPolicy: WorkflowIdConflictPolicy.USE_EXISTING,
+          workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+        });
+      } catch (error) {
+        const readyMedia = await findReadyMedia().catch(() => undefined);
+        if (readyMedia) {
+          return { media: readyMedia };
         }
-
-        const readyMedia = await findReadyMedia();
-        if (!readyMedia) {
-          throw new Error('Failed to complete Media upload');
-        }
-        return {
-          media: readyMedia,
-        };
-      }
-
-      if (applyNightshade) {
-        throw new ConflictError({ message: '이미지를 다시 첨부해 주세요' });
-      }
-
-      const mediaStorageOrigin = process.env.MEDIA_STORAGE_SERVICE_ORIGIN;
-      const mediaStorageApiKey = process.env.MEDIA_STORAGE_SERVICE_API_KEY;
-      if (!mediaStorageOrigin || !mediaStorageApiKey) {
-        throw new Error('Media Storage Service is not configured');
-      }
-
-      const representationPath = `/v1/uploads/${encodeURIComponent(media.storageReference)}`;
-      const representationUrl = new URL(representationPath, mediaStorageOrigin);
-      if (representationUrl.pathname !== representationPath) {
-        throw new Error('Media Storage Service returned an unsafe upload reference');
-      }
-
-      const response = await globalThis.fetch(representationUrl, {
-        headers: { Authorization: `Bearer ${mediaStorageApiKey}` },
-        signal: AbortSignal.any([
-          ctx.c.req.raw.signal,
-          AbortSignal.timeout(MEDIA_STORAGE_REQUEST_TIMEOUT_MS),
-        ]),
-      });
-      if (response.status === 404) {
-        throw new Error('Media upload is not complete');
-      }
-      if (response.status !== 200) {
-        throw new Error(
-          `Media Storage Service rejected representation lookup (${response.status})`,
-        );
-      }
-      const representation = representationResponseSchema.safeParse(await response.json());
-      if (!representation.success) {
-        throw new Error('Media Storage Service returned an invalid representation');
-      }
-
-      const completed = await db
-        .update(MediaTable)
-        .set({
-          mediaType: representation.data.mediaType,
-          url: representation.data.url,
-          readyAt: Temporal.Now.instant(),
-          state: MediaState.READY,
-        })
-        .where(
-          and(
-            eq(MediaTable.id, media.id),
-            eq(MediaTable.accountId, ctx.session.accountId),
-            eq(MediaTable.source, MediaSource.LOCAL),
-            eq(MediaTable.state, MediaState.UPLOADING),
-          ),
-        )
-        .returning()
-        .then(first);
-      if (completed) {
-        return { media: completed };
+        throw error;
       }
 
       const readyMedia = await findReadyMedia();
