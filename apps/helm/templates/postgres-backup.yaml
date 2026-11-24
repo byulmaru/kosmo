@@ -33,6 +33,7 @@ metadata:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 ---
+{{- if not $oke }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -60,10 +61,11 @@ rules:
     verbs:
       - update
 ---
+{{- end }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: kosmo-postgres-backup-objectstore-reader
+  name: {{ if $oke }}kosmo-postgres-backup-cnpg{{ else }}kosmo-postgres-backup-objectstore-reader{{ end }}
   labels:
     helm.sh/chart: {{ include "kosmo.chart" . }}
     app.kubernetes.io/name: postgres-backup
@@ -76,7 +78,7 @@ subjects:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: kosmo-postgres-backup-objectstore-reader
+  name: {{ if $oke }}{{ include "kosmo.postgresName" . }}{{ else }}kosmo-postgres-backup-objectstore-reader{{ end }}
 ---
 apiVersion: barmancloud.cnpg.io/v1
 kind: ObjectStore
