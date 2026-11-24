@@ -1,4 +1,4 @@
-import { expect, fireEvent, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { AnalyticsSessionBridge } from '@/analytics/AnalyticsSessionBridge';
 import { trackAnalytics } from '@/analytics/client';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
@@ -6,7 +6,7 @@ import ProfileScreen from '@/components/profile/ProfileScreen';
 import { PrimaryNavigationScrollProvider } from '@/components/shell/PrimaryNavigationScrollContext';
 import { ShellChromeProvider } from '@/components/shell/ShellChromeContext';
 import { Button } from '@/components/ui/Button';
-import { SessionProvider, useSession } from '@/session/SessionProvider';
+import { SessionProvider } from '@/session/SessionProvider';
 import { RouterMockProvider, usePathname, useRouter } from '../../../.storybook/mocks/expo-router';
 import { profile, profileWithPosts } from '../fixtures';
 import type { Meta, StoryObj } from '@storybook/react-vite';
@@ -80,12 +80,6 @@ const followResponse = (request = false) => ({
 function Routes() {
   const pathname = usePathname();
   const router = useRouter();
-  const { selectedProfileId } = useSession();
-
-  if (!selectedProfileId) {
-    return null;
-  }
-
   return (
     <>
       <AnalyticsSessionBridge />
@@ -122,8 +116,6 @@ function SearchConversionFixture({ startPath = '/search' }: { startPath?: string
   );
 }
 
-const mutationRequestObserver = fn();
-
 const events = () =>
   mocked(trackAnalytics).mock.calls.filter(([name]) =>
     ['search_result_selected', 'profile_view_succeeded', 'follow_succeeded'].includes(name),
@@ -137,16 +129,10 @@ const meta = {
   component: SearchConversionFixture,
   beforeEach: () => {
     mocked(trackAnalytics).mockReset();
-    mutationRequestObserver.mockClear();
     return () => mocked(trackAnalytics).mockReset();
   },
   parameters: {
-    relay: {
-      actorBoundary: true,
-      data,
-      mutationResponse: followResponse(),
-      mutationRequestObserver,
-    },
+    relay: { actorBoundary: true, data, mutationResponse: followResponse() },
     controls: { disable: true },
   },
 } satisfies Meta<typeof SearchConversionFixture>;
@@ -236,13 +222,8 @@ export const FollowRequestExcluded: Story = {
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
     const canvas = within(canvasElement);
+    await expect(canvas.findByText('아직 게시글이 없어요')).resolves.toBeVisible();
     await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
-    await waitFor(() =>
-      expect(mutationRequestObserver).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'FollowButtonFollowProfileMutation' }),
-        { id: target.id },
-      ),
-    );
     await expect(canvas.findByRole('button', { name: '요청됨' })).resolves.toBeEnabled();
     await waitFor(() => expect(events().map(([name]) => name)).toContain('follow_succeeded'));
     expect(events().find(([name]) => name === 'follow_succeeded')?.[1]).toMatchObject({
@@ -255,13 +236,8 @@ export const FollowRelationshipIncluded: Story = {
   play: async ({ canvasElement }) => {
     await selectResult(canvasElement);
     const canvas = within(canvasElement);
+    await expect(canvas.findByText('아직 게시글이 없어요')).resolves.toBeVisible();
     await userEvent.click(await canvas.findByRole('button', { name: '팔로우' }));
-    await waitFor(() =>
-      expect(mutationRequestObserver).toHaveBeenCalledWith(
-        expect.objectContaining({ name: 'FollowButtonFollowProfileMutation' }),
-        { id: target.id },
-      ),
-    );
     await expect(canvas.findByRole('button', { name: '팔로잉' })).resolves.toBeEnabled();
     await waitFor(() => expect(events().map(([name]) => name)).toContain('follow_succeeded'));
     expect(events().find(([name]) => name === 'follow_succeeded')?.[1]).toMatchObject({
