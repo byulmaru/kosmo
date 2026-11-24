@@ -68,49 +68,17 @@ jobs:
             const { checkPullRequest } = await import(
               pathToFileURL(process.env.UI_CONTRACT_CHECKER).href
             );
-            const result = checkPullRequest({
+            const { errors, reviewNotes = [] } = checkPullRequest({
               base: process.env.UI_CONTRACT_BASE_SHA,
               bootstrap: process.env.UI_CONTRACT_BOOTSTRAP === '1',
               cwd: process.env.GITHUB_WORKSPACE,
               head: process.env.UI_CONTRACT_HEAD_SHA,
               prBody: event.pull_request?.body,
             });
-            // shortcut: filter legacy global policy/UI boundary errors; remove when old base checkers no longer emit them.
-            const reviewNotes = Array.isArray(result.reviewNotes) ? [...result.reviewNotes] : [];
-            const legacyUiMix = result.errors.find((error) =>
-              error.startsWith('The PR mixes UI contract changes with feature changes;'),
-            );
-            if (legacyUiMix) {
-              const categoryFiles =
-                result.categoryFiles && typeof result.categoryFiles === 'object'
-                  ? result.categoryFiles
-                  : undefined;
-              const uiFiles = Array.isArray(categoryFiles?.ui) ? categoryFiles.ui : [];
-              const featureFiles = Array.isArray(categoryFiles?.feature)
-                ? categoryFiles.feature
-                : [];
-              reviewNotes.push(
-                uiFiles.length > 0 || featureFiles.length > 0
-                  ? [
-                      '이전 checker의 UI/기능 혼합 참고:',
-                      ...(uiFiles.length > 0 ? ['UI 계약 근거:', ...uiFiles.map((file) => `    ${file}`)] : []),
-                      ...(featureFiles.length > 0 ? ['기능/runtime 근거:', ...featureFiles.map((file) => `    ${file}`)] : []),
-                      '기존 component/recipe 재사용 여부와 새 variant/public visual prop의 근거를 리뷰하세요. 이 근거만으로 PR 분리를 요구하지 않습니다.',
-                    ].join('\n')
-                  : '이전 checker가 UI/기능 혼합의 파일별 근거를 제공하지 않습니다. 기존 component/recipe 재사용 여부와 새 variant/public visual prop의 근거를 리뷰하세요. 이 근거만으로 PR 분리를 요구하지 않습니다.',
-              );
-            }
-            const filteredErrors = result.errors.filter(
-              (error) =>
-                !error.startsWith('The PR mixes UI contract changes with feature changes;') &&
-                !error.startsWith(
-                  'The PR mixes enforcement-policy changes with runtime UI or feature changes;',
-                ),
-            );
-            const report = { errors: filteredErrors, reviewNotes };
+            const report = { errors, reviewNotes };
             writeFileSync(process.env.UI_CONTRACT_RESULT, JSON.stringify(report));
-            if (filteredErrors.length > 0) {
-              console.error(`UI contract PR check failed: ${filteredErrors.join('\n')}`);
+            if (errors.length > 0) {
+              console.error(`UI contract PR check failed: ${errors.join('\n')}`);
               process.exitCode = 1;
             } else {
               console.log('UI contract PR check passed.');

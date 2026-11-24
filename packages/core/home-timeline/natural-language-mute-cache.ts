@@ -5,8 +5,6 @@ const cacheKeyPrefix = 'kosmo:home-timeline:natural-language-mute:profile:';
 const keyLifetimeSeconds = 604_800;
 
 const hashKey = (profileId: string) => `${cacheKeyPrefix}${profileId}`;
-const legacyCacheKey = (profileId: string, postId: string) =>
-  `${cacheKeyPrefix}${profileId}:post:${postId}`;
 
 function parseNaturalLanguageMuteDecision(value: unknown): NaturalLanguageMuteDecision | null {
   if (typeof value !== 'string') {
@@ -42,14 +40,7 @@ export async function getNaturalLanguageMuteDecision(
 ): Promise<NaturalLanguageMuteDecision | null> {
   try {
     const result = await runRedisCommand(async (client) => {
-      const cachedDecision = parseNaturalLanguageMuteDecision(
-        await client.hGet(hashKey(profileId), postId),
-      );
-      if (cachedDecision !== null) {
-        return cachedDecision;
-      }
-
-      return parseNaturalLanguageMuteDecision(await client.get(legacyCacheKey(profileId, postId)));
+      return parseNaturalLanguageMuteDecision(await client.hGet(hashKey(profileId), postId));
     });
     return result?.value ?? null;
   } catch {
