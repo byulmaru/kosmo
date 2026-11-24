@@ -1,6 +1,7 @@
 import { ValidationError } from '../error';
 import { postBodyMaxLength } from '../validation/post-policy';
 import {
+  getPostContentMediaIds,
   isPostContentMentionHandleUsernameWithinLimit,
   normalizePostContentHashtagId,
   normalizePostContentHashtagToken,
@@ -154,7 +155,7 @@ export function validateLocalPostContentDocument(
   ) {
     throw new ValidationError('PostContent Mention exceeds its limits', { field: 'mentions' });
   }
-  const mediaCount = document.body.content.filter((block) => block.type === 'media').length;
+  const hasMedia = getPostContentMediaIds(document).length > 0;
   const bodyText =
     authoredBodyText === undefined
       ? postContentBodyToText(document.body)
@@ -171,7 +172,7 @@ export function validateLocalPostContentDocument(
   const bodyTextLength = [...bodyText].length;
   const authoredTextLength = [...(document.summary ?? '')].length + bodyTextLength;
 
-  if (bodyTextLength === 0 && mediaCount === 0) {
+  if (bodyTextLength === 0 && !hasMedia) {
     throw new RangeError('PostContent must contain body text or Media');
   }
   if (authoredTextLength > postBodyMaxLength) {

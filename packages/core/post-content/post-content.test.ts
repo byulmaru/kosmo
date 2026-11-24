@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { projectRemoteNoteContent } from '../activitypub-note-content';
-import { isPostContentDocumentV1, readPostContentDocumentV1 } from './index';
+import {
+  getPostContentMediaIds,
+  isPostContentDocumentV1,
+  readPostContentDocumentV1,
+} from './index';
 import {
   applyPostContentHashtags,
   applyRemotePostContentHashtags,
@@ -27,6 +31,26 @@ const otherHashtagId = '019f6678-86fa-709b-984e-1520766b8444';
 function serializeJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
+
+test('returns Media IDs in document order, retaining repeated references', () => {
+  const firstMediaId = '019f6678-86fa-709b-984e-1520766b8448';
+  const secondMediaId = '019f6678-86fa-709b-984e-1520766b8447';
+  const document: PostContentDocumentV1 = {
+    version: 1,
+    summary: null,
+    body: {
+      type: 'doc',
+      content: [
+        { type: 'media', attrs: { mediaId: firstMediaId } },
+        { type: 'paragraph', content: [{ type: 'text', text: 'body' }] },
+        { type: 'media', attrs: { mediaId: secondMediaId } },
+        { type: 'media', attrs: { mediaId: firstMediaId } },
+      ],
+    },
+  };
+
+  assert.deepEqual(getPostContentMediaIds(document), [firstMediaId, secondMediaId, firstMediaId]);
+});
 
 test('returns deduplicated Profile identities from Mention body nodes only', () => {
   const document = canonicalizePostContentDocument({

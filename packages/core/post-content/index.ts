@@ -201,6 +201,12 @@ export function readPostContentDocumentV1(value: unknown): PostContentDocumentV1
   return body === null ? null : ({ ...value, body } as PostContentDocumentV1);
 }
 
+export function getPostContentMediaIds(document: PostContentDocumentV1): string[] {
+  return document.body.content.flatMap((block) =>
+    block.type === 'media' ? [block.attrs.mediaId] : [],
+  );
+}
+
 export function getFirstPostContentLink(document: PostContentDocumentV1): string | null {
   for (const block of document.body.content) {
     if (block.type !== 'paragraph') {
@@ -224,7 +230,7 @@ export function getFirstPostContentLink(document: PostContentDocumentV1): string
 
 export function getPostContentLinkPreviewUrl(value: unknown): string | null {
   const document = readPostContentDocumentV1(value);
-  if (document === null || document.body.content.some((block) => block.type === 'media')) {
+  if (document === null || getPostContentMediaIds(document).length > 0) {
     return null;
   }
 

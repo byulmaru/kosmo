@@ -28,6 +28,7 @@ import {
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
+import { getPostContentMediaIds } from '@kosmo/core/post-content';
 import {
   getPostContentMentionProfileIds,
   postContentDocumentToHtml,
@@ -141,8 +142,9 @@ const loadLocalPostNoteForProjection = async (
     return null;
   }
 
-  const mediaNodes = row.contentDocument.body.content.filter((node) => node.type === 'media');
-  const mediaAttachments = await projectLocalMediaAttachments(mediaNodes);
+  const mediaAttachments = await projectLocalMediaAttachments(
+    getPostContentMediaIds(row.contentDocument),
+  );
   if (!mediaAttachments) {
     return null;
   }
@@ -381,15 +383,11 @@ const projectLocalQuote = async (
 };
 
 const projectLocalMediaAttachments = async (
-  mediaNodes: readonly Extract<
-    PostContentDocumentV1['body']['content'][number],
-    { type: 'media' }
-  >[],
+  mediaIds: readonly string[],
 ): Promise<readonly Image[] | null> => {
-  if (mediaNodes.length === 0) {
+  if (mediaIds.length === 0) {
     return [];
   }
-  const mediaIds = mediaNodes.map((node) => node.attrs.mediaId);
   if (new Set(mediaIds).size !== mediaIds.length) {
     return null;
   }
@@ -414,8 +412,8 @@ const projectLocalMediaAttachments = async (
 
   const mediaById = new Map(rows.map((media) => [media.id, media]));
   const attachments: Image[] = [];
-  for (const node of mediaNodes) {
-    const media = mediaById.get(node.attrs.mediaId);
+  for (const mediaId of mediaIds) {
+    const media = mediaById.get(mediaId);
     if (!media?.url || !media.mediaType) {
       return null;
     }

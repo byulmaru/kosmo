@@ -1,6 +1,7 @@
 import { db, Instances, PostContents, Posts, Profiles } from '@kosmo/core/db';
 import { MediaState, PostState, PostVisibility } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
+import { getPostContentMediaIds } from '@kosmo/core/post-content';
 import { postContentDocumentToText } from '@kosmo/core/post-content/server';
 import { and, eq, getColumns, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
@@ -81,14 +82,12 @@ PostContent.implement({
       nullable: true,
       grantScopes: ['readMedia'],
       resolve: async (content, _, ctx) => {
-        const mediaNodes = content.document.body.content.filter((block) => block.type === 'media');
-        if (mediaNodes.length === 0) {
+        const mediaIds = getPostContentMediaIds(content.document);
+        if (mediaIds.length === 0) {
           return [];
         }
 
-        const mediaRows = await Promise.all(
-          mediaNodes.map((node) => mediaByIdLoader(ctx).load(node.attrs.mediaId)),
-        );
+        const mediaRows = await Promise.all(mediaIds.map((id) => mediaByIdLoader(ctx).load(id)));
         const result: NonNullable<(typeof mediaRows)[number]>[] = [];
 
         for (const media of mediaRows) {
