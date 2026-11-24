@@ -62,7 +62,7 @@ const themeKey = {};
 
 mockModule('react-native', {
   processColor: (value: string) =>
-    value === '#4080c080' ? { r: 64, g: 128, b: 192, a: 128 / 255 } : undefined,
+    value === '#4080c080' ? 0x804080c0 : undefined,
   Animated: {
     Color: AnimatedColorMock,
     Value: AnimatedValueMock,
