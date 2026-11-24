@@ -27,31 +27,73 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ARGOCD_SERVER: argocd-aws.tail1fdd55.ts.net:443
-  AWS_REGION: ap-northeast-2
+  TF_STATE_NAMESPACE: ${{ vars.TF_STATE_NAMESPACE }}
   TF_IN_AUTOMATION: 'true'
   TF_PLAN_ARTIFACT: terraform-plan
   TF_REGISTRY_CLIENT_TIMEOUT: '60'
   TF_REGISTRY_DISCOVERY_RETRY: '3'
   TF_ROOT: apps/terraform
-  TF_STATE_BUCKET: byulmaru-terraform-state
-  TF_STATE_KEY: kosmo/terraform.tfstate
 
 jobs:
   plan:
     name: Terraform Plan
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+      - &oci_state_auth
+        name: Authenticate to OCI Object Storage
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        env:
+          OCI_IDENTITY_DOMAIN_URL: ${{ vars.OCI_IDENTITY_DOMAIN_URL }}
+          OCI_OIDC_CLIENT_ID: ${{ vars.OCI_OIDC_CLIENT_ID }}
+          OCI_OIDC_CLIENT_SECRET: ${{ secrets.OCI_OIDC_CLIENT_SECRET }}
         with:
-          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          script: |
+            const { generateKeyPairSync } = require('node:crypto');
+            const { mkdtempSync, writeFileSync } = require('node:fs');
+            const { join } = require('node:path');
+            const { OCI_IDENTITY_DOMAIN_URL, OCI_OIDC_CLIENT_ID, OCI_OIDC_CLIENT_SECRET, RUNNER_TEMP } = process.env;
+            const domain = new URL(OCI_IDENTITY_DOMAIN_URL);
+            if (domain.protocol !== 'https:' || !domain.hostname.endsWith('.identity.oraclecloud.com')) {
+              throw new Error('Expected an OCI Identity Domain HTTPS URL');
+            }
+            const jwt = await core.getIDToken();
+            core.setSecret(jwt);
+            const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+            const credentials = Buffer.from(`${OCI_OIDC_CLIENT_ID}:${OCI_OIDC_CLIENT_SECRET}`).toString('base64');
+            core.setSecret(credentials);
+            const response = await fetch(new URL('/oauth2/v1/token', domain), {
+              method: 'POST',
+              headers: { authorization: `Basic ${credentials}` },
+              redirect: 'error',
+              signal: AbortSignal.timeout(30000),
+              body: new URLSearchParams({
+                grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+                requested_token_type: 'urn:oci:token-type:oci-rpst',
+                subject_token_type: 'jwt',
+                subject_token: jwt,
+                public_key: publicKey.export({ type: 'spki', format: 'der' }).toString('base64'),
+                res_type: 'githubactions',
+                rpst_exp: '60',
+              }),
+            });
+            if (!response.ok) throw new Error(`OCI token exchange failed (${response.status})`);
+            const { token } = await response.json();
+            if (!token) throw new Error('OCI token exchange returned no RPST');
+            core.setSecret(token);
+            const directory = mkdtempSync(join(RUNNER_TEMP, 'oci-rpst-'));
+            const privateKeyPath = join(directory, 'private.pem');
+            const tokenPath = join(directory, 'rpst');
+            writeFileSync(privateKeyPath, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+            writeFileSync(tokenPath, token, { mode: 0o600 });
+            core.exportVariable('OCI_RESOURCE_PRINCIPAL_VERSION', '2.2');
+            core.exportVariable('OCI_RESOURCE_PRINCIPAL_RPST', tokenPath);
+            core.exportVariable('OCI_RESOURCE_PRINCIPAL_PRIVATE_PEM', privateKeyPath);
+            core.exportVariable('OCI_RESOURCE_PRINCIPAL_REGION', 'ap-chuncheon-1');
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
@@ -63,55 +105,14 @@ jobs:
           export_environment_variables: true
           cleanup_credentials: true
 
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
-        with:
-          oauth-client-id: ${{ vars.TAILSCALE_OAUTH_CLIENT_ID }}
-          audience: ${{ vars.TAILSCALE_AUDIENCE }}
-          tags: tag:github-actions
-
-      - name: Authenticate to Argo CD
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const githubToken = await core.getIDToken();
-            core.setSecret(githubToken);
-
-            const response = await fetch(`https://${process.env.ARGOCD_SERVER}/api/dex/token`, {
-              method: "POST",
-              headers: {
-                authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
-              },
-              body: new URLSearchParams({
-                connector_id: "github-actions",
-                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
-                scope: "openid email profile federated:id",
-                requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
-                subject_token: githubToken,
-                subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-              }),
-            });
-
-            if (!response.ok) {
-              throw new Error(`Dex token exchange failed: ${response.status} ${await response.text()}`);
-            }
-
-            const { access_token: dexToken } = await response.json();
-            if (!dexToken) {
-              throw new Error("Dex token response did not include an access token.");
-            }
-
-            core.setSecret(dexToken);
-            core.exportVariable("ARGOCD_AUTH_TOKEN", dexToken);
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: '1.15.6'
+          terraform_version: '1.15.7'
 
       - name: Terraform init
         working-directory: ${{ env.TF_ROOT }}
-        run: terraform init
+        run: terraform init -input=false -backend-config="namespace=${TF_STATE_NAMESPACE}"
 
       - name: Terraform validate
         working-directory: ${{ env.TF_ROOT }}
@@ -243,11 +244,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
-        with:
-          role-to-assume: ${{ vars.AWS_TERRAFORM_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+      - *oci_state_auth
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
@@ -259,62 +256,14 @@ jobs:
           export_environment_variables: true
           cleanup_credentials: true
 
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@780049a30b6ff5c378a9e7b389d15ece7a204888 # v4.1.3
-        with:
-          oauth-client-id: ${{ vars.TAILSCALE_OAUTH_CLIENT_ID }}
-          audience: ${{ vars.TAILSCALE_AUDIENCE }}
-          tags: tag:github-actions
-
-      - name: Authenticate to Argo CD
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
-        with:
-          script: |
-            const githubToken = await core.getIDToken();
-            core.setSecret(githubToken);
-
-            const response = await fetch(`https://${process.env.ARGOCD_SERVER}/api/dex/token`, {
-              method: "POST",
-              headers: {
-                authorization: `Basic ${Buffer.from("argo-cd-cli:").toString("base64")}`,
-              },
-              body: new URLSearchParams({
-                connector_id: "github-actions",
-                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
-                scope: "openid email profile federated:id",
-                requested_token_type: "urn:ietf:params:oauth:token-type:access_token",
-                subject_token: githubToken,
-                subject_token_type: "urn:ietf:params:oauth:token-type:id_token",
-              }),
-            });
-
-            if (!response.ok) {
-              throw new Error(`Dex token exchange failed: ${response.status} ${await response.text()}`);
-            }
-
-            const { access_token: dexToken } = await response.json();
-            if (!dexToken) {
-              throw new Error("Dex token response did not include an access token.");
-            }
-
-            core.setSecret(dexToken);
-            core.exportVariable("ARGOCD_AUTH_TOKEN", dexToken);
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
-          terraform_version: '1.15.6'
-
-      - name: Setup AWS CLI
-        uses: jdx/mise-action@3c2e0cf82a5b2e5249f0d3635a4d83d0ae861518 # v4.2.5
-        with:
-          version: '2026.9.2'
-          tool_versions: |
-            aws-cli 2.35.14
+          terraform_version: '1.15.7'
 
       - name: Terraform init
         working-directory: ${{ env.TF_ROOT }}
-        run: terraform init
+        run: terraform init -input=false -backend-config="namespace=${TF_STATE_NAMESPACE}"
 
       - name: Download reviewed Terraform plan
         if: ${{ github.event_name == 'push' }}
@@ -395,29 +344,12 @@ jobs:
           normalize_plan() {
             terraform show -json "$1" \
               | jq -S '
-                  def normalize_argocd_application:
-                    if .type == "argocd_application" then
-                      del(
-                        .change.before.status,
-                        .change.after.status,
-                        .change.before.metadata[]?.generation,
-                        .change.after.metadata[]?.generation,
-                        .change.before.metadata[]?.resource_version,
-                        .change.after.metadata[]?.resource_version,
-                        .change.before.metadata[]?.uid,
-                        .change.after.metadata[]?.uid
-                      )
-                    else
-                      .
-                    end;
-
                   {
                     configuration,
                     variables,
                     resource_changes: [
                       (.resource_changes // [])[]
                       | select(.change.actions != ["no-op"])
-                      | normalize_argocd_application
                     ],
                     output_changes,
                     checks
@@ -465,31 +397,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          cleanup_lock_on_cancel() {
-            status=$?
-            if [[ -n "${terraform_pid:-}" ]]; then
-              kill -INT "${terraform_pid}" 2>/dev/null || true
-              wait "${terraform_pid}" 2>/dev/null || true
-            fi
-            sleep 5
-            aws s3api delete-object \
-              --bucket "${TF_STATE_BUCKET}" \
-              --key "${TF_STATE_KEY}.tflock" || true
-            exit "${status}"
-          }
-
-          trap cleanup_lock_on_cancel INT TERM
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            terraform apply -auto-approve &
+            terraform apply -auto-approve
           else
-            terraform apply -auto-approve terraform.tfplan &
+            terraform apply -auto-approve terraform.tfplan
           fi
-          terraform_pid=$!
-          wait "${terraform_pid}"
-
-      - name: Cleanup lock after cancelled apply
-        if: ${{ cancelled() }}
-        run: |
-          aws s3api delete-object \
-            --bucket "${TF_STATE_BUCKET}" \
-            --key "${TF_STATE_KEY}.tflock"

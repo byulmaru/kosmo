@@ -1,5 +1,4 @@
 locals {
-  aws_region = "ap-northeast-2"
 
   firebase_project_id  = "byulmaru-kosmo"
   github_owner         = "byulmaru"
@@ -28,17 +27,6 @@ locals {
   ])
 }
 
-provider "aws" {
-  region = local.aws_region
-
-  default_tags {
-    tags = {
-      ManagedBy = "terraform"
-      Project   = "kosmo"
-    }
-  }
-}
-
 provider "google-beta" {
   project               = local.firebase_project_id
   billing_project       = local.firebase_project_id
@@ -54,10 +42,6 @@ provider "google-beta" {
 data "google_project" "firebase" {
   provider   = google-beta
   project_id = local.firebase_project_id
-}
-
-data "aws_eks_cluster" "kosmo" {
-  name = "byulmaru"
 }
 
 resource "google_project_service" "required" {
@@ -291,7 +275,7 @@ resource "google_iam_workload_identity_pool_provider" "kosmo_worker" {
   attribute_condition = "assertion.sub in ${jsonencode(local.firebase_fcm_sender_subjects)}"
 
   oidc {
-    issuer_uri = data.aws_eks_cluster.kosmo.identity[0].oidc[0].issuer
+    issuer_uri = "https://oidc.eks.ap-northeast-2.amazonaws.com/id/C24D412565C3ABBE4B0D047FF5AC1BC3"
   }
 }
 
