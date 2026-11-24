@@ -63,6 +63,7 @@ temporal:
       prod: 30d
 postgres:
   existingCluster: ''
+  clusterSpec: {}
   storage:
     size: 10Gi
     storageClass: ''
