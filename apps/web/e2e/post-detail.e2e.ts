@@ -23,7 +23,7 @@ test.beforeEach(async () => {
 
 const gotoPostDetail = async (page: Page, path: string) => {
   await page.goto(path);
-  await expect(page.getByRole('article', { current: true })).toBeVisible();
+  await expect(page.locator('[role="article"][aria-current="true"]')).toBeVisible();
 };
 
 const expectGraphQLSuccess = async (response: Awaited<ReturnType<Page['waitForResponse']>>) => {
