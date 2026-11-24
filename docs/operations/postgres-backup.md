@@ -7,7 +7,7 @@ Production CloudNativePG Cluster는 Barman Cloud CNPG-I plugin으로 다음 경�
 - Cluster namespace: `kosmo-prod`
 - Cluster: `kosmo-postgres`
 - Backup ServiceAccount와 ObjectStore: `kosmo-postgres-backup`
-- Destination: `s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/`
+- Destination: `s3://byulmaru-kosmo-prod-backup/kosmo-prod/`
 - WAL archive timeout: 4분(업로드·관측 시간을 포함한 RPO 5분 목표에 1분 여유)
 - Base backup: 매일 03:00 KST, 최초 동기화 시 즉시 1회
 - PITR recovery window: 7일
@@ -15,6 +15,7 @@ Production CloudNativePG Cluster는 Barman Cloud CNPG-I plugin으로 다음 경�
 - 목표: RPO 5분 이내, restore Cluster Ready까지 RTO 60분 이내
 
 Backup 내용, database credential과 row 값은 command output, workflow log 또는 Linear에 남기지 않는다. Prometheus/Slack 자동 알림은 `PROD-552` 범위이며, 그 전에는 아래 상태를 수동 확인한다.
+아래 `kubectl` 명령은 OKE의 `oci` 컨텍스트를 사용한다.
 
 ## Migration 전환 backup gate
 
@@ -52,8 +53,8 @@ kubectl auth can-i update objectstores.barmancloud.cnpg.io/kosmo-postgres-backup
   --subresource=status \
   --namespace=kosmo-prod \
   --as=system:serviceaccount:kosmo-prod:kosmo-postgres-backup
-aws eks list-pod-identity-associations --cluster-name byulmaru --region ap-northeast-2
-kubectl logs deployment/barman-cloud-plugin-barman-cloud -n cnpg-system --since=30m
+kubectl describe vaultstaticsecret kosmo-postgres-backup-s3 -n kosmo-prod
+kubectl logs deployment/plugin-barman-cloud -n cnpg-system --since=30m
 kubectl get pod -n kosmo-prod -l cnpg.io/cluster=kosmo-postgres \
   -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].name}{"\n"}{end}'
 ```
@@ -64,8 +65,8 @@ kubectl get pod -n kosmo-prod -l cnpg.io/cluster=kosmo-postgres \
 kubectl logs -n kosmo-prod POD_NAME -c PLUGIN_SIDECAR_NAME --since=30m
 ```
 
-- `AccessDenied`: association의 namespace, ServiceAccount, role ARN과 요청된 S3 prefix를 확인한다.
-- credential endpoint 오류: `eks-pod-identity-agent` 상태와 Pod 재생성 후 credential 주입 여부를 확인한다.
+- `AccessDenied`: OCI 전용 사용자의 버킷 권한, ObjectStore의 endpoint와 요청 경로를 확인한다.
+- 자격 증명 오류: `VaultStaticSecret` 상태와 `kosmo-postgres-backup-s3` Secret의 `ACCESS_KEY_ID`, `ACCESS_SECRET_KEY` 키 존재 여부를 확인한다.
 - ObjectStore/plugin 연결 오류: `cnpg-system`의 plugin Deployment, client/server Certificate와 ObjectStore condition을 확인한다. `auth whoami`가 요청한 ServiceAccount가 아니라 관리자 identity를 반환하면 proxy가 impersonation을 무시한 것이므로 이어지는 `can-i`의 `yes`를 workload 권한 증거로 사용하지 않는다. 유효한 ServiceAccount identity에서 두 `can-i` 결과가 각각 `yes`인지 확인한다. 첫 번째는 정확한 `kosmo-postgres-backup` ObjectStore 본문 조회이고, 두 번째는 같은 이름의 `objectstores/status` recovery-window 상태 갱신이다. 본문 `update`·`patch`·`create`·`delete`나 다른 ObjectStore 이름에 대한 권한은 `no`여야 한다.
 - WAL archive 오류가 지속되면 새 base backup을 실행하기 전에 원인을 해결한다. WAL 연속성이 끊긴 기간은 복구 가능 시점에서 제외될 수 있다.
 
@@ -96,7 +97,7 @@ spec:
     name: barman-cloud.cloudnative-pg.io
 ```
 
-`Backup` phase가 `completed`가 된 뒤 S3의 `kosmo-prod/` 아래에 새 versioned object가 생성됐는지 확인한다. Object key나 내용을 Linear에 복사하지 않는다.
+`Backup` phase가 `completed`가 된 뒤 OCI 버킷의 `kosmo-prod/kosmo-postgres/base/` 아래에 해당 전체 백업이 생성됐는지 확인한다. Object key나 내용을 Linear에 복사하지 않는다.
 
 ## 격리 PITR rehearsal
 
@@ -105,6 +106,8 @@ spec:
 ### 1. 복구 지점과 불변 기준 기록
 
 고유한 `RESTORE_POINT_NAME`을 정한다. Application의 쓰기 경로를 maintenance/read-only 상태로 전환하고 실제 writer가 멈춘 것을 확인한다. 쓰기가 중지된 동안 원본 database의 한 read-only transaction에서 비민감 집계값을 기록한다.
+
+복구 지점보다 먼저 완료된 `Backup`의 `status.backupId`를 `BACKUP_ID`로 기록한다.
 
 ```sql
 BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
@@ -138,10 +141,20 @@ FROM pg_stat_archiver;
 
 ### 2. Restore namespace와 source ObjectStore 생성
 
-Pod Identity association은 미리 `kosmo-prod-restore/kosmo-postgres-backup`에 연결되어 있다.
+격리된 namespace를 만들고 OpenBao에서 기존 OCI S3 자격 증명을 읽어 해당 namespace의 Secret에 저장한다. OpenBao에 Google OIDC로 로그인한 관리자 세션에서 실행한다.
 
 ```sh
-kubectl create namespace kosmo-prod-restore
+export VAULT_ADDR=https://openbao.tail1fdd55.ts.net
+vault login -method=oidc -no-print
+kubectl --context oci create namespace kosmo-prod-restore
+vault kv get -mount=secret -format=json kubernetes/kosmo/prod/postgres-backup \
+  | jq -e '{apiVersion: "v1", kind: "Secret", type: "Opaque",
+      metadata: {name: "kosmo-postgres-backup-s3", namespace: "kosmo-prod-restore"},
+      stringData: {
+        ACCESS_KEY_ID: (.data.data.ACCESS_KEY_ID | strings | select(length > 0)),
+        ACCESS_SECRET_KEY: (.data.data.ACCESS_SECRET_KEY | strings | select(length > 0))
+      }}' \
+  | kubectl --context oci create -f -
 ```
 
 다음 manifest를 적용한다.
@@ -160,14 +173,24 @@ metadata:
   namespace: kosmo-prod-restore
 spec:
   configuration:
-    destinationPath: s3://byulmaru-kosmo-prod-postgresql-backups-822638974464/kosmo-prod/
+    destinationPath: s3://byulmaru-kosmo-prod-backup/kosmo-prod/
+    endpointURL: https://ax1l6f331yog.compat.objectstorage.ap-chuncheon-1.oci.customer-oci.com
     s3Credentials:
-      inheritFromIAMRole: true
+      accessKeyId:
+        name: kosmo-postgres-backup-s3
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: kosmo-postgres-backup-s3
+        key: ACCESS_SECRET_KEY
+  instanceSidecarConfiguration:
+    env:
+      - name: AWS_DEFAULT_REGION
+        value: ap-chuncheon-1
 ```
 
 ### 3. 새 Cluster를 named restore point로 복구
 
-`RESTORE_POINT_NAME`을 1단계에서 생성한 이름으로 바꿔 적용한다. `serverName`은 source Cluster 이름인 `kosmo-postgres`로 유지한다.
+`BACKUP_ID`와 `RESTORE_POINT_NAME`을 1단계에서 기록한 값으로 바꾼다. `SOURCE_POSTGRES_IMAGE`는 원본의 `spec.imageName`으로 바꾼다. `serverName`은 원본 Cluster 이름인 `kosmo-postgres`를 사용한다. 원본의 볼륨이 50Gi보다 크면 복구 볼륨도 원본 크기에 맞춘다.
 
 ```yaml
 apiVersion: postgresql.cnpg.io/v1
@@ -177,6 +200,7 @@ metadata:
   namespace: kosmo-prod-restore
 spec:
   instances: 1
+  imageName: SOURCE_POSTGRES_IMAGE
   serviceAccountName: kosmo-postgres-backup
   bootstrap:
     recovery:
@@ -184,6 +208,7 @@ spec:
       database: kosmo
       owner: kosmo
       recoveryTarget:
+        backupID: 'BACKUP_ID'
         targetName: 'RESTORE_POINT_NAME'
   externalClusters:
     - name: production
@@ -193,7 +218,8 @@ spec:
           barmanObjectName: kosmo-postgres-backup
           serverName: kosmo-postgres
   storage:
-    size: 10Gi
+    size: 50Gi
+    storageClass: oci-bv
 ```
 
 이 Cluster에는 `.spec.plugins`와 `ScheduledBackup`을 추가하지 않는다. 따라서 source ObjectStore는 recovery input으로만 사용되고 restore Cluster는 같은 destination에 WAL이나 base backup을 쓰지 않는다.
@@ -221,10 +247,11 @@ CNPG가 생성한 `kosmo-postgres-restore-app` Secret을 `kosmo` owner와 `kosmo
 검증 결과를 기록한 뒤 restore namespace만 제거한다.
 
 ```sh
-kubectl delete namespace kosmo-prod-restore
-kubectl get namespace kosmo-prod kosmo-prod-restore
-aws s3api get-bucket-versioning \
-  --bucket byulmaru-kosmo-prod-postgresql-backups-822638974464
+kubectl --context oci delete namespace kosmo-prod-restore
+kubectl --context oci get namespace kosmo-prod
+oci os bucket get --region ap-chuncheon-1 \
+  --namespace-name ax1l6f331yog --name byulmaru-kosmo-prod-backup \
+  --query 'data.name' --raw-output
 ```
 
 `kosmo-prod`와 source S3 bucket은 유지되어야 한다. Restore 실패 시 원인을 기록하고 namespace를 정리한 뒤 같은 달 안에 재실행한다. 실제 backup과 최초 restore 증거가 없으면 `PROD-546` 또는 관련 OpenSpec을 완료·archive하지 않는다.
