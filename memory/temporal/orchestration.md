@@ -149,6 +149,7 @@
   transition effects는 domain contract가 정한 FIFO queue에 넣고, queue 순서를 보존해 drain한다.
 - `settleEffects` 같은 deterministic Workflow 전용 공통 로직은 `workflows` 아래 공용 모듈 한 곳에 둔다. 특정 domain Workflow 파일에 복사하거나 그 파일의 private helper로 두지 않는다.
 - Workflow effect는 개수와 관계없이 `settleEffects`로 정산해 종료와 실패 보고 경계를 일관되게 유지한다.
+- ESLint는 Workflow 소스에서 `Promise.allSettled()` 결과를 바로 버리는 호출을 오류로 처리한다. 이 경로에서는 인라인 ESLint 설정을 적용하지 않는다.
 - Home timeline fanout의 신규 history는 `patched('home-timeline-batch-fanout-v1')` 뒤에서 수신자 페이지를 최대
   1,000개까지 읽고, 프로필 ID를 최대 100개씩 묶은 `homeTimelineInsertBatchWorkflow` child를 순차 실행한다.
   각 batch child는 입력을 최대 100개로 검증한 뒤 기존 `insertHomeTimelinePostActivity`를 프로필별로 실행하고
