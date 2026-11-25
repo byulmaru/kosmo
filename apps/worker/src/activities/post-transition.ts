@@ -2,12 +2,12 @@ import { createHash } from 'node:crypto';
 import { db, first, Posts } from '@kosmo/core/db';
 import { PostState } from '@kosmo/core/enums';
 import { KosmoError, NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
+import { createPostPersisted, deletePostPersisted } from '@kosmo/core/post/persistence';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postCreateInputKey } from '@kosmo/core/temporal/post';
 import { postCreateIdentities } from '@kosmo/core/temporal/post-admission';
 import { postQuoteOwnerWorkflow } from '@kosmo/core/temporal/post-quote-owner';
 import { eq, sql } from 'drizzle-orm';
-import { createPostPersisted, deletePostPersisted } from '../../../../packages/core/services/post';
 import type {
   PostCreateInput,
   PostDeleteInput,

@@ -15,9 +15,9 @@ import { ConflictError, KosmoError, NotFoundError, ValidationError } from '@kosm
 import {
   createPostInTransaction,
   isActivityPubPostUriConflict,
-  ProfilePairBlockedError,
   resolveActivityPubPostCreatedAt,
-} from '@kosmo/core/services';
+} from '@kosmo/core/post/persistence';
+import { ProfilePairBlockedError } from '@kosmo/core/services';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { postCreateInputKey } from '@kosmo/core/temporal/post';
 import { postCreateIdentities, quotePostCreateInput } from '@kosmo/core/temporal/post-admission';

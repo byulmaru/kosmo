@@ -44,7 +44,8 @@ import {
   deleteNotificationBySource,
 } from './notification';
 import { isNotificationSuppressed, materializeNotification } from './notification-policy';
-import { createPost, createPostPersisted, repostPost } from './post';
+import { createPost, repostPost } from './post';
+import { createPostPersisted } from './post-persistence';
 import { followProfile, removeInboundFollow, unfollowProfile } from './profile-follow.test-helpers';
 import { muteProfile, unmuteProfile } from './profile-mute';
 

@@ -23,7 +23,10 @@ import {
   ProfileState,
 } from '../enums';
 import { postContentDocumentFromText } from '../post-content/server';
-import { createPostPersisted as createPost, deletePostPersisted as deletePost } from './post';
+import {
+  createPostPersisted as createPost,
+  deletePostPersisted as deletePost,
+} from './post-persistence';
 import { applyPostQuoteConsent } from './post-quote-consent';
 import type { InstanceKind as InstanceKindType } from '../enums';
 

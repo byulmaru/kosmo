@@ -3,6 +3,7 @@ import '@kosmo/core/polyfill';
 import { ActivityPubActors, ActivityPubPosts, db, first, Posts } from '@kosmo/core/db';
 import { PostQuoteConsentStatus, PostState } from '@kosmo/core/enums';
 import { KosmoError, ValidationError } from '@kosmo/core/error';
+import { applyPostQuoteConsent, createPostInTransaction } from '@kosmo/core/post/persistence';
 import {
   isLocalQuoteAllowedByPolicy,
   loadQuoteConsentForPost,
@@ -24,8 +25,6 @@ import {
 import { Context } from '@temporalio/activity';
 import { WorkflowClient } from '@temporalio/client';
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { createPostInTransaction } from '../../../../packages/core/services/post';
-import { applyPostQuoteConsent } from '../../../../packages/core/services/post-quote-consent';
 import { assertLocalPostRequestAuthorization } from './post-create-authorization';
 import type {
   PreparedQuoteConsent,

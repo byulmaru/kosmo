@@ -1,3 +1,11 @@
+export type {
+  ActivityPubPostInput,
+  ApplyPostQuoteConsentInput,
+  LegacyLocalPostInput,
+  LocalPostInput,
+  PostCreateInput,
+  RemoteMediaCandidate,
+} from '../post/inputs';
 export { materializeInboundReaction, undoInboundReaction } from './activitypub-reaction';
 export { createBookmark, deleteBookmark } from './bookmark';
 export { createReplyNotification } from './create-reply-notification';
@@ -15,22 +23,8 @@ export {
   deleteRepostNotification,
 } from './notification';
 export { isNotificationSuppressed } from './notification-policy';
-export type {
-  ActivityPubPostInput,
-  LegacyLocalPostInput,
-  LocalPostInput,
-  PostCreateInput,
-  RemoteMediaCandidate,
-} from './post';
-export {
-  createPost,
-  createPostInTransaction,
-  deletePost,
-  isActivityPubPostUriConflict,
-  repostPost,
-  resolveActivityPubPostCreatedAt,
-} from './post';
-export type { AppliedPostQuoteConsent, ApplyPostQuoteConsentInput } from './post-quote-consent';
+export { createPost, deletePost, repostPost } from './post';
+export type { AppliedPostQuoteConsent } from './post-quote-consent';
 export { isLocalQuoteAllowedByPolicy } from './post-quote-consent';
 export type { PostQuoteConsentRow, QuoteSource } from './post-quote-identity';
 export {

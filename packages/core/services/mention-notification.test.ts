@@ -38,7 +38,7 @@ import {
 import { notificationSourceAvailabilityWhere } from '../visibility/notification';
 import { createReplyNotification } from './create-reply-notification';
 import { createMentionNotification } from './mention-notification';
-import { createPostPersisted } from './post';
+import { createPostPersisted } from './post-persistence';
 import { createQuoteNotification } from './quote-notification';
 
 const instanceIds: string[] = [];

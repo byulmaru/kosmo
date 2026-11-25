@@ -22,6 +22,7 @@
     "./post-content": "./post-content/index.ts",
     "./post-content/server": "./post-content/server.ts",
     "./post-content/server-document": "./post-content/server-document.ts",
+    "./post/persistence": "./post/persistence.ts",
     "./polyfill": "./polyfill.ts",
     "./visibility": "./visibility/index.ts",
     "./profile": "./profile.ts",
@@ -57,7 +58,6 @@
   },
   "dependencies": {
     "@graphql-yoga/subscription": "5.1.1",
-    "@kosmo/fedify": "workspace:*",
     "@redis/client": "^6.3.0",
     "@sentry/node": "^10.66.0",
     "@temporalio/client": "^1.25.0",

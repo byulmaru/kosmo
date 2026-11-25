@@ -1,5 +1,5 @@
 import type { ErrorCode } from '../error';
-import type { LocalPostInput } from '../services/post';
+import type { LocalPostInput } from '../post/inputs';
 import type { WorkflowDefinition, WorkflowUpdateDefinition } from './client';
 import type { PostAnalyticsPlatform } from './post-create';
 

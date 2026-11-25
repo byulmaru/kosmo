@@ -34,8 +34,8 @@ import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { deletePostPersisted as DeletePostPersisted } from '@kosmo/core/post/persistence';
 import type * as CoreServices from '@kosmo/core/services';
-import type { deletePostPersisted as DeletePostPersisted } from '../../core/services/post';
 import type { handleInboundCreate as handleInboundCreateType } from './inbound-create';
 import type { handleInboundDelete as handleInboundDeleteType } from './inbound-delete';
 
@@ -79,7 +79,7 @@ describe('inbound Delete dispatch', () => {
     } = await import('@kosmo/core/db'));
     const { seedDatabase } = (await import('@kosmo/core/db/seed')) as typeof CoreSeed;
     ({ createPost } = await import('@kosmo/core/services'));
-    ({ deletePostPersisted } = await import('../../core/services/post'));
+    ({ deletePostPersisted } = await import('@kosmo/core/post/persistence'));
     ({ handleInboundCreate } = await import('./inbound-create'));
     ({ handleInboundDelete } = await import('./inbound-delete'));
     const { localInstance } = await seedDatabase({ publicOrigin });

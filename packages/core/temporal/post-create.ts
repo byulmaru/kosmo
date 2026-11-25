@@ -1,5 +1,5 @@
 import type { ErrorCode } from '../error';
-import type { ActivityPubPostInput, LocalPostInput } from '../services/post';
+import type { ActivityPubPostInput, LocalPostInput } from '../post/inputs';
 import type { WorkflowDefinition } from './client';
 
 export const POST_CREATE_WORKFLOW_TYPE = 'postCreateWorkflow';
