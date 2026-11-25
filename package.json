@@ -5,6 +5,7 @@
   "packageManager": "pnpm@11.28.8+sha512.f6988a32046b9a3f78d7d7ee0747926bbe905ff9dff73bf19abb87bd7d1906a2ac90d93f73be32b5f9e14c2899569bcb0c9c5ec8a19e083f5d71bbab6dd9e0b8",
   "scripts": {
     "build:sentry-artifacts": "node scripts/build-sentry-artifacts.mjs",
+    "check:structure": "eslint --no-inline-config --config eslint.structure.config.mjs apps packages",
     "db:test:down": "node scripts/test-db.mjs down",
     "db:test:drop": "node scripts/test-db.mjs drop",
     "db:test:push": "env DATABASE_URL=\"${DATABASE_URL:-postgres://kosmo:kosmo@localhost:54329/kosmo_test}\" pnpm --filter @kosmo/core db:migrate && env DATABASE_URL=\"${DATABASE_URL:-postgres://kosmo:kosmo@localhost:54329/kosmo_test}\" NODE_OPTIONS='--preserve-symlinks --preserve-symlinks-main' ./packages/core/node_modules/.bin/drizzle-kit push --config packages/core/drizzle.config.ts",
@@ -42,6 +43,7 @@
     "@types/node": "^25.6.2",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.5",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-simple-import-sort": "^13.0.0",
     "eslint-plugin-svelte": "^3.23.0",
