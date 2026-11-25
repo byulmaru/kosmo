@@ -1197,7 +1197,7 @@ test('Composer 프로필 전환은 첨부 이미지 편집 상태와 draft를 �
   });
 });
 
-test('compose의 touch 취소가 본문 포커스와 닫힌 공개 범위 menu를 유지한다', async ({
+test('공개 범위 버튼 밖으로 드래그하면 본문 포커스가 유지되고 탭하면 메뉴가 열린다', async ({
   context,
   page,
 }) => {
@@ -1210,6 +1210,7 @@ test('compose의 touch 취소가 본문 포커스와 닫힌 공개 범위 menu�
   const composer = await openComposer(page);
   const input = composer.getByRole('textbox', { name: '게시글 본문' });
   const visibilityTrigger = composer.getByRole('button', { name: '공개 범위: 조용한 공개' });
+  const visibilityMenu = page.getByRole('menu', { name: '공개 범위 선택' });
 
   await input.fill('touch 취소 뒤에도 포커스를 유지하는 본문입니다.');
   await expect(input).toBeFocused();
@@ -1220,9 +1221,10 @@ test('compose의 touch 취소가 본문 포커스와 닫힌 공개 범위 menu�
   try {
     const x = triggerBox!.x + triggerBox!.width / 2;
     const y = triggerBox!.y + triggerBox!.height / 2;
+    const triggerTouch = [{ x, y }];
     await session.send('Input.dispatchTouchEvent', {
       type: 'touchStart',
-      touchPoints: [{ x, y }],
+      touchPoints: triggerTouch,
     });
     await session.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
@@ -1234,7 +1236,17 @@ test('compose의 touch 취소가 본문 포커스와 닫힌 공개 범위 menu�
     });
 
     await expect(input).toBeFocused();
-    await expect(page.getByRole('menu', { name: '공개 범위 선택' })).toHaveCount(0);
+    await expect(visibilityMenu).toBeHidden();
+
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: triggerTouch,
+    });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
+    });
+    await expect(visibilityMenu).toBeVisible();
   } finally {
     await session.detach();
   }
