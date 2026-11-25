@@ -10,11 +10,25 @@ import uiContract from './scripts/eslint-ui-contract.mjs';
 import workflowEffects from './scripts/eslint-workflow-effects.mjs';
 
 const appSourceFiles = ['apps/app/src/**/*.{js,jsx,ts,tsx}'];
-const appFixtureFiles = [
-  'apps/app/src/**/*.test.{js,jsx,ts,tsx}',
-  'apps/app/src/**/*.stories.{js,jsx,ts,tsx}',
-  'apps/app/src/stories/**',
-];
+const appTestFiles = ['apps/app/src/**/*.{test,stories}.{js,jsx,ts,tsx}'];
+const appFixtureFiles = [...appTestFiles, 'apps/app/src/stories/**'];
+
+const reactChildProps = [
+  "MemberExpression[object.type='MemberExpression'][object.object.type='MemberExpression']",
+  ":matches([computed=false][property.name='props'], [computed=true][property.value='props'])",
+  ":matches([object.computed=false][object.property.name='children'], [object.computed=true][object.property.value='children'])",
+  ":matches([object.object.computed=false][object.object.property.name='props'], [object.object.computed=true][object.object.property.value='props'])",
+].join('');
+
+const mapCallback =
+  "CallExpression[callee.property.name='map'][callee.computed=false] > :matches(ArrowFunctionExpression.arguments, FunctionExpression.arguments)";
+const testIdRead =
+  "CallExpression[callee.property.name='getAttribute'][callee.computed=false] > Literal.arguments[value='data-testid']";
+const mappedTestId = [
+  `${mapCallback} > ${testIdRead}`,
+  `${mapCallback} > BlockStatement.body > ReturnStatement.body > ${testIdRead}`,
+].join(', ');
+
 // Existing canonical SVG geometry/asset owners keep file-level value-import access; this does not approve new geometry.
 const svgOwnerFiles = [
   'apps/app/src/components/ui/StateView.tsx',
@@ -125,6 +139,25 @@ const config = ts.config(
     rules: {
       'no-restricted-imports': 'off',
       'no-restricted-syntax': 'off',
+    },
+  },
+  {
+    files: appTestFiles,
+    linterOptions: { noInlineConfig: true },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: reactChildProps,
+          message:
+            'Interact with the rendered control or check the observable boundary instead of reading props through React children.',
+        },
+        {
+          selector: mappedTestId,
+          message:
+            'Use test IDs to locate elements. Verify their content, state, or rendered order.',
+        },
+      ],
     },
   },
   {
