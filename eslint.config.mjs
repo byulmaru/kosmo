@@ -7,6 +7,7 @@ import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 import uiContract from './scripts/eslint-ui-contract.mjs';
+import workflowEffects from './scripts/eslint-workflow-effects.mjs';
 
 const appSourceFiles = ['apps/app/src/**/*.{js,jsx,ts,tsx}'];
 const appFixtureFiles = [
@@ -139,6 +140,7 @@ const config = ts.config(
       '@eslint-react/no-class-component': 'error',
     },
   },
+  workflowEffects,
   ...svelte.configs['flat/recommended'],
   {
     files: ['**/*.svelte'],
