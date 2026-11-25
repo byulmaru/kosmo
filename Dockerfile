@@ -12,7 +12,8 @@ WORKDIR /app
 
 ENV PATH=/pnpm/bin:$PATH
 
-RUN pnpm runtime set node ${NODE_VERSION} -g
+RUN --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
+  pnpm runtime set node ${NODE_VERSION} -g
 
 FROM base AS workspace
 

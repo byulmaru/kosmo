@@ -36,7 +36,7 @@ jobs:
             command: |
               set -euo pipefail
               docker build --target runtime --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-admin-smoke .
-              docker run --rm --user 0 --entrypoint sh kosmo-admin-smoke -ec '
+              docker run --rm --user 0 --entrypoint sh kosmo-admin-smoke -exc '
                 test "$SENTRY_RELEASE" = smoke-a
                 if [ -d /root/.cache/pnpm ]; then
                   metadata=$(find /root/.cache/pnpm -type d \( -name metadata -o -name metadata-full \) -print -quit)
