@@ -36,21 +36,22 @@ mockModule(require.resolve('lucide-react-native'), {
   ChevronLeftIcon: 'ChevronLeftIcon',
   Menu: 'Menu',
 });
+const refetch = () => undefined;
+const missingData = { node: null };
+const contentData = {
+  node: {
+    __typename: 'Post',
+    id: 'post',
+    content: { id: 'content' },
+    profile: { relativeHandle: '@writer' },
+    detail: {},
+    conversation: {},
+    state: 'PUBLISHED',
+  },
+};
 mockModule('react-relay', {
   graphql: () => ({}),
-  useLazyLoadQuery: () => ({
-    node:
-      state === 'missing'
-        ? null
-        : {
-            __typename: 'Post',
-            id: 'post',
-            content: { id: 'content' },
-            profile: { relativeHandle: '@writer' },
-            thread: {},
-            state: 'PUBLISHED',
-          },
-  }),
+  useLazyLoadQuery: () => (state === 'missing' ? missingData : contentData),
 });
 mockModule('@/components/RouteBoundary', {
   RouteBoundary: ({
@@ -59,7 +60,7 @@ mockModule('@/components/RouteBoundary', {
     error,
   }: PropsWithChildren<{ loading: ReactNode; error: () => ReactNode }>) =>
     state === 'loading' ? loading : state === 'error' ? error() : children,
-  useRouteBoundary: () => ({ fetchKey: 0, refetch: () => undefined }),
+  useRouteBoundary: () => ({ fetchKey: 0, refetch }),
 });
 mockModule('@/components/BrandLogo', { BrandLogo: () => null });
 mockModule('@/components/shell/NavigationLink', {
@@ -71,9 +72,10 @@ mockModule('@/components/ui/IconButton', {
 });
 mockModule('@/components/ui/StateView', { StateView: () => null });
 mockModule('@/components/post/PostDetailThread', {
-  PostDetailFrame: ({ children, header }: PropsWithChildren<{ header: ReactNode }>) =>
+  PostDetailThreadProviders: ({ children }: PropsWithChildren) => children,
+  PostDetailThreadViewport: ({ children, header }: PropsWithChildren<{ header: ReactNode }>) =>
     createElement('View', null, header, children),
-  PostDetailThread: ({ header }: { header: ReactNode }) => header,
+  PostDetailConversationData: () => null,
 });
 mockModule('@/components/shell/PrimaryNavigationScrollContext', {
   usePrimaryNavigationScroll: () => ({ isHistoryEntryRestoration: () => false }),

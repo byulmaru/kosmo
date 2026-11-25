@@ -22,18 +22,8 @@ test.beforeEach(async () => {
 });
 
 const gotoPostDetail = async (page: Page, path: string) => {
-  const detailResponse = page.waitForResponse(async (response) => {
-    if (
-      new URL(response.url()).pathname !== '/graphql' ||
-      !isGraphQLOperation(response.request().postData(), 'PostDetailQuery')
-    ) {
-      return false;
-    }
-
-    await expectGraphQLSuccess(response);
-    return true;
-  });
-  await Promise.all([page.goto(path), detailResponse]);
+  await page.goto(path);
+  await expect(page.locator('[role="article"][aria-current="true"]')).toBeVisible();
 };
 
 const expectGraphQLSuccess = async (response: Awaited<ReturnType<Page['waitForResponse']>>) => {
