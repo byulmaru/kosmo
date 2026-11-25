@@ -174,6 +174,21 @@ const config = ts.config(
     },
   },
   workflowEffects,
+  {
+    files: ['apps/web/e2e/**/*.{js,mjs,ts}'],
+    linterOptions: { noInlineConfig: true },
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "MemberExpression:matches([computed=false][property.name='waitForTimeout'], [computed=true][property.value='waitForTimeout'])",
+          message:
+            'Wait for the relevant request or UI state. Use the Playwright Clock when testing elapsed time.',
+        },
+      ],
+    },
+  },
   ...svelte.configs['flat/recommended'],
   {
     files: ['**/*.svelte'],
