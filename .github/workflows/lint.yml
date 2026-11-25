@@ -33,11 +33,5 @@ jobs:
       - name: Run lint for apps
         run: pnpm --recursive --parallel --if-present run "/^lint:.*/"
 
-      - name: Report module structure violations
-        id: structure
-        continue-on-error: true
+      - name: Check module structure
         run: pnpm check:structure
-
-      - name: Annotate module structure violations
-        if: steps.structure.outcome == 'failure'
-        run: echo '::warning::Module structure lint reported violations. See the preceding step.'
