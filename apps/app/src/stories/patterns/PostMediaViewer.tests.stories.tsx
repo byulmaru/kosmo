@@ -644,30 +644,34 @@ export const WideRailCompositionContract: Story = {
     const canvas = within(canvasElement);
     const rail = await canvas.findByTestId('post-media-viewer-context-rail');
     const thread = await within(rail).findByTestId('post-thread');
-    const rows = Array.from(thread.children) as HTMLElement[];
-    const currentRow = within(thread).getByTestId('post-thread-current-wide-rail-current');
-
-    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
-      'post-thread-item-wide-rail-ancestor',
-      'post-thread-current-wide-rail-current',
-      'post-thread-item-wide-rail-descendant',
-    ]);
-    expect(within(thread).getAllByRole('article', { current: true })).toEqual([currentRow]);
+    const ancestorBody = within(thread).getByText('오늘도 별을 보며 나누고 싶은 이야기를 남겨요.');
+    const currentBody = within(thread).getByText(
+      '코스모에서 함께 나누고 싶은 오늘의 이야기입니다.',
+    );
+    const descendantBody = within(thread).getByText(
+      '같은 하늘을 보고 있던 답글도 이어서 확인할 수 있어요.',
+    );
+    const bodies = [ancestorBody, currentBody, descendantBody];
+    bodies.forEach((body, index) => {
+      expect(body).toBeVisible();
+      if (index > 0) {
+        expect(body.getBoundingClientRect().top).toBeGreaterThan(
+          bodies[index - 1]!.getBoundingClientRect().top,
+        );
+      }
+    });
+    const currentRow = within(thread).getByRole('article', { current: true });
+    expect(within(thread).getAllByRole('article', { current: true })).toHaveLength(1);
     expect(currentRow).toHaveAttribute('aria-current', 'true');
     expect(within(currentRow).queryByRole('button', { name: /첨부 이미지 크게 보기/ })).toBeNull();
     expect(within(rail).queryByRole('img', { name: '스토리 첨부 이미지 1' })).toBeNull();
 
     expect(window.getComputedStyle(currentRow).borderTopWidth).toBe('0px');
     expect(window.getComputedStyle(currentRow).borderBottomWidth).toBe('0px');
-    for (const rowId of [
-      'post-thread-item-wide-rail-ancestor',
-      'post-thread-item-wide-rail-descendant',
-    ]) {
-      expect(
-        window.getComputedStyle(
-          within(thread).getByTestId(rowId).querySelector('[role="article"]')!,
-        ).borderBottomWidth,
-      ).toBe('0px');
+    for (const body of [ancestorBody, descendantBody]) {
+      const article = body.closest<HTMLElement>('[role="article"]');
+      expect(article).not.toBeNull();
+      expect(window.getComputedStyle(article!).borderBottomWidth).toBe('0px');
     }
   },
 };

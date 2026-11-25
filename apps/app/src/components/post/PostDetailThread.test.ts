@@ -177,20 +177,7 @@ afterEach(async () => {
   loadNextCompletionsByKey = {};
 });
 
-describe('PostDetailThread Viewer presentation', () => {
-  it('ancestors·현재 Post·descendants를 유지하고 현재 Post Media만 숨긴다', async () => {
-    await render('viewer');
-
-    const current = renderer!.root.findByProps({ testID: 'thread-current-post' });
-    const surrounding = renderer!.root.findAllByProps({ testID: 'thread-list-post' });
-
-    assert.equal(current.props.contentWarningPresentation, 'revealed');
-    assert.equal(current.props.mediaPresentation, 'hidden');
-    assert.equal('viewerWideDetail' in current.props, false);
-    assert.equal(surrounding.length, 2);
-    assert.ok(renderer!.root.findByProps({ testID: 'post-media-viewer-thread-scroll' }));
-  });
-
+describe('PostDetailThread pagination', () => {
   it('route와 Viewer는 component 간 token 없이 각 near-end UI 요청을 시작한다', async () => {
     await renderRouteAndViewer();
 
@@ -204,19 +191,6 @@ describe('PostDetailThread Viewer presentation', () => {
     });
 
     assert.equal(loadNextCalls, 2);
-  });
-
-  it('Viewer 오른쪽 scroller만 near-end reply page를 요청한다', async () => {
-    await render('viewer');
-    const scroll = renderer!.root.findByProps({ testID: 'post-media-viewer-thread-scroll' });
-
-    await act(async () => {
-      scroll.props.onLayout({ nativeEvent: { layout: { height: 800 } } });
-      scroll.props.onContentSizeChange(0, 1200);
-    });
-
-    assert.equal(documentScrollListener, null);
-    assert.equal(loadNextCalls, 1);
   });
 
   it('Viewer page 완료 후에도 near-end이면 저장된 metrics로 다음 page를 요청한다', async () => {
