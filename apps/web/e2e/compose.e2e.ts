@@ -1224,17 +1224,14 @@ test('compose의 touch 취소가 본문 포커스와 닫힌 공개 범위 menu�
       type: 'touchStart',
       touchPoints: [{ x, y }],
     });
-    await page.waitForTimeout(100);
     await session.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
       touchPoints: [{ x: x + 180, y: y + 180 }],
     });
-    await page.waitForTimeout(50);
     await session.send('Input.dispatchTouchEvent', {
       type: 'touchEnd',
       touchPoints: [],
     });
-    await page.waitForTimeout(100);
 
     await expect(input).toBeFocused();
     await expect(page.getByRole('menu', { name: '공개 범위 선택' })).toHaveCount(0);

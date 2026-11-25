@@ -509,6 +509,7 @@ test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ con
   });
 
   await setE2ESessionCookie(context, viewer.token);
+  await page.clock.install();
   await page.route('**/graphql', async (route) => {
     if (isGraphQLOperation(route.request().postData(), 'LocalPageQuery')) {
       localRequestCount += 1;
@@ -536,7 +537,7 @@ test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ con
 
   await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
   await expect(page.getByText('아직 게시글이 없어요')).toHaveCount(0);
-  await page.waitForTimeout(3600);
+  await page.clock.runFor(3600);
   await expect(page.getByRole('alert')).toBeVisible();
   const previousCount = localRequestCount;
   await page.goto('/home');
@@ -551,7 +552,7 @@ test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ con
   await page.getByRole('button', { name: '다시 시도' }).click();
   await expect.poll(() => localRequestCount).toBe(countBeforeRetry + 1);
   await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
-  await page.waitForTimeout(3600);
+  await page.clock.runFor(3600);
   await expect(page.getByRole('alert')).toBeVisible();
 
   failLocalRequests = false;
