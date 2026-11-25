@@ -7,6 +7,7 @@ import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
 import uiContract from './scripts/eslint-ui-contract.mjs';
+import workflowEffects from './scripts/eslint-workflow-effects.mjs';
 
 const appSourceFiles = ['apps/app/src/**/*.{js,jsx,ts,tsx}'];
 const appFixtureFiles = [
@@ -52,8 +53,6 @@ const iconContractRules = {
     },
   ],
 };
-const promiseAllSettledCall =
-  "CallExpression[callee.type='MemberExpression'][callee.object.name='Promise']:matches([callee.property.name='allSettled'], [callee.property.value='allSettled'])";
 
 const config = ts.config(
   js.configs.recommended,
@@ -141,19 +140,7 @@ const config = ts.config(
       '@eslint-react/no-class-component': 'error',
     },
   },
-  {
-    files: ['apps/worker/src/workflows/**/*.ts'],
-    linterOptions: { noInlineConfig: true },
-    rules: {
-      'no-restricted-syntax': [
-        'error',
-        {
-          selector: `ExpressionStatement > ${promiseAllSettledCall}, ExpressionStatement > :matches(AwaitExpression, UnaryExpression[operator='void']) > ${promiseAllSettledCall}`,
-          message: 'Use settleEffects() for Workflow effects or inspect the settlement results.',
-        },
-      ],
-    },
-  },
+  workflowEffects,
   ...svelte.configs['flat/recommended'],
   {
     files: ['**/*.svelte'],

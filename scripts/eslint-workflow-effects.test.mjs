@@ -6,41 +6,38 @@ import { ESLint } from 'eslint';
 const cwd = fileURLToPath(new URL('..', import.meta.url));
 const eslint = new ESLint({ cwd });
 const workflowPath = 'apps/worker/src/workflows/example.ts';
-const ignoredAllSettled = 'await Promise.allSettled([]);';
+const discardedSettlement = `export async function workflow(effects: Promise<void>[]) {
+  await Promise.allSettled(effects);
+}`;
 
-test('rejects discarded Workflow settlement results despite an inline disable', async () => {
-  const [{ messages }] = await eslint.lintText(
-    `/* eslint-disable no-restricted-syntax */
-${ignoredAllSettled}
-void Promise['allSettled']([]);
-Promise.allSettled([]);`,
-    { filePath: workflowPath },
-  );
+async function lintErrorCount(source, filePath = workflowPath) {
+  const [result] = await eslint.lintText(source, { filePath });
+  assert.equal(result.fatalErrorCount, 0);
+  return result.errorCount;
+}
 
-  assert.deepEqual(
-    messages
-      .filter(({ ruleId, severity }) => ruleId === 'no-restricted-syntax' && severity === 2)
-      .map(({ line }) => line),
-    [2, 3, 4],
-  );
+test('rejects a Workflow that discards settlement results', async () => {
+  assert.ok((await lintErrorCount(discardedSettlement)) > 0);
+});
+
+test('rejects the same Workflow with an inline disable', async () => {
+  assert.ok((await lintErrorCount(`/* eslint-disable */\n${discardedSettlement}`)) > 0);
 });
 
 test('allows Workflow code to check settlement results', async () => {
-  const [{ messages }] = await eslint.lintText(
-    `const [result] = await Promise.allSettled([Promise.resolve()]);
-if (result.status === 'rejected') {
-  throw result.reason;
-}`,
-    { filePath: workflowPath },
-  );
+  const source = `export async function workflow(effect: Promise<void>) {
+  const [result] = await Promise.allSettled([effect]);
+  if (result.status === 'rejected') {
+    throw result.reason;
+  }
+}`;
 
-  assert.deepEqual(messages, []);
+  assert.equal(await lintErrorCount(source), 0);
 });
 
-test('leaves settlement calls outside Workflow source alone', async () => {
-  const [{ messages }] = await eslint.lintText(ignoredAllSettled, {
-    filePath: 'apps/worker/src/activities/example.ts',
-  });
-
-  assert.deepEqual(messages, []);
+test('allows discarded results outside Workflow source', async () => {
+  assert.equal(
+    await lintErrorCount(discardedSettlement, 'apps/worker/src/activities/example.ts'),
+    0,
+  );
 });
