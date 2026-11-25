@@ -1,5 +1,5 @@
 import { builder } from '@/graphql/builder';
-import { Hashtag } from '../../hashtag';
+import { Hashtag } from '../../hashtag/ref';
 import { profileTagsLoader } from '../loader/tags';
 import { Profile } from '../ref';
 

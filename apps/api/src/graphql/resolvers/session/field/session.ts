@@ -1,6 +1,6 @@
 import { builder } from '@/graphql/builder';
-import { Account } from '@/graphql/resolvers/account';
-import { Profile } from '@/graphql/resolvers/profile';
+import { Account } from '@/graphql/resolvers/account/ref';
+import { Profile } from '@/graphql/resolvers/profile/ref';
 import { Session } from '../ref';
 
 builder.objectFields(Session, (t) => ({

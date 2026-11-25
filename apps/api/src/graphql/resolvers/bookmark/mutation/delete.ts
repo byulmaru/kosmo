@@ -2,7 +2,7 @@ import { db } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { deleteBookmark } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
-import { Post } from '@/graphql/resolvers/post';
+import { Post } from '@/graphql/resolvers/post/ref';
 import { Bookmark } from '../ref';
 
 type DeleteBookmarkPayload = {

@@ -3,7 +3,7 @@ import { profilePostListAccessWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, isNull, lt } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Profile } from '@/graphql/resolvers/profile';
+import { Profile } from '@/graphql/resolvers/profile/ref';
 import { Post, PostConnection } from '../ref';
 
 type PostRow = typeof Posts.$inferSelect;

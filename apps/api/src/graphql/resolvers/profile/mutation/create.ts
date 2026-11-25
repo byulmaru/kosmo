@@ -11,7 +11,7 @@ import { normalizeHandle } from '@kosmo/core/utils';
 import { localProfileHandleSchema } from '@kosmo/core/validation';
 import { and, count, eq, inArray } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Account } from '@/graphql/resolvers/account';
+import { Account } from '@/graphql/resolvers/account/ref';
 import { Profile } from '../ref';
 
 const MAX_ACCOUNT_OWNED_PROFILES = 10;

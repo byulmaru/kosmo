@@ -1,6 +1,6 @@
 import { PostQuoteConsentStatus } from '@kosmo/core/enums';
 import { builder } from '@/graphql/builder';
-import { Profile } from '@/graphql/resolvers/profile';
+import { Profile } from '@/graphql/resolvers/profile/ref';
 import {
   cachedHomePostContentLoader,
   cachedHomeRepostSourceLoader,

@@ -4,7 +4,7 @@ import { initContextCache } from '@pothos/core';
 import { and, eq, getColumns } from 'drizzle-orm';
 import { filter, pipe } from 'graphql-yoga';
 import { builder } from '@/graphql/builder';
-import { Profile } from '@/graphql/resolvers/profile';
+import { Profile } from '@/graphql/resolvers/profile/ref';
 import { visibleViewerNotificationWhere } from '../access/visibility';
 import { Notification } from '../ref';
 import type { NotificationAddedPayload } from '@kosmo/core/notification/events';

@@ -5,13 +5,12 @@ import { parseProfileHandle } from '@kosmo/core/profile';
 import { runWorkflow } from '@kosmo/core/temporal/client';
 import { remoteProfileLookupWorkflow } from '@kosmo/core/temporal/workflows';
 import { remoteProfileHandleSchema } from '@kosmo/core/validation';
-import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
+import { profileBlockVisibilityWhere, visibleProfileWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { WorkflowIdConflictPolicy, WorkflowIdReusePolicy } from '@temporalio/client';
 import { and, asc, desc, eq, getColumns, gt, lt, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { resolveComposerProfileId } from '@/profile/authorization';
-import { visibleProfileWhere } from '@/profile/visibility';
 import { reportError } from '@/sentry';
 import { Profile, ProfileConnection } from '../ref';
 

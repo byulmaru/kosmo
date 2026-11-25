@@ -8,11 +8,11 @@ import {
   Sessions,
 } from '@kosmo/core/db';
 import { NotFoundError } from '@kosmo/core/error';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { RequestCache } from '@pothos/plugin-scope-auth';
 import { and, eq } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
 import { Session } from '@/graphql/resolvers/session/ref';
-import { visibleProfileWhere } from '@/profile/visibility';
 import { Profile } from '../ref';
 
 builder.mutationField('selectProfile', (t) =>

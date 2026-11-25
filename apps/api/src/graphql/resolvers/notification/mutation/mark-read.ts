@@ -1,7 +1,7 @@
 import { AccountProfiles, db, Notifications } from '@kosmo/core/db';
 import { and, eq, getColumns, or, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Profile } from '@/graphql/resolvers/profile';
+import { Profile } from '@/graphql/resolvers/profile/ref';
 import { visibleViewerNotificationWhere } from '../access/visibility';
 import { Notification, notificationKindForNodeType } from '../ref';
 

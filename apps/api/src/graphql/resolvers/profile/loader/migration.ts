@@ -1,7 +1,7 @@
 import { db, Instances, ProfileMigrations, Profiles } from '@kosmo/core/db';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, eq, inArray } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
-import { visibleProfileWhere } from '@/profile/visibility';
 import type { UserContext } from '@/context';
 
 const MigrationSourceProfiles = alias(Profiles, 'profile_migration_source_profile');

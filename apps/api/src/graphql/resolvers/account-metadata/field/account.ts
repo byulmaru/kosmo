@@ -1,5 +1,5 @@
 import { builder } from '@/graphql/builder';
-import { Account } from '@/graphql/resolvers/account';
+import { Account } from '@/graphql/resolvers/account/ref';
 import { AccountMetadata } from '../ref';
 import { accountMetadataKeysSchema } from '../validation';
 

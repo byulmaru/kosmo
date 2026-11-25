@@ -1,7 +1,7 @@
 import { db, Instances, Posts, Profiles } from '@kosmo/core/db';
 import { PostState } from '@kosmo/core/enums';
+import { visibleProfileWhere } from '@kosmo/core/visibility';
 import { and, count, eq, getColumns, inArray, isNull } from 'drizzle-orm';
-import { visibleProfileWhere } from '@/profile/visibility';
 import type { UserContext } from '@/context';
 
 type RepostCountRow = {

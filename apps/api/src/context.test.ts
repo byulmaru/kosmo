@@ -15,24 +15,24 @@ const createRequestContext = async (): Promise<Context> => {
 };
 
 describe('GraphQL request context', () => {
-  it('creates one request-scoped loader registry without a database handle', async () => {
+  it('reuses named loaders within a request and isolates them between requests', async () => {
     const context = await createRequestContext();
+    const otherContext = await createRequestContext();
 
     assert.equal('db' in context, false);
 
-    const loader = context.loader({
-      name: 'request-context',
-      load: async (keys: string[]) => keys.map((key) => ({ key })),
-      key: (row) => row.key,
-    });
-    const loaderAgain = context.loader({
-      name: 'request-context',
-      load: async (keys: string[]) => keys.map((key) => ({ key })),
-      key: (row) => row.key,
-    });
+    const load = (request: Context, source: string) =>
+      request
+        .loader({
+          name: 'request-context',
+          load: async (keys: string[]) => keys.map((key) => ({ key, source })),
+          key: (row) => row.key,
+        })
+        .load('record');
 
-    assert.equal(loader, loaderAgain);
-    assert.equal(context.$loaders.size, 1);
+    assert.deepEqual(await load(context, 'first'), { key: 'record', source: 'first' });
+    assert.deepEqual(await load(context, 'unused'), { key: 'record', source: 'first' });
+    assert.deepEqual(await load(otherContext, 'other'), { key: 'record', source: 'other' });
   });
 
   it('overrides the request actor only for a valid member profile and uses its server role', async (t) => {

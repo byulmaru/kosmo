@@ -2,14 +2,13 @@ import { db, Instances, Profiles, Reactions } from '@kosmo/core/db';
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { ValidationError } from '@kosmo/core/error';
 import { reactionTypeSchema } from '@kosmo/core/validation';
-import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
+import { profileBlockVisibilityWhere, visibleProfileWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, desc, eq, getColumns, gt, lt, or } from 'drizzle-orm';
 import { parse as parseUuid } from 'uuid';
 import { builder } from '@/graphql/builder';
-import { Post } from '@/graphql/resolvers/post';
-import { Profile, ProfileConnection } from '@/graphql/resolvers/profile';
-import { visibleProfileWhere } from '@/profile/visibility';
+import { Post } from '@/graphql/resolvers/post/ref';
+import { Profile, ProfileConnection } from '@/graphql/resolvers/profile/ref';
 import { viewerReactionLoader } from '../loader/viewer-reaction';
 import { Reaction } from '../ref';
 

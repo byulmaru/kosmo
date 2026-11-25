@@ -1,8 +1,8 @@
 import { AccountProfileRole } from '@kosmo/core/enums';
 import { pinProfilePost, reorderProfilePost, unpinProfilePost } from '@kosmo/core/services';
 import { builder } from '@/graphql/builder';
-import { Post } from '@/graphql/resolvers/post';
 import { postProfilePinLoader } from '@/graphql/resolvers/post/loader/profile-pin';
+import { Post } from '@/graphql/resolvers/post/ref';
 import { Profile } from '../ref';
 
 builder.mutationField('pinProfilePost', (t) =>

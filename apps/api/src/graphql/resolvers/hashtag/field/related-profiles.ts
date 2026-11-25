@@ -1,12 +1,11 @@
 import { db, Instances, ProfileHashtags, Profiles } from '@kosmo/core/db';
 import { ValidationError } from '@kosmo/core/error';
-import { profileBlockVisibilityWhere } from '@kosmo/core/visibility';
+import { profileBlockVisibilityWhere, visibleProfileWhere } from '@kosmo/core/visibility';
 import { resolveCursorConnection } from '@pothos/plugin-relay';
 import { and, asc, eq, getColumns, gt, ne } from 'drizzle-orm';
 import { parse as parseUuid } from 'uuid';
 import { builder } from '@/graphql/builder';
-import { ProfileConnection } from '@/graphql/resolvers/profile';
-import { visibleProfileWhere } from '@/profile/visibility';
+import { ProfileConnection } from '@/graphql/resolvers/profile/ref';
 import { Hashtag } from '../ref';
 
 type ProfileRow = typeof Profiles.$inferSelect;

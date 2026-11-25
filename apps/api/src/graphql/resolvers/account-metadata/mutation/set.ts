@@ -1,7 +1,7 @@
 import { Accounts, db, firstOrThrow } from '@kosmo/core/db';
 import { eq, sql } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Account } from '@/graphql/resolvers/account';
+import { Account } from '@/graphql/resolvers/account/ref';
 import { accountMetadataKeySchema, accountMetadataValueSchema } from '../validation';
 
 builder.mutationField('setAccountMetadata', (t) =>

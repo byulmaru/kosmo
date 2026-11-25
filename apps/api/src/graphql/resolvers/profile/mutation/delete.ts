@@ -4,7 +4,7 @@ import { NotFoundError, PermissionDeniedError } from '@kosmo/core/error';
 import { disableProfile } from '@kosmo/core/services';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 import { builder } from '@/graphql/builder';
-import { Account } from '@/graphql/resolvers/account';
+import { Account } from '@/graphql/resolvers/account/ref';
 import { Profile } from '../ref';
 
 builder.mutationField('deleteProfile', (t) =>
