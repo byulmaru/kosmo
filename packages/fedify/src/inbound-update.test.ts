@@ -13,13 +13,17 @@ import {
   ProfileMediaKind,
 } from '@kosmo/core/enums';
 import { temporalClient } from '@kosmo/core/temporal/client';
-import { executeProfileFollowPairTransition } from '@kosmo/core/temporal/follow-command';
+import {
+  executeProfileFollowPairTransition,
+  profileFollowPairWorkflowId,
+} from '@kosmo/core/temporal/follow-command';
 import { remoteProfileUpdateWorkflow } from '@kosmo/core/temporal/workflows';
 import { and, eq, inArray } from 'drizzle-orm';
 import { setInboundObservabilityReporter } from './inbound-observability';
 import type { DocumentLoader, InboxContext } from '@fedify/fedify';
 import type * as CoreDb from '@kosmo/core/db';
 import type * as CoreSeed from '@kosmo/core/db/seed';
+import type { ProfileFollowPair } from '@kosmo/core/services';
 import type { RemoteProfileUpdateInput } from '@kosmo/core/temporal/workflows';
 import type { handleInboundAccept as HandleInboundAccept } from './inbound-accept';
 import type { handleInboundUpdate as HandleInboundUpdate } from './inbound-update';
@@ -389,8 +393,9 @@ describe('inbound actor Update', () => {
     });
 
     mock.method(console, 'error', () => undefined);
+    const pair = { followerProfileId: pendingLocal.id, followeeProfileId: remote.profile.id };
     const followed = await executeProfileFollowPairTransition({
-      pair: { followerProfileId: pendingLocal.id, followeeProfileId: remote.profile.id },
+      pair,
       command: {
         kind: 'FOLLOW',
         origin: 'LOCAL',
@@ -430,6 +435,7 @@ describe('inbound actor Update', () => {
       follower: 1,
       followee: 2,
     });
+    await assertFollowPairCompleted(pair);
   });
 
   test('creates an established Follow immediately after policy refreshes to open', async () => {
@@ -445,8 +451,9 @@ describe('inbound actor Update', () => {
     );
 
     mock.method(console, 'error', () => undefined);
+    const pair = { followerProfileId: local.id, followeeProfileId: remote.profile.id };
     const followed = await executeProfileFollowPairTransition({
-      pair: { followerProfileId: local.id, followeeProfileId: remote.profile.id },
+      pair,
       command: {
         kind: 'FOLLOW',
         origin: 'LOCAL',
@@ -464,8 +471,14 @@ describe('inbound actor Update', () => {
       follower: 1,
       followee: 1,
     });
+    await assertFollowPairCompleted(pair);
   });
 });
+
+const assertFollowPairCompleted = async (pair: ProfileFollowPair): Promise<void> => {
+  const handle = temporalClient.workflow.getHandle(profileFollowPairWorkflowId(pair));
+  await temporalClient.withDeadline(Date.now() + 30_000, () => handle.result());
+};
 
 type PersonOptions = ConstructorParameters<typeof Person>[0];
 
