@@ -1,4 +1,4 @@
-import { readPostContentDocumentV1 } from '@kosmo/core/post-content';
+import { getPostContentMediaIds, readPostContentDocumentV1 } from '@kosmo/core/post-content';
 import { Fragment } from 'react';
 import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
@@ -75,9 +75,9 @@ export function PostContentRenderer({
   const forcedRevealed = contentWarningPresentation === 'revealed';
   const contentVisible = forcedRevealed || !isProtected || revealed;
   const showContentWarning = Boolean(contentWarning) && !forcedRevealed;
-  const hasMedia = Boolean(
-    media?.length || contentDocument?.body.content.some((block) => block.type === 'media'),
-  );
+  const hasMedia =
+    Boolean(media?.length) ||
+    (contentDocument !== null && getPostContentMediaIds(contentDocument).length > 0);
   const visibleLinkPreview = contentVisible && !hasMedia ? linkPreview : null;
   const bodyStyle = [
     styles.body,

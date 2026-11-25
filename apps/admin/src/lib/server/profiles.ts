@@ -19,6 +19,7 @@ import {
   ProfileMediaKind,
   ProfileState,
 } from '@kosmo/core/enums';
+import { getPostContentMediaIds } from '@kosmo/core/post-content';
 import {
   canonicalizePostContentDocument,
   postContentDocumentToText,
@@ -479,7 +480,7 @@ const toProfilePostRow = (row: {
     bodyText: document ? postContentDocumentToText(document) : '',
     summary: document?.summary ?? null,
     sensitive: document?.body.attrs?.sensitiveMedia ?? false,
-    mediaCount: document?.body.content.filter(({ type }) => type === 'media').length ?? 0,
+    mediaCount: document ? getPostContentMediaIds(document).length : 0,
   };
 };
 

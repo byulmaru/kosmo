@@ -11,6 +11,7 @@ import {
   Profiles,
 } from '../db';
 import { MediaState, PostQuoteConsentStatus } from '../enums';
+import { getPostContentMediaIds } from '../post-content';
 import { canonicalizePostContentDocument, postContentDocumentToText } from '../post-content/server';
 import { homePostListWhere } from '../visibility/home-post-list';
 import { visiblePostWhere } from '../visibility/post';
@@ -58,11 +59,8 @@ const projectDocument = (
   try {
     const document = canonicalizePostContentDocument(value);
     const imageUrls: string[] = [];
-    for (const block of document.body.content) {
-      if (block.type !== 'media') {
-        continue;
-      }
-      const media = mediaById.get(block.attrs.mediaId);
+    for (const mediaId of getPostContentMediaIds(document)) {
+      const media = mediaById.get(mediaId);
       if (!media || media.mediaType === null) {
         return null;
       }
@@ -87,9 +85,7 @@ const projectDocument = (
 
 const mediaIdsFromDocument = (value: unknown): string[] | null => {
   try {
-    return canonicalizePostContentDocument(value).body.content.flatMap((block) =>
-      block.type === 'media' ? [block.attrs.mediaId] : [],
-    );
+    return getPostContentMediaIds(canonicalizePostContentDocument(value));
   } catch {
     return null;
   }

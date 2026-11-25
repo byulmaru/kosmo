@@ -5,6 +5,7 @@ import { MediaState } from '@kosmo/core/enums';
 import { decodeGlobalId, encodeGlobalId } from '@kosmo/core/global-id';
 import { resolveConfiguredLocalInstance } from '@kosmo/core/local-instance';
 import { isValidMediaPublicationRights, mediaUseTermsUrl } from '@kosmo/core/media-metadata';
+import { getPostContentMediaIds } from '@kosmo/core/post-content';
 import {
   getPostContentMentionProfileIds,
   postContentDocumentToText,
@@ -276,9 +277,7 @@ async function findVisibleImages(
   document: (typeof PostContents.$inferSelect)['document'],
   origin: string,
 ): Promise<readonly ShareImage[]> {
-  const mediaIds = document.body.content.flatMap((block) =>
-    block.type === 'media' ? [block.attrs.mediaId] : [],
-  );
+  const mediaIds = getPostContentMediaIds(document);
   if (mediaIds.length === 0) {
     return [];
   }
