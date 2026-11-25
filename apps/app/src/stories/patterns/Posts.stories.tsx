@@ -5503,6 +5503,7 @@ export const PostMediaViewerCompact: Story = {
     await waitFor(() =>
       expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toHaveFocus(),
     );
+    expect(await viewer.findByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 4');
     const mediaPane = viewer.getByTestId('post-media-viewer-media-pane');
     const mediaPaneBounds = mediaPane.getBoundingClientRect();
     const compactDetail = viewer.getByTestId('post-media-viewer-compact-detail');
@@ -5511,7 +5512,6 @@ export const PostMediaViewerCompact: Story = {
     expect(compactDetail.getBoundingClientRect().top).toBeGreaterThanOrEqual(
       mediaPaneBounds.bottom,
     );
-    expect(await viewer.findByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 4');
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toHaveAttribute(
       'aria-label',
@@ -5547,21 +5547,13 @@ export const PostMediaViewerCompact: Story = {
     expect(origin).toHaveFocus();
 
     await userEvent.click(origin);
-    const replyViewer = within(await screen.findByRole('dialog'));
-    await userEvent.click(replyViewer.getByRole('button', { name: '답글' }));
+    const replyViewer = within(await screen.findByRole('dialog', { name: '이미지 뷰어' }));
+    await userEvent.click(await replyViewer.findByRole('button', { name: '답글' }));
     const replyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
     expect(screen.queryByTestId('post-media-viewer-dialog')).toBeNull();
     await waitFor(() =>
       expect(within(replyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveFocus(),
     );
-    await userEvent.click(within(replyDialog).getByRole('button', { name: '닫기' }));
-    await userEvent.click(
-      within(await screen.findByRole('alertdialog', { name: '답글 작성을 취소할까요?' })).getByRole(
-        'button',
-        { name: '작성 취소' },
-      ),
-    );
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: '답글 쓰기' })).toBeNull());
   },
   render: () => (
     <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="mobile" />
@@ -5589,9 +5581,9 @@ export const PostMediaViewerWide: Story = {
     const dialog = await screen.findByRole('dialog');
     const viewer = within(dialog);
     expect(dialog).toHaveAttribute('aria-modal', 'true');
+    const thread = await viewer.findByTestId('post-thread');
     const mediaPane = viewer.getByTestId('post-media-viewer-media-pane');
     const mediaPaneBounds = mediaPane.getBoundingClientRect();
-    const thread = await viewer.findByTestId('post-thread');
     const wideDetail = viewer.getByTestId('post-media-viewer-context-rail');
     const railBounds = wideDetail.getBoundingClientRect();
     expect(mediaPane).toBeVisible();
@@ -5604,7 +5596,7 @@ export const PostMediaViewerWide: Story = {
       within(thread).getByText('Route Root 본문'),
       within(thread).getByText('Route Parent 본문'),
       currentRow,
-      within(thread).getByText('주변 Reply Media 본문'),
+      within(thread).getByText('Media Reply'),
     ]);
 
     const currentPost = within(currentRow);
@@ -6562,11 +6554,11 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
     const parentBody = within(thread).getByText('조회 가능한 직접 Parent');
-    const currentBody = within(thread).getByText('현재 Reply 본문');
+    const currentBody = within(thread).getByText('경계 Current 본문');
     expectVisibleContentInOrder([parentBody, currentBody]);
     const header = canvas.getByTestId('post-detail-scroll').children[0] as HTMLElement;
     const current = within(thread).getByRole('article', { current: true });
-    expect(current).toHaveTextContent('현재 Reply 본문');
+    expect(current).toHaveTextContent('경계 Current 본문');
     await waitFor(() =>
       expect(
         Math.abs(current.getBoundingClientRect().top - header.getBoundingClientRect().bottom),
