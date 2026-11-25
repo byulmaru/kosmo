@@ -124,7 +124,7 @@ mockModule('@/components/ui/Avatar', { Avatar: () => null });
 mockModule('@/components/ui/TimestampText', { TimestampText: () => null });
 mockModule('@/lib/date', { formatTimelineTimestamp: () => 'timestamp' });
 mockModule('./PostBody', { PostBody: () => null });
-mockModule('./PostMediaViewerHost', { usePostMediaViewerHost: () => () => undefined });
+mockModule('./PostMediaViewerContext', { usePostMediaViewerHost: () => () => undefined });
 mockModule('./PostReplySurface', {
   usePostReplySurface: () => ({ reply: undefined, replySurface: null }),
 });

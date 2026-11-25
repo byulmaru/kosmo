@@ -14,7 +14,7 @@ import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { PostDetailBackground, PostDetailBackgroundFeedbackContext } from './PostDetailBackground';
 import { postListMetrics } from './postListMetrics';
-import { usePostMediaViewerHost } from './PostMediaViewerHost';
+import { usePostMediaViewerHost } from './PostMediaViewerContext';
 import { usePostReplySurface } from './PostReplySurface';
 import { PostSourcePresentationView, PostSourcePreview } from './PostSourcePresentationView';
 import { PostVisibilityIcon } from './PostVisibilityIcon';

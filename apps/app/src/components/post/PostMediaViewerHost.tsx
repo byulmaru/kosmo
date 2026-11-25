@@ -21,6 +21,7 @@ import {
   PostMediaViewerContent,
   PostMediaViewerQueryState,
 } from './PostMediaViewer';
+import { PostMediaViewerHostContext } from './PostMediaViewerContext';
 import { focusPostMediaViewerTarget } from './postMediaViewerSession';
 import { PostMediaViewerThread } from './PostMediaViewerThread';
 import { getPostReplyActionCount } from './postReplyCount';
@@ -29,6 +30,7 @@ import type { PropsWithChildren, RefObject } from 'react';
 import type { View as NativeView } from 'react-native';
 import type { PostMediaViewerHostQuery } from './__generated__/PostMediaViewerHostQuery.graphql';
 import type { PostActionBarProps } from './PostActionBar';
+import type { PostMediaViewerSession } from './PostMediaViewerContext';
 
 const PostMediaViewerHostOperation = graphql`
   query PostMediaViewerHostQuery($surfacePostId: ID!) {
@@ -57,17 +59,6 @@ const PostMediaViewerHostOperation = graphql`
   }
 `;
 
-type ViewerSession = Readonly<{
-  mediaOwnerPostId: string;
-  onDeleted?: () => void;
-  originControl: RefObject<NativeView | null>;
-  selectedIndex: number;
-  surfacePostId: string;
-}>;
-
-type OpenViewer = (session: ViewerSession) => void;
-
-const PostMediaViewerHostContext = createContext<OpenViewer | null>(null);
 const PostMediaViewerScreenFallbackContext = createContext<RefObject<NativeView | null> | null>(
   null,
 );
@@ -88,10 +79,13 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
   const previousActorLifecycleKey = useRef(actorLifecycleKey);
   const fallbackFocus = useRef<NativeView>(null);
   const screenFallback = useContext(PostMediaViewerScreenFallbackContext);
-  const [session, setSession] = useState<ViewerSession | null>(null);
-  const sessionRef = useRef<ViewerSession | null>(null);
+  const [session, setSession] = useState<PostMediaViewerSession | null>(null);
+  const sessionRef = useRef<PostMediaViewerSession | null>(null);
   sessionRef.current = session;
-  const openViewer = useCallback<OpenViewer>((nextSession) => setSession(nextSession), []);
+  const openViewer = useCallback(
+    (nextSession: PostMediaViewerSession) => setSession(nextSession),
+    [],
+  );
   const closeViewer = useCallback(() => {
     sessionRef.current = null;
     setSession(null);
@@ -163,14 +157,6 @@ export function PostMediaViewerHostProvider({ children }: PropsWithChildren) {
   );
 }
 
-export function usePostMediaViewerHost(): OpenViewer {
-  const openViewer = useContext(PostMediaViewerHostContext);
-  if (!openViewer) {
-    throw new Error('Post Media Viewer launcher에는 PostMediaViewerHostProvider가 필요합니다.');
-  }
-  return openViewer;
-}
-
 function PostMediaViewerHostContent({
   onClose,
   onDeleted,
@@ -178,7 +164,7 @@ function PostMediaViewerHostContent({
 }: Readonly<{
   onClose: () => void;
   onDeleted: () => void;
-  session: ViewerSession;
+  session: PostMediaViewerSession;
 }>) {
   const { width } = useWindowDimensions();
   const viewerReplyOwner =
@@ -258,6 +244,7 @@ function PostMediaViewerHostContent({
       contentId={contentId}
       currentPostReplyOnPress={viewerReply?.onPress}
       mediaOwnerPostId={mediaOwner.id}
+      mediaViewerHost={PostMediaViewerHostProvider}
       onPostDeleted={onDeleted}
       replyAvailable={Boolean(surface?.content)}
       replySurfacePostId={session.surfacePostId}

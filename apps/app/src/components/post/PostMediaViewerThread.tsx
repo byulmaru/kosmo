@@ -3,6 +3,7 @@ import { graphql, useLazyLoadQuery } from 'react-relay';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { StateView } from '@/components/ui/StateView';
 import type { PostMediaViewerThreadQuery } from './__generated__/PostMediaViewerThreadQuery.graphql';
+import type { PostMediaViewerHostComponent } from './PostMediaViewerContext';
 
 const PostDetailThread = lazy(async () => {
   const module = await import('./PostDetailThread');
@@ -34,6 +35,7 @@ type Props = Readonly<{
   contentId: string;
   currentPostReplyOnPress?: () => void;
   mediaOwnerPostId: string;
+  mediaViewerHost: PostMediaViewerHostComponent;
   onPostDeleted?: () => void;
   replyAvailable: boolean;
   replySurfacePostId: string;
@@ -55,6 +57,7 @@ function PostMediaViewerThreadContent({
   contentId,
   currentPostReplyOnPress,
   mediaOwnerPostId,
+  mediaViewerHost,
   onPostDeleted,
   replyAvailable,
   replySurfacePostId,
@@ -77,6 +80,7 @@ function PostMediaViewerThreadContent({
       currentPostReplyAvailable={replyAvailable}
       currentPostReplyOnPress={currentPostReplyOnPress}
       currentPostReplySurfaceId={replySurfacePostId}
+      mediaViewerHost={mediaViewerHost}
       onPostDeleted={onPostDeleted}
       onReplyCreated={refetch}
       post={thread}

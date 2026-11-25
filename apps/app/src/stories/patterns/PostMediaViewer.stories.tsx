@@ -273,6 +273,7 @@ function ContextRailFixture() {
       <PostMediaViewerThread
         contentId={wideRailCurrentPost.content!.id}
         mediaOwnerPostId={wideRailCurrentPost.id}
+        mediaViewerHost={PostMediaViewerHostProvider}
         replyAvailable
         replySurfacePostId={wideRailCurrentPost.id}
       />

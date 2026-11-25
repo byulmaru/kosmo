@@ -7,6 +7,7 @@ import { Environment, Network, Observable, RecordSource, Store } from 'relay-run
 import { post } from '@/stories/fixtures';
 import PostDetailThreadFragment from './__generated__/PostDetailThread_post.graphql';
 import PostMediaViewerThreadQueryNode from './__generated__/PostMediaViewerThreadQuery.graphql';
+import type { PropsWithChildren } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { PostDetailThread_post$key } from './__generated__/PostDetailThread_post.graphql';
@@ -115,6 +116,7 @@ async function render() {
         children: createElement(PostMediaViewerThread, {
           contentId: 'content-post-1',
           mediaOwnerPostId: 'post-1',
+          mediaViewerHost: ({ children }: PropsWithChildren) => children,
           replyAvailable: true,
           replySurfacePostId: 'post-1',
         }),

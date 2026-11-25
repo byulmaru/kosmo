@@ -15,10 +15,8 @@ import {
 import PostMediaViewerHostQueryNode from './__generated__/PostMediaViewerHostQuery.graphql';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
-import type {
-  PostMediaViewerHostProvider as HostProviderComponent,
-  usePostMediaViewerHost as UseHost,
-} from './PostMediaViewerHost';
+import type { usePostMediaViewerHost as UseHost } from './PostMediaViewerContext';
+import type { PostMediaViewerHostProvider as HostProviderComponent } from './PostMediaViewerHost';
 
 const PostComposerCoordinatorContext = createContext(undefined);
 
@@ -164,8 +162,8 @@ let HostProvider: typeof HostProviderComponent;
 let useHost: typeof UseHost;
 
 before(async () => {
-  ({ PostMediaViewerHostProvider: HostProvider, usePostMediaViewerHost: useHost } =
-    await import('./PostMediaViewerHost'));
+  ({ usePostMediaViewerHost: useHost } = await import('./PostMediaViewerContext'));
+  ({ PostMediaViewerHostProvider: HostProvider } = await import('./PostMediaViewerHost'));
 });
 
 afterEach(async () => {

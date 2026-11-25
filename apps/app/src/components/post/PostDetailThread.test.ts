@@ -123,9 +123,7 @@ mock.module('@/components/post/PostListItem', {
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
-mock.module('@/components/post/PostMediaViewerHost', {
-  exports: { PostMediaViewerHostProvider: ({ children }: PropsWithChildren) => children },
-} as unknown as Parameters<typeof mock.module>[1]);
+const TestMediaViewerHost = ({ children }: PropsWithChildren) => children;
 
 mock.module('@/components/post/PostComposerCoordinator', {
   exports: { PostComposerCoordinatorProvider: ({ children }: PropsWithChildren) => children },
@@ -277,12 +275,14 @@ async function renderRouteAndViewer() {
         Fragment,
         null,
         createElement(PostDetailThread, {
+          mediaViewerHost: TestMediaViewerHost,
           header: createElement('Header'),
           identity: 'route-thread',
           post: { testPaginationKey: 'route' } as never,
           presentation: 'route',
         } as never),
         createElement(PostDetailThread, {
+          mediaViewerHost: TestMediaViewerHost,
           header: null,
           identity: 'viewer-thread',
           post: { testPaginationKey: 'viewer' } as never,
@@ -298,6 +298,7 @@ async function render(presentation: 'route' | 'viewer') {
   await act(async () => {
     renderer = create(
       createElement(PostDetailThread, {
+        mediaViewerHost: TestMediaViewerHost,
         header: createElement('Header'),
         identity: 'thread-identity',
         post: {} as never,
@@ -321,6 +322,7 @@ describe('PostDetailThread Native initial target scroll', () => {
     await act(async () => {
       renderer = create(
         createElement(PostDetailThread, {
+          mediaViewerHost: TestMediaViewerHost,
           header: createElement('Header'),
           identity: 'native-source',
           post: {} as never,
@@ -418,6 +420,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
       await act(async () => {
         renderer = create(
           createElement(PostDetailThread, {
+            mediaViewerHost: TestMediaViewerHost,
             header: createElement('Header'),
             identity: 'short-mobile-viewport',
             post: {} as never,
@@ -460,6 +463,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
     await act(async () => {
       renderer = create(
         createElement(PostDetailThread, {
+          mediaViewerHost: TestMediaViewerHost,
           header: createElement('Header'),
           identity: 'viewport-offset-adjustment',
           post: {} as never,
@@ -505,6 +509,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
       await act(async () => {
         renderer = create(
           createElement(PostDetailThread, {
+            mediaViewerHost: TestMediaViewerHost,
             header: createElement('Header'),
             identity: 'reused-history-route',
             post: {} as never,
@@ -561,6 +566,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
     await act(async () => {
       renderer = create(
         createElement(PostDetailThread, {
+          mediaViewerHost: TestMediaViewerHost,
           header: createElement('Header'),
           identity: 'history-restored-route',
           preserveScrollPosition: () => true,
@@ -601,6 +607,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
     await act(async () => {
       renderer = create(
         createElement(PostDetailThread, {
+          mediaViewerHost: TestMediaViewerHost,
           header: createElement('Header'),
           identity: 'history-restored-route',
           post: {} as never,
@@ -620,6 +627,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
     await act(async () => {
       renderer!.update(
         createElement(PostDetailThread, {
+          mediaViewerHost: TestMediaViewerHost,
           header: createElement('Header'),
           identity: 'history-restored-route',
           preserveScrollPosition: () => true,
@@ -650,6 +658,7 @@ describe('PostDetailThread Web initial target scroll cleanup', () => {
     await act(async () => {
       renderer = create(
         createElement(PostDetailThread, {
+          mediaViewerHost: TestMediaViewerHost,
           header: createElement('Header'),
           identity: 'web-target',
           post: {} as never,

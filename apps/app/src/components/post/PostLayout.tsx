@@ -12,7 +12,7 @@ import { PostActionSurface } from './PostActionSurface';
 import { PostBody } from './PostBody';
 import { usePostComposerBinding } from './PostComposerCoordinator';
 import { PostContentPrivacyBoundary } from './PostContentPrivacyBoundary';
-import { usePostMediaViewerHost } from './PostMediaViewerHost';
+import { usePostMediaViewerHost } from './PostMediaViewerContext';
 import { getPostReplyActionCount } from './postReplyCount';
 import { PostSourcePreview } from './PostSourcePresentationView';
 import { ReplyComposerSurface } from './ReplyComposerSurface';

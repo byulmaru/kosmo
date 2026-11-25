@@ -5,6 +5,7 @@ import { Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import { graphql, useLazyLoadQuery } from 'react-relay';
 import { PageHeader } from '@/components/PageHeader';
 import { PostDetailFrame, PostDetailThread } from '@/components/post/PostDetailThread';
+import { PostMediaViewerHostProvider } from '@/components/post/PostMediaViewerHost';
 import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { usePrimaryNavigationScroll } from '@/components/shell/PrimaryNavigationScrollContext';
@@ -188,6 +189,7 @@ function PostDetailContent({
       active={active}
       header={header}
       identity={postId}
+      mediaViewerHost={PostMediaViewerHostProvider}
       onCurrentPostBackgroundPress={() => router.push(`/${post.profile.relativeHandle}/${post.id}`)}
       onPostDeleted={() => setLocallyDeleted(true)}
       onReplyCreated={refetch}
