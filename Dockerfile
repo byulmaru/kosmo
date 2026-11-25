@@ -3,7 +3,6 @@
 ARG NODE_VERSION=26.12.1
 # 11.28.8 bundles undici 6.29.1; workspace overrides do not patch pnpm's own dependencies.
 ARG PNPM_VERSION=11.28.8
-ARG SENTRY_RELEASE
 
 FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS base
 
@@ -65,22 +64,22 @@ RUN find apps/app/dist -type f \( \
 
 RUN pnpm --filter @kosmo/admin build
 
-FROM workspace AS runtime-files
-
-ARG SENTRY_RELEASE
+FROM workspace AS runtime-deps
 
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV EXPO_WEB_ROOT=/app/apps/app/dist
-ENV SENTRY_RELEASE=$SENTRY_RELEASE
 
 RUN groupadd --system --gid 10001 app \
   && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
   && chown app:app /app
 
 RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
+  --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
   pnpm install --filter @kosmo/admin --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
+
+FROM runtime-deps AS runtime-files
 
 COPY --chown=app:app tsconfig.json ./
 COPY --chown=app:app apps/api ./apps/api
@@ -101,6 +100,9 @@ FROM runtime-files AS runtime
 RUN apt-get update \
   && apt-get upgrade -y \
   && rm -rf /var/lib/apt/lists/*
+
+ARG SENTRY_RELEASE
+ENV SENTRY_RELEASE=$SENTRY_RELEASE
 
 USER app
 
