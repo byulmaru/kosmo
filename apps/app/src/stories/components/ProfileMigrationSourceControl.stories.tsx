@@ -42,7 +42,7 @@ const query = graphql`
   }
 `;
 
-type Mode = 'error-once' | 'pending' | 'success';
+type Mode = 'error-once' | 'pending' | 'success' | 'unregister-error-once';
 
 function createEnvironment({
   hasMigrationSource,
@@ -106,6 +106,13 @@ function createEnvironment({
           request.name === 'ProfileMigrationSourceControlMutation'
         ) {
           return Promise.reject(new Error('profile migration preparation failed'));
+        }
+        if (
+          mode === 'unregister-error-once' &&
+          attempts === 1 &&
+          request.name === 'ProfileMigrationSourceControlUnregisterMutation'
+        ) {
+          return Promise.reject(new Error('profile migration unregister failed'));
         }
         return Promise.resolve({ data: payload } as GraphQLResponse);
       }
@@ -294,6 +301,7 @@ const meta = {
     'OwnerUnregisterThenRegister',
     'OwnerPreparationAndSuccess',
     'OwnerCanUnregisterWhenSourceIsNotVisible',
+    'OwnerUnregisterFailureAndRetry',
   ],
   parameters: { controls: { disable: true } },
   title: 'KOSMO/Components/Profile Migration Source Control',
@@ -307,6 +315,7 @@ export const Playground: Story = {
 };
 
 export const OwnerWithPreparedSource: Story = {
+  args: { mode: 'success' },
   render: (args) => (
     <ProfileMigrationSourceStory
       {...args}
@@ -336,7 +345,7 @@ export const OwnerPreparationAndSuccess: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '요청 완료' }));
     await expect(canvas.findByText('기존 계정을 등록했어요.')).resolves.toBeVisible();
     await expect(
-      canvas.findByText('이제 기존 서비스에서 아래 주소로 이전을 시작하세요.'),
+      canvas.findByText('아직 이전하지 않았다면, 기존 서비스에서 아래 주소로 이전을 시작하세요.'),
     ).resolves.toBeVisible();
     await expect(
       canvas.findByRole('group', {
@@ -360,13 +369,27 @@ export const OwnerUnregisterThenRegister: Story = {
     await expect(
       canvas.findByRole('button', { name: '기존 계정 등록 해제' }),
     ).resolves.toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
+    expect(args.onMutationAttempt).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole('button', { name: '취소' }));
+    expect(canvas.queryByRole('alertdialog')).toBeNull();
+    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
+
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
+    await userEvent.click(canvas.getByRole('button', { name: '취소' }));
+    expect(args.onMutationAttempt).not.toHaveBeenCalled();
+    expect(canvas.queryByRole('alertdialog')).toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
+    await expect(canvas.findByRole('alertdialog')).resolves.toBeVisible();
+    const dialog = await canvas.findByRole('alertdialog');
+    await expect(within(dialog).findByText('@source@remote.example')).resolves.toBeVisible();
     await expect(
-      canvas.findByText(
+      within(dialog).findByText(
         '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
     ).resolves.toBeVisible();
-    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
-
+    await userEvent.click(canvas.getByRole('button', { name: '등록 해제' }));
     expect(args.onMutationAttempt).toHaveBeenCalledWith(
       'ProfileMigrationSourceControlUnregisterMutation',
       {},
@@ -378,11 +401,7 @@ export const OwnerUnregisterThenRegister: Story = {
     const input = await canvas.findByRole('textbox', { name: '기존 계정 주소' });
     await expect(input).toHaveValue('');
     await expect(canvas.queryByRole('button', { name: '기존 계정 등록 해제' })).toBeNull();
-    expect(
-      canvas.queryByText(
-        '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
-      ),
-    ).toBeNull();
+    expect(canvas.queryByRole('alertdialog')).toBeNull();
 
     await userEvent.type(input, '@new@remote.example');
     await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록' }));
@@ -398,10 +417,9 @@ export const OwnerUnregisterThenRegister: Story = {
     expect(canvas.queryByRole('button', { name: '기존 계정 등록' })).toBeNull();
     expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
     await expect(
-      canvas.findByText(
-        '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
-      ),
+      canvas.findByText('아직 이전하지 않았다면, 기존 서비스에서 아래 주소로 이전을 시작하세요.'),
     ).resolves.toBeVisible();
+    expect(canvas.queryByRole('alertdialog')).toBeNull();
     await expect(canvas.findByText('기존 계정을 등록했어요.')).resolves.toBeVisible();
   },
   render: (args) => (
@@ -424,15 +442,17 @@ export const OwnerCanUnregisterWhenSourceIsNotVisible: Story = {
       canvas.findByRole('button', { name: '기존 계정 등록 해제' }),
     ).resolves.toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
-    expect(args.onMutationAttempt).toHaveBeenCalledWith(
-      'ProfileMigrationSourceControlUnregisterMutation',
-      {},
-    );
     await expect(
       canvas.findByText(
         '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
     ).resolves.toBeVisible();
+    expect(args.onMutationAttempt).not.toHaveBeenCalled();
+    await userEvent.click(canvas.getByRole('button', { name: '등록 해제' }));
+    expect(args.onMutationAttempt).toHaveBeenCalledWith(
+      'ProfileMigrationSourceControlUnregisterMutation',
+      {},
+    );
     expect(canvas.queryByRole('button', { name: '기존 계정 등록' })).toBeNull();
 
     await userEvent.click(canvas.getByRole('button', { name: '요청 완료' }));
@@ -462,6 +482,32 @@ export const FailureAndRetry: Story = {
     await expect(canvas.findByText('기존 계정을 등록했어요.')).resolves.toBeVisible();
   },
   render: (args) => <ProfileMigrationSourceStory {...args} editable mode="error-once" />,
+};
+
+export const OwnerUnregisterFailureAndRetry: Story = {
+  play: async ({ args, canvasElement }) => {
+    args.onMutationAttempt.mockClear();
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
+    await userEvent.click(canvas.getByRole('button', { name: '등록 해제' }));
+    await expect(canvas.findByRole('alert')).resolves.toHaveTextContent(
+      '기존 계정 등록을 해제하지 못했어요.',
+    );
+    expect(canvas.getByRole('button', { name: '기존 계정 등록 해제' })).toBeVisible();
+    expect(canvas.queryByRole('textbox', { name: '기존 계정 주소' })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '기존 계정 등록 해제' }));
+    await userEvent.click(canvas.getByRole('button', { name: '등록 해제' }));
+    expect(args.onMutationAttempt).toHaveBeenCalledTimes(2);
+  },
+  render: (args) => (
+    <ProfileMigrationSourceStory
+      {...args}
+      editable
+      hasMigrationSource={true}
+      initialSource={preparedSource}
+      mode="unregister-error-once"
+    />
+  ),
 };
 
 export const LateCompletionIgnoredAfterActorLifecycleReset: Story = {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement, useState } from 'react';
 import { act, create } from 'react-test-renderer';
+import type { ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { ProfileMigrationSourceControl as ProfileMigrationSourceControlExport } from './ProfileMigrationSourceControl';
 
@@ -86,10 +87,22 @@ mockModule(new URL('../ui/Button.tsx', import.meta.url), {
 mockModule(new URL('../ui/TextField.tsx', import.meta.url), {
   TextField: (props: Record<string, unknown>) => createElement('TextField', props),
 });
+mockModule(new URL('../ui/ModalSheet.tsx', import.meta.url), {
+  ModalSheet: (props: Record<string, unknown>) =>
+    props.visible ? createElement('ModalSheet', props, props.children as ReactNode) : null,
+});
+mockModule(new URL('../ui/ConfirmationContent.tsx', import.meta.url), {
+  ConfirmationContent: (props: Record<string, unknown>) =>
+    createElement('ConfirmationContent', props, props.children as ReactNode),
+});
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
+    backgroundSurface: '#fff',
+    borderDefault: '#ddd',
     danger: '#a00',
     divider: '#ddd',
+    foregroundPrimary: '#111',
+    foregroundSecondary: '#666',
     text: '#111',
     textSecondary: '#666',
   }),
@@ -97,8 +110,13 @@ mockModule('@/theme/ThemeProvider', {
 mockModule('@/theme/tokens', {
   borderWidths: { 1: 1 },
   breakpoints: { compact: 768 },
+  radius: { 12: 12 },
   space: { 4: 4, 8: 8, 12: 12, 16: 16, 24: 24 },
-  textStyles: { uiCopyM: { fontSize: 14 }, uiLabelM: { fontSize: 14 } },
+  textStyles: {
+    uiCopyM: { fontSize: 14 },
+    uiLabelL: { fontSize: 16 },
+    uiLabelM: { fontSize: 14 },
+  },
 });
 
 let ProfileMigrationSourceControl: typeof ProfileMigrationSourceControlExport;
@@ -126,6 +144,24 @@ afterEach(async () => {
 });
 
 describe('ProfileMigrationSourceControl', () => {
+  it('등록 해제 action은 확인 전 mutation을 보내지 않는다', async () => {
+    profile.hasMigrationSource = true;
+    profile.migrationSource = {
+      displayName: '원격 원본',
+      id: 'profile-source',
+      relativeHandle: '@source@remote.example',
+    };
+    await render(true);
+
+    await act(async () => rendered('Button')[0].props.onPress());
+
+    assert.equal(mutationConfigs.length, 0);
+    assert.equal(rendered('ModalSheet')[0].props.role, 'alertdialog');
+    assert.equal(rendered('ConfirmationContent')[0].props.confirmLabel, '등록 해제');
+    await act(async () => rendered('ConfirmationContent')[0].props.onCancel());
+    assert.equal(rendered('ModalSheet').length, 0);
+  });
+
   it('Owner가 기존 계정을 등록하고 선택된 Profile의 qualified destination 주소를 보여준다', async () => {
     await render(true);
 
@@ -187,7 +223,7 @@ describe('ProfileMigrationSourceControl', () => {
           node.children.join('') ===
           '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
-      true,
+      false,
     );
     assert.equal(
       rendered('Text').filter((node) => node.children.join('') === '기존 계정을 등록했어요.')
@@ -202,7 +238,9 @@ describe('ProfileMigrationSourceControl', () => {
     );
     assert.equal(
       rendered('Text').some(
-        (node) => node.children.join('') === '이제 기존 서비스에서 아래 주소로 이전을 시작하세요.',
+        (node) =>
+          node.children.join('') ===
+          '아직 이전하지 않았다면, 기존 서비스에서 아래 주소로 이전을 시작하세요.',
       ),
       true,
     );
@@ -265,6 +303,7 @@ describe('ProfileMigrationSourceControl', () => {
     );
 
     await act(async () => rendered('Button')[0].props.onPress());
+    await act(async () => rendered('ConfirmationContent')[0].props.onConfirm());
     assert.deepEqual(
       rendered('Button').map((button) => button.props.accessibilityLabel),
       ['기존 계정 등록 해제'],
@@ -396,7 +435,7 @@ describe('ProfileMigrationSourceControl', () => {
           node.children.join('') ===
           '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
-      true,
+      false,
     );
   });
 
@@ -411,6 +450,7 @@ describe('ProfileMigrationSourceControl', () => {
 
     const unregister = rendered('Button')[0];
     await act(async () => unregister.props.onPress());
+    await act(async () => rendered('ConfirmationContent')[0].props.onConfirm());
     assert.equal(
       mutationConfigs[0].operationName,
       'ProfileMigrationSourceControlUnregisterMutation',
@@ -452,6 +492,7 @@ describe('ProfileMigrationSourceControl', () => {
     await render(true);
 
     await act(async () => rendered('Button')[0].props.onPress());
+    await act(async () => rendered('ConfirmationContent')[0].props.onConfirm());
     await act(async () => mutationConfigs[0].onError(new Error('server detail')));
 
     assert.equal(rendered('Button')[0].props.accessibilityLabel, '기존 계정 등록 해제');
@@ -462,7 +503,7 @@ describe('ProfileMigrationSourceControl', () => {
           node.children.join('') ===
           '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
-      true,
+      false,
     );
     assert.equal(
       rendered('Text').some(
@@ -473,6 +514,7 @@ describe('ProfileMigrationSourceControl', () => {
       true,
     );
     await act(async () => rendered('Button')[0].props.onPress());
+    await act(async () => rendered('ConfirmationContent')[0].props.onConfirm());
     assert.deepEqual(mutationConfigs[1].variables, {});
     assert.equal(profile.migrationSource?.relativeHandle, '@source@remote.example');
   });
@@ -487,6 +529,7 @@ describe('ProfileMigrationSourceControl', () => {
     await render(true);
 
     await act(async () => rendered('Button')[0].props.onPress());
+    await act(async () => rendered('ConfirmationContent')[0].props.onConfirm());
     await act(async () =>
       mutationConfigs[0].onCompleted({
         unregisterProfileMigrationSource: { profile: { id: 'another-profile' } },
@@ -553,16 +596,19 @@ describe('ProfileMigrationSourceControl', () => {
           node.children.join('') ===
           '등록을 해제하면 남은 팔로워 이전이 중단될 수 있어요. 이미 옮겨온 팔로워는 유지돼요.',
       ),
-      true,
+      false,
     );
     assert.equal(
       rendered('Text').some(
-        (node) => node.children.join('') === '이제 기존 서비스에서 아래 주소로 이전을 시작하세요.',
+        (node) =>
+          node.children.join('') ===
+          '아직 이전하지 않았다면, 기존 서비스에서 아래 주소로 이전을 시작하세요.',
       ),
-      false,
+      true,
     );
 
     await act(async () => rendered('Button')[0].props.onPress());
+    await act(async () => rendered('ConfirmationContent')[0].props.onConfirm());
     profile.hasMigrationSource = false;
     await act(async () =>
       mutationConfigs[0].onCompleted({
