@@ -503,6 +503,31 @@ test('compose에서 공개 범위와 500자 제한을 적용해 게시 요청을
   await expect(page.getByText(body).filter({ visible: true })).toBeVisible();
 });
 
+test('좁은 Web에서 게시 성공 알림이 떠 있는 동안 하단 탭으로 이동한다', async ({
+  context,
+  page,
+}) => {
+  const viewer = await createE2ESession({
+    displayName: 'E2E Composer Navigation',
+    handle: 'e2e-composer-navigation',
+  });
+  await setE2ESessionCookie(context, viewer.token);
+  await page.setViewportSize({ width: 390, height: 500 });
+  const composer = await openComposer(page);
+  await composer.getByRole('textbox', { name: '게시글 본문' }).fill('E2E post before navigation');
+  await composer.getByRole('button', { name: '게시', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '글쓰기' })).toHaveCount(0);
+
+  const successToast = page.getByRole('alert').filter({ hasText: '게시했어요' });
+  await expect(successToast).toBeVisible();
+  await page
+    .getByRole('navigation', { name: '하단 탐색' })
+    .getByRole('link', { name: '검색', exact: true })
+    .click();
+  await expect(successToast).toBeVisible();
+  await expect(page).toHaveURL(/\/search$/);
+});
+
 test('기본 공개 범위 저장부터 Local 재선택까지 production wiring을 유지한다', async ({
   context,
   page,
