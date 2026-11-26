@@ -163,6 +163,9 @@ mockModule('@/components/PageHeader', {
   PageHeaderView: ({ leading, ...props }: { leading?: ReactNode; [key: string]: unknown }) =>
     createElement('PageHeader', props, leading),
 });
+mockModule('@/components/coachmark/TimelineCoachmark', {
+  TimelineHelpButton: () => null,
+});
 mockModule('@/components/post/PostMediaViewerHost', {
   PostMediaViewerScreenFallbackProvider: PassThrough,
 });
@@ -247,9 +250,6 @@ mockModule('./shellLayout', {
     showRightRail,
   }),
   isNativeDrawerSwipeEnabled,
-  isSettingsRoute: (route: string) => route.startsWith('/settings/'),
-  isTimelineRoute: (route: string) =>
-    route === '/home' || route === '/local' || route === '/federated',
 });
 
 let UniversalShell: typeof UniversalShellComponent;

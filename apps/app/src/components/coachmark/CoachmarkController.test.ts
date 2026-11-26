@@ -475,7 +475,10 @@ test('account changes clear requests and stale handles cannot affect the new acc
   });
   assert.ok(newAccountRequest);
 
-  await act(async () => oldAccountRequest?.cancel());
+  await act(async () => {
+    oldAccountRequest?.cancel();
+    oldAccountRequest?.cancel();
+  });
   assert.equal(renderer?.root.findByType('Coachmark' as never).props.description, '현재 계정 안내');
 
   await act(async () => {
@@ -488,7 +491,10 @@ test('account changes clear requests and stale handles cannot affect the new acc
   });
   assert.equal(renderer?.root.findAllByType('Coachmark' as never).length, 0);
 
-  await act(async () => newAccountRequest?.cancel());
+  await act(async () => {
+    newAccountRequest?.cancel();
+    newAccountRequest?.cancel();
+  });
 });
 
 test('controller callbacks from the previous account reject synchronously', async () => {
@@ -499,7 +505,6 @@ test('controller callbacks from the previous account reject synchronously', asyn
   };
   await renderProvider(createElement(ControllerProbe), account.id);
   const previous = renderer?.root.findByType('ControllerProbe' as never).props;
-
   await act(async () => {
     renderer?.update(
       createElement(CoachmarkProvider, {

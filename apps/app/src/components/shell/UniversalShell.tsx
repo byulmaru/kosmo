@@ -115,6 +115,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const composerTriggerFocusRef = useRef<HTMLElement | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [timelineHelp, setTimelineHelp] = useState<(() => void) | null>(null);
   const [invitationDismissed, setInvitationDismissed] = useState(() => {
     try {
       return (
@@ -127,6 +128,9 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
   const [invitationHeight, setInvitationHeight] = useState(0);
   const { accountId, status } = useSession();
   const menuButtonRef = useRef<NativeView>(null);
+  const timelineProfileRef = useRef<NativeView>(null);
+  const timelineComposerRef = useRef<NativeView>(null);
+  const timelineHelpTriggerRef = useRef<NativeView>(null);
   const screenFallbackRef = useRef<NativeView>(null);
   const homeReselectionHandlerRef = useRef<HomeReselectionHandler | null>(null);
   const tabReselectionRegistryRef = useRef(createTabReselectionRegistry());
@@ -138,6 +142,10 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         homeReselectionHandlerRef.current = null;
       }
     };
+  }, []);
+  const registerTimelineHelp = useCallback((handler: (() => void) | null) => {
+    setTimelineHelp(() => handler);
+    return () => setTimelineHelp((current) => (current === handler ? null : current));
   }, []);
   const reselectHome = useCallback(() => {
     homeReselectionHandlerRef.current?.();
@@ -374,9 +382,11 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
             feedbackActive={feedbackOverlayVisible}
             guestPublicContent={guestPublicContent}
             onComposeOpen={layout === 'compact' ? openComposer : undefined}
+            composeTriggerRef={timelineComposerRef}
             onFeedbackOpen={openFeedbackOverlay}
             onHomeReselect={web ? reselectHome : undefined}
             onSwitcherOpenChange={setSwitcherOpen}
+            profileTriggerRef={timelineProfileRef}
             query={data}
             switcherOpen={switcherOpen}
           />
@@ -439,7 +449,11 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         </View>
         {mobile && !guestMobileRoot ? (
           <View aria-hidden={drawerOpen || undefined} style={web ? webFixedBottomBar : undefined}>
-            <BottomTabBar onComposeOpen={openComposer} profile={profile} />
+            <BottomTabBar
+              composeTriggerRef={timelineComposerRef}
+              onComposeOpen={openComposer}
+              profile={profile}
+            />
           </View>
         ) : null}
       </View>
@@ -456,6 +470,7 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
         >
           {profile ? (
             <RightRail
+              anchorRef={showRightRail ? timelineComposerRef : undefined}
               fallbackFocusRef={screenFallbackRef as unknown as RefObject<HTMLElement | null>}
               onRequestClose={closeComposer}
               open={composerVisible}
@@ -516,6 +531,11 @@ function UniversalShellContent({ children }: { children?: ReactNode }) {
       openNavigationDrawer={openNavigationDrawer}
       openProfileSwitcher={openProfileSwitcher}
       selectedProfile={profile}
+      registerTimelineHelp={registerTimelineHelp}
+      timelineComposerRef={timelineComposerRef}
+      timelineHelp={timelineHelp ?? undefined}
+      timelineHelpTriggerRef={timelineHelpTriggerRef}
+      timelineProfileRef={timelineProfileRef}
       registerHomeReselection={registerHomeReselection}
       registerTabReselection={registerTabReselection}
       reselectTab={reselectTab}

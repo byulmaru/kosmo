@@ -5,6 +5,7 @@ import {
   getProfileEditActionTargetMetrics,
   getShellLayout,
   getShellRoutePresentation,
+  getTimelineGuideViewportWidth,
   isNativeDrawerSwipeEnabled,
   isSettingsRoute,
   isTimelineRoute,
@@ -106,5 +107,29 @@ describe('getShellLayout', () => {
       settingsWorkspace: false,
       showRightRail: false,
     });
+  });
+});
+
+describe('getTimelineGuideViewportWidth', () => {
+  it('uses the scrollbar-independent Web viewport and falls back for Native or SSR', () => {
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+
+    try {
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true,
+        value: { innerWidth: 1_280 },
+      });
+      assert.equal(getTimelineGuideViewportWidth(true, 1_265), 1_280);
+      assert.equal(getTimelineGuideViewportWidth(false, 1_265), 1_265);
+
+      Reflect.deleteProperty(globalThis, 'window');
+      assert.equal(getTimelineGuideViewportWidth(true, 1_265), 1_265);
+    } finally {
+      if (originalWindow) {
+        Object.defineProperty(globalThis, 'window', originalWindow);
+      } else {
+        Reflect.deleteProperty(globalThis, 'window');
+      }
+    }
   });
 });

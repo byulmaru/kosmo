@@ -19,6 +19,7 @@ import {
   getRequest,
   ROOT_ID,
 } from 'relay-runtime';
+import { TimelineCoachmark, TimelineHelpButton } from '@/components/coachmark/TimelineCoachmark';
 import { PageHeader } from '@/components/PageHeader';
 import { PostList } from '@/components/post/PostList';
 import { PostRequestListSummary } from '@/components/post/PostRequestList';
@@ -26,7 +27,7 @@ import { RouteBoundary, useRouteBoundary } from '@/components/RouteBoundary';
 import { MobileWebRouteChrome } from '@/components/shell/MobileWebRouteChrome';
 import { NavigationDrawerTrigger } from '@/components/shell/NavigationDrawerTrigger';
 import { useShellChrome } from '@/components/shell/ShellChromeContext';
-import { getShellLayout } from '@/components/shell/shellLayout';
+import { getShellLayout, getTimelineGuideViewportWidth } from '@/components/shell/shellLayout';
 import { HomePushPermissionBanner } from '@/components/timeline/HomePushPermissionBanner';
 import { TimelineTabs } from '@/components/TimelineTabs';
 import { Button } from '@/components/ui/Button';
@@ -34,7 +35,7 @@ import { StateView } from '@/components/ui/StateView';
 import { useToast } from '@/components/ui/ToastProvider';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, RefObject } from 'react';
 import type { ViewStyle } from 'react-native';
 import type { RouteBoundaryHandle } from '@/components/RouteBoundary';
 import type { HomePageQuery, HomePageQuery$data } from './__generated__/HomePageQuery.graphql';
@@ -60,6 +61,7 @@ const HomeQuery = graphql`
       id
       selectedProfile {
         id
+        displayName
         ...ReplyComposerSurface_profile
       }
     }
@@ -69,6 +71,7 @@ const HomeQuery = graphql`
       profiles {
         id
       }
+      ...CoachmarkController_account
     }
     ...PostList_home @arguments(count: 20)
   }
@@ -119,6 +122,8 @@ export default function HomeScreen() {
   const registerHomeReselection = shellChrome?.registerHomeReselection;
   const routeBoundaryRef = useRef<RouteBoundaryHandle>(null);
   const homeRefreshRef = useRef<HomeRefresh | null>(null);
+  const homeTabAnchorRef = useRef<View>(null);
+  const localTabAnchorRef = useRef<View>(null);
   const registerHomeRefresh = useCallback((refresh: HomeRefresh | null) => {
     homeRefreshRef.current = refresh;
   }, []);
@@ -152,7 +157,11 @@ export default function HomeScreen() {
   }, [environment]);
 
   return (
-    <HomeFrame onBrandCurrentNavigate={shellChrome?.reselectHome}>
+    <HomeFrame
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
+      onBrandCurrentNavigate={shellChrome?.reselectHome}
+    >
       <RouteBoundary
         loading={<StateView loading title="홈을 불러오는 중입니다." />}
         ref={routeBoundaryRef}
@@ -163,6 +172,8 @@ export default function HomeScreen() {
           onAutomaticRefresh={requestAutomaticRefresh}
           onRefresh={handleHomeReselection}
           registerHomeRefresh={registerHomeRefresh}
+          homeTabAnchorRef={homeTabAnchorRef}
+          localTabAnchorRef={localTabAnchorRef}
         />
       </RouteBoundary>
     </HomeFrame>
@@ -171,8 +182,14 @@ export default function HomeScreen() {
 
 function HomeFrame({
   children,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onBrandCurrentNavigate,
-}: PropsWithChildren<{ onBrandCurrentNavigate?: () => void }>) {
+}: PropsWithChildren<{
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
+  onBrandCurrentNavigate?: () => void;
+}>) {
   const { width } = useWindowDimensions();
   const mobileWeb = Platform.OS === 'web' && getShellLayout(true, width) === 'mobile';
 
@@ -186,6 +203,7 @@ function HomeFrame({
           onBrandCurrentNavigate={
             Platform.OS === 'web' && !mobileWeb ? onBrandCurrentNavigate : undefined
           }
+          trailing={<TimelineHelpButton />}
           variant="brand"
         />
         <View
@@ -193,7 +211,11 @@ function HomeFrame({
             Platform.OS === 'web' && !mobileWeb ? [styles.webTimelineTabs, { top: 0 }] : undefined
           }
         >
-          <TimelineTabs value="home" />
+          <TimelineTabs
+            homeAnchorRef={homeTabAnchorRef}
+            localAnchorRef={localTabAnchorRef}
+            value="home"
+          />
         </View>
       </MobileWebRouteChrome>
       <View style={styles.body}>{children}</View>
@@ -206,11 +228,15 @@ function HomeRouteContent({
   onAutomaticRefresh,
   onRefresh,
   registerHomeRefresh,
+  homeTabAnchorRef,
+  localTabAnchorRef,
 }: {
   active: boolean;
   onAutomaticRefresh: HomeAutomaticRefresh;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: HomeRefresh | null) => void;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
 }) {
   const { fetchKey } = useRouteBoundary();
 
@@ -221,6 +247,8 @@ function HomeRouteContent({
       onAutomaticRefresh={onAutomaticRefresh}
       onRefresh={onRefresh}
       registerHomeRefresh={registerHomeRefresh}
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
     />
   );
 }
@@ -231,12 +259,16 @@ function HomeContent({
   onAutomaticRefresh,
   onRefresh,
   registerHomeRefresh,
+  homeTabAnchorRef,
+  localTabAnchorRef,
 }: {
   active: boolean;
   fetchKey: string;
   onAutomaticRefresh: HomeAutomaticRefresh;
   onRefresh: () => void;
   registerHomeRefresh: (refresh: HomeRefresh | null) => void;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
 }) {
   const environment = useRelayEnvironment();
   const { showToast } = useToast();
@@ -415,6 +447,8 @@ function HomeContent({
         onRefresh={onRefresh}
         postRequestRefreshKey={postRequestRefreshKey}
         refreshing={refreshing}
+        homeTabAnchorRef={homeTabAnchorRef}
+        localTabAnchorRef={localTabAnchorRef}
       />
     </>
   );
@@ -474,6 +508,8 @@ function HomeContentView({
   data,
   fetchKey,
   onAtTopChange,
+  homeTabAnchorRef,
+  localTabAnchorRef,
   onRefresh,
   postRequestRefreshKey,
   refreshing,
@@ -482,11 +518,14 @@ function HomeContentView({
   data: HomePageQuery$data;
   fetchKey: string;
   onAtTopChange: (atTop: boolean) => void;
+  homeTabAnchorRef: RefObject<View | null>;
+  localTabAnchorRef: RefObject<View | null>;
   onRefresh: () => void;
   postRequestRefreshKey: number;
   refreshing: boolean;
 }) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const shellChrome = useShellChrome();
   const selectedProfile = data.currentSession?.selectedProfile ?? null;
   const accountId = data.me?.id ?? null;
@@ -516,6 +555,23 @@ function HomeContentView({
       ) : null,
     [accountId, openComposer, postRequestFetchKey, postRequestFetchPolicy, selectedProfileId],
   );
+  const shellLayout = getShellLayout(Platform.OS === 'web', width);
+  const timelineLayout = getShellLayout(
+    Platform.OS === 'web',
+    getTimelineGuideViewportWidth(Platform.OS === 'web', width),
+  );
+  const coachmark = (
+    <TimelineCoachmark
+      account={data.me}
+      hasProfiles={hasProfiles}
+      hasSelectedProfile={Boolean(selectedProfile)}
+      lifecycleKey={`${data.me?.id ?? 'guest'}:${selectedProfile?.id ?? 'none'}:${timelineLayout}`}
+      mobile={Platform.OS !== 'web' || shellLayout === 'mobile'}
+      homeTabAnchorRef={homeTabAnchorRef}
+      localTabAnchorRef={localTabAnchorRef}
+      profileName={selectedProfile?.displayName}
+    />
+  );
 
   if (data.currentSession && data.me && data.me.profiles.length === 0) {
     return <Redirect href="/first-profile/handle" />;
@@ -523,39 +579,48 @@ function HomeContentView({
 
   if (!selectedProfile) {
     return (
-      <View style={styles.onboardingRoot}>
-        <View style={styles.onboarding}>
-          <UserRoundPlus color={theme.textSecondary} size={48} strokeWidth={1.5} />
-          <Text accessibilityRole="header" style={[styles.onboardingTitle, { color: theme.text }]}>
-            {hasProfiles ? '사용할 프로필을 선택해주세요' : '프로필을 만들어 시작하세요'}
-          </Text>
-          <Text style={[styles.description, { color: theme.textSecondary }]}>
-            {hasProfiles
-              ? '홈을 보려면 사용할 프로필을 먼저 선택해야 해요.'
-              : '프로필을 만들면 글을 쓰고 피드를 볼 수 있어요.'}
-          </Text>
-          <Button onPress={() => shellChrome?.openProfileSwitcher()} style={styles.action}>
-            {hasProfiles ? '프로필 선택' : '프로필 만들기'}
-          </Button>
+      <>
+        {coachmark}
+        <View style={styles.onboardingRoot}>
+          <View style={styles.onboarding}>
+            <UserRoundPlus color={theme.textSecondary} size={48} strokeWidth={1.5} />
+            <Text
+              accessibilityRole="header"
+              style={[styles.onboardingTitle, { color: theme.text }]}
+            >
+              {hasProfiles ? '사용할 프로필을 선택해주세요' : '프로필을 만들어 시작하세요'}
+            </Text>
+            <Text style={[styles.description, { color: theme.textSecondary }]}>
+              {hasProfiles
+                ? '홈을 보려면 사용할 프로필을 먼저 선택해야 해요.'
+                : '프로필을 만들면 글을 쓰고 피드를 볼 수 있어요.'}
+            </Text>
+            <Button onPress={() => shellChrome?.openProfileSwitcher()} style={styles.action}>
+              {hasProfiles ? '프로필 선택' : '프로필 만들기'}
+            </Button>
+          </View>
         </View>
-      </View>
+      </>
     );
   }
 
   return (
-    <View style={styles.timeline}>
-      <HomePushPermissionBanner />
-      <PostList
-        active={active}
-        header={postRequestCards}
-        home={data}
-        identityKey={`home:${selectedProfile.id}`}
-        onAtTopChange={onAtTopChange}
-        onRefresh={onRefresh}
-        replyProfile={selectedProfile}
-        refreshing={refreshing}
-      />
-    </View>
+    <>
+      {coachmark}
+      <View style={styles.timeline}>
+        <HomePushPermissionBanner />
+        <PostList
+          active={active}
+          header={postRequestCards}
+          home={data}
+          identityKey={`home:${selectedProfile.id}`}
+          onAtTopChange={onAtTopChange}
+          onRefresh={onRefresh}
+          replyProfile={selectedProfile}
+          refreshing={refreshing}
+        />
+      </View>
+    </>
   );
 }
 
