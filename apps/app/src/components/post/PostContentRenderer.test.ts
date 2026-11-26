@@ -258,7 +258,7 @@ describe('PostContentRenderer', () => {
     assert.equal(rendered('PostLinkPreviewCard').length, 0);
   });
 
-  it('일반 링크는 외부 URL을 열고 부모 본문으로 이벤트를 전파하지 않는다', async () => {
+  it('외부 링크는 브라우저로 열고 부모 본문으로 이벤트를 전파하지 않는다', async () => {
     await render({
       bodyText: '외부 링크',
       contentWarning: null,
@@ -301,6 +301,50 @@ describe('PostContentRenderer', () => {
     assert.equal(stopped, true);
     assert.equal(prevented, true);
     assert.deepEqual(openedURLs, ['https://example.com/post']);
+  });
+
+  it('KOSMO 공유 링크는 앱 경로로 연결하고 부모 본문으로 이벤트를 전파하지 않는다', async () => {
+    const href = 'https://kos.moe/@alice/post-id?source=shared#latest';
+    await render({
+      bodyText: 'KOSMO 게시글',
+      contentWarning: null,
+      document: {
+        version: 1,
+        summary: null,
+        body: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: 'KOSMO 게시글',
+                  marks: [{ type: 'link', attrs: { href } }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      media: [],
+      mentionedProfiles: [],
+      postId: 'post-kosmo-link',
+    });
+
+    const [appLink] = rendered('NavigationLink');
+    assert.equal(appLink?.props.href, '/@alice/post-id?source=shared#latest');
+    const link = rendered('Text').find((node) => node.props.accessibilityRole === 'link');
+    assert.ok(link);
+    let stopped = false;
+    link.props.onPress({
+      preventDefault: () => assert.fail('앱 경로 이동을 취소하면 안 된다'),
+      stopPropagation: () => {
+        stopped = true;
+      },
+    });
+    assert.equal(stopped, true);
+    assert.deepEqual(openedURLs, []);
   });
 
   it('content warning row exposes its summary, metadata, action, and expanded state', async () => {

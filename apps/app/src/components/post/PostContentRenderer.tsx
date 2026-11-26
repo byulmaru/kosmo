@@ -3,6 +3,7 @@ import { Fragment } from 'react';
 import { Linking, Pressable, StyleSheet, Text } from 'react-native';
 import { match } from 'ts-pattern';
 import { NavigationLink } from '@/components/shell/NavigationLink';
+import { resolveAppLink } from '@/lib/appLink';
 import { useTheme } from '@/theme/ThemeProvider';
 import { fontFamilies, spacing, typography } from '@/theme/tokens';
 import { PostContentMention } from './PostContentMention';
@@ -233,21 +234,38 @@ function renderMark(
       (value) => value.type === 'link' && !context.interactive,
       () => content,
     )
-    .with({ type: 'link' }, (link) => (
-      <Text
-        accessibilityLabel={`${accessibilityLabel}, ${link.attrs.href}`}
-        accessibilityRole="link"
-        key={key}
-        onPress={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          void Linking.openURL(link.attrs.href);
-        }}
-        style={[styles.link, { color: context.linkColor }]}
-      >
-        {content}
-      </Text>
-    ))
+    .with({ type: 'link' }, ({ attrs }) => {
+      const target = resolveAppLink(attrs.href);
+      if (!target) {
+        return content;
+      }
+
+      const text = (
+        <Text
+          accessibilityLabel={`${accessibilityLabel}, ${attrs.href}`}
+          accessibilityRole="link"
+          key={key}
+          onPress={(event) => {
+            event.stopPropagation();
+            if (target.kind === 'external') {
+              event.preventDefault();
+              void Linking.openURL(target.href);
+            }
+          }}
+          style={[styles.link, { color: context.linkColor }]}
+        >
+          {content}
+        </Text>
+      );
+
+      return target.kind === 'internal' ? (
+        <NavigationLink key={key} href={target.href}>
+          {text}
+        </NavigationLink>
+      ) : (
+        text
+      );
+    })
     .otherwise(() => content);
 }
 

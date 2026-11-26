@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, before, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { PostLinkPreviewData } from './PostLinkPreview';
 
@@ -26,6 +26,10 @@ mockModule('react-native', {
   StyleSheet: { create: (styles: object) => styles },
   Text: 'Text',
   View: 'View',
+});
+mockModule('@/components/shell/NavigationLink', {
+  NavigationLink: ({ children, href }: { children: ReactNode; href: unknown }) =>
+    createElement('NavigationLink', { href }, children),
 });
 mockModule('@/theme/ThemeProvider', {
   useTheme: () => ({
@@ -92,6 +96,33 @@ describe('PostLinkPreviewCard', () => {
     assert.equal(prevented, true);
     assert.equal(stopped, true);
     assert.deepEqual(openedURLs, [url]);
+  });
+
+  it('links a KOSMO preview to its app route and stops the parent post press', async () => {
+    await render({
+      preview: {
+        description: null,
+        imageUrl: null,
+        title: 'KOSMO 게시글',
+        url: 'https://kos.moe/@alice/post-id?source=preview#latest',
+      },
+    });
+
+    const [appLink] = rendered('NavigationLink');
+    assert.equal(appLink?.props.href, '/@alice/post-id?source=preview#latest');
+    const [card] = rendered('Pressable');
+    assert.ok(card);
+    let stopped = false;
+    await act(async () =>
+      card.props.onPress({
+        preventDefault: () => assert.fail('앱 경로 이동을 취소하면 안 된다'),
+        stopPropagation: () => {
+          stopped = true;
+        },
+      }),
+    );
+    assert.equal(stopped, true);
+    assert.deepEqual(openedURLs, []);
   });
 
   it('shows an image and long text without making a noninteractive preview a link', async () => {

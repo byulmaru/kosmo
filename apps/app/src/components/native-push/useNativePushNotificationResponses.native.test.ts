@@ -119,6 +119,22 @@ describe('native push responses', () => {
     assert.equal(clearResponseCount, 1);
   });
 
+  it('opens an absolute KOSMO notice URL with the app router', async () => {
+    await renderHook();
+
+    await handle({
+      href: 'https://kos.moe/privacy/changes/2026-10-13?source=notice#latest',
+      notificationId: 'operational-1',
+      recipientAccountId: 'account-1',
+    });
+
+    assert.deepEqual(
+      router.replace.mock.calls.map(({ arguments: args }) => args),
+      [['/privacy/changes/2026-10-13?source=notice#latest']],
+    );
+    assert.equal(openURL.mock.callCount(), 0);
+  });
+
   it('opens external HTTPS destinations for the matching account without profile switching', async () => {
     await renderHook();
 

@@ -1,7 +1,7 @@
-import { parseNotificationHref } from '@/components/notification/notificationHref';
+import { resolveAppLink } from '@/lib/appLink';
 import type { NotificationResponse } from 'expo-notifications';
 import type { Href } from 'expo-router';
-import type { NotificationHrefTarget } from '@/components/notification/notificationHref';
+import type { AppLinkTarget } from '@/lib/appLink';
 
 export type NativeProfilePushTapTarget = {
   href: Href;
@@ -11,7 +11,7 @@ export type NativeProfilePushTapTarget = {
 };
 
 export type NativeOperationalPushTapTarget = {
-  href: NotificationHrefTarget;
+  href: AppLinkTarget;
   kind: 'operational';
   notificationId: string;
   recipientAccountId: string;
@@ -46,7 +46,7 @@ export function parseNativePushTapTarget(value: unknown): NativePushTapTarget | 
     return null;
   }
 
-  const notificationHref = parseNotificationHref(href);
+  const notificationHref = resolveAppLink(href);
   if (
     recipientProfileId &&
     !recipientAccountId &&

@@ -18,6 +18,7 @@
 ## 상호작용
 
 - 대화형 Post Content에서는 카드 전체가 본문 첫 링크와 같은 URL을 연다. 카드 입력은 부모 Post의 navigation을 함께 실행하지 않는다.
+- 본문과 미리보기에서 현재 KOSMO origin의 링크는 앱 경로로 열고, 다른 origin의 HTTP(S) 링크는 브라우저에서 연다.
 - 전체 Post preview가 `interactive=false`로 표시되는 Composer의 Reply Parent·Quote Source 등에서는 카드도 비대화형으로 유지한다. 카드만 별도 외부 링크 입력을 추가하지 않는다.
 
 ## Content Warning과 Media

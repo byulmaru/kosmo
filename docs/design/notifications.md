@@ -97,9 +97,9 @@ Reaction/Repost의 사진을 게시글 이동 영역에서 분리한다.
   읽지 않은 행에는 기존의 subtle surface와 rail을 사용한다.
 - 링크의 접근 가능한 이름은 제목, 선택적 본문, 시각, 읽지 않은 경우 `읽지 않은 알림`, `알림 열기` 순으로
   구성한다. 링크 역할, 표준 키보드 활성화와 기존 focus ring을 제공한다.
-- 링크 활성화는 내부 앱 경로를 앱 내에서 열고 HTTP(S) 외부 링크를 브라우저로 연다. 활성화 직후 Best Effort
-  Read를 시작하며 이동이 Read 결과를 기다리게 하지 않는다. Push tap은 동일한 목적지 규칙을 따르지만 Read
-  State를 변경하지 않는다.
+- 링크 활성화는 앱 루트 상대 경로와 현재 KOSMO Web origin의 절대 앱 링크를 앱 내에서 연다. 다른 origin의
+  HTTP(S) 링크는 브라우저로 연다. 활성화 직후 Best Effort Read를 시작하며 이동이 Read 결과를 기다리게 하지
+  않는다. Push tap은 동일한 목적지 규칙을 따르며 Read State를 변경하지 않는다.
 
 ## 실시간 신규 Notification과 미확인 수 · PROD-1320
 
