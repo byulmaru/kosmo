@@ -56,11 +56,20 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            {{- if and (eq .Values.env "prod") (eq .Values.monitoring.alertEvaluator "grafana") .Values.monitoring.podMonitor.enabled }}
+            - name: metrics
+              containerPort: 9464
+              protocol: TCP
+            {{- end }}
           args:
             - api
           env:
             - name: ENVIRONMENT
               value: {{ .Values.env | quote }}
+            {{- if and (eq .Values.env "prod") (eq .Values.monitoring.alertEvaluator "grafana") .Values.monitoring.podMonitor.enabled }}
+            - name: API_METRICS_PORT
+              value: "9464"
+            {{- end }}
             - name: TEMPORAL_ADDRESS
               value: {{ .Values.temporal.frontendAddress | quote }}
             - name: TEMPORAL_NAMESPACE

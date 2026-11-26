@@ -4,10 +4,26 @@ import { Hono } from 'hono';
 import { logger } from 'hono/logger';
 import { deriveContext } from './context';
 import { yoga } from './graphql';
+import { closeApiMetrics, startApiMetrics } from './metrics';
 import { reportError } from './sentry';
 import type { Env } from './context';
 
 await resolveConfiguredLocalInstance();
+
+try {
+  await startApiMetrics();
+} catch (error) {
+  console.error(
+    'API metrics endpoint failed to start',
+    error instanceof Error ? error.message : String(error),
+  );
+  await closeApiMetrics().catch((closeError: unknown) => {
+    console.error(
+      'API metrics provider failed to close',
+      closeError instanceof Error ? closeError.message : String(closeError),
+    );
+  });
+}
 
 const app = new Hono<Env>();
 
