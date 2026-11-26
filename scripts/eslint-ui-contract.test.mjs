@@ -30,6 +30,7 @@ async function lint(source, name = 'scripts/ui-contract-fixture.tsx', ruleOption
     : eslint;
   const [result] = await runner.lintText(source, { filePath: name });
   assert.ok(result);
+  assert.equal(result.fatalErrorCount, 0);
   return result.messages;
 }
 
@@ -384,5 +385,59 @@ describe('ui-contract/no-visual-style-overrides', () => {
 
     assert.deepEqual(iconContractViolations(storyMessages), []);
     assert.deepEqual(iconContractViolations(testMessages), []);
+  });
+});
+
+describe('observable App tests', () => {
+  const unitTest = 'apps/app/src/components/example.test.ts';
+  const story = 'apps/app/src/stories/example.stories.tsx';
+  const childProps = 'export const reply = (bar) => bar.props.children.props.reply;';
+
+  async function errors(source, filePath) {
+    const messages = await lint(source, filePath);
+    return messages.filter(({ severity }) => severity === 2).map(({ ruleId }) => ruleId);
+  }
+
+  it('rejects access to nested React child props', async () => {
+    assert.deepEqual(await errors(childProps, unitTest), ['no-restricted-syntax']);
+    assert.deepEqual(
+      await errors("export const reply = (bar) => bar['props'].children['props'].reply;", unitTest),
+      ['no-restricted-syntax'],
+    );
+  });
+
+  it('rejects collecting test IDs as the observed values', async () => {
+    const source = `export function check(rows, expect) {
+      const ids = rows.map((row) => row.getAttribute('data-testid'));
+      expect(ids).toEqual(['first', 'second']);
+    }`;
+    assert.deepEqual(await errors(source, story), ['no-restricted-syntax']);
+    const explicitReturn =
+      "export const ids = (rows) => rows.map((row) => { return row.getAttribute('data-testid'); });";
+    assert.deepEqual(await errors(explicitReturn, story), ['no-restricted-syntax']);
+  });
+
+  it('allows test IDs as locators and visible state assertions', async () => {
+    const source = `export function check(rows, expect, within, view) {
+      const row = rows.find((row) => row.getAttribute('data-testid') === 'target');
+      expect(within(row).getByRole('button', { name: '답글' })).toBeVisible();
+      expect(view.getByTestId('thread')).toContainText('게시글 본문');
+    }`;
+    assert.deepEqual(await errors(source, story), []);
+    assert.deepEqual(
+      await errors('export const label = (button) => button.props.accessibilityLabel;', unitTest),
+      [],
+    );
+  });
+
+  it('keeps the restrictions inside App tests and stories', async () => {
+    assert.deepEqual(await errors(childProps, 'apps/app/src/components/example.ts'), []);
+  });
+
+  it('keeps reporting a violation with an inline disable', async () => {
+    assert.deepEqual(
+      await errors(`/* eslint-disable no-restricted-syntax */\n${childProps}`, unitTest),
+      ['no-restricted-syntax'],
+    );
   });
 });
