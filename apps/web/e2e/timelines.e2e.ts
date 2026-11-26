@@ -500,65 +500,54 @@ test('게시글이 없는 홈, Local과 프로필 목록은 빈 상태를 보여
   await expect(page.getByText('아직 게시글이 없어요').filter({ visible: true })).toBeVisible();
 });
 
-test('Local 최초 오류 상태는 다시 시도를 제공한다', async ({ context, page }, testInfo) => {
-  let localRequestCount = 0;
-  let failLocalRequests = true;
+test('로컬 타임라인 조회에 실패해도 다시 시도해 게시글을 볼 수 있다', async ({ context, page }) => {
+  const postBody = 'E2E 로컬 타임라인 재시도 후 표시되는 게시글';
   const viewer = await createE2ESession({
     displayName: 'E2E Local Error Viewer',
     handle: 'e2e-local-error-viewer',
   });
+  await createE2EPost({ body: postBody, profileId: viewer.profile!.id });
 
   await setE2ESessionCookie(context, viewer.token);
+  await page.clock.install();
+  let failLocalRequests = true;
   await page.route('**/graphql', async (route) => {
-    if (isGraphQLOperation(route.request().postData(), 'LocalPageQuery')) {
-      localRequestCount += 1;
-      if (failLocalRequests) {
-        await route.fulfill({
-          body: JSON.stringify({ errors: [{ message: 'E2E forced Local error' }] }),
-          contentType: 'application/json',
-          status: 500,
-        });
-      } else {
-        await route.continue();
-      }
-      return;
+    if (failLocalRequests && isGraphQLOperation(route.request().postData(), 'LocalPageQuery')) {
+      await route.fulfill({
+        body: JSON.stringify({ errors: [{ message: 'E2E forced Local error' }] }),
+        contentType: 'application/json',
+        status: 500,
+      });
+    } else {
+      await route.continue();
     }
-
-    await route.continue();
   });
 
+  const alert = page.getByRole('alert').filter({ hasText: '로컬 타임라인을 불러오지 못했어요' });
+  const retry = alert.getByRole('button', { name: '다시 시도' });
+  const tabs = page.getByRole('tablist', { name: '타임라인' });
+  const post = page.getByText(postBody, { exact: true });
   await page.goto('/local');
-  await expect.poll(() => localRequestCount).toBeGreaterThan(0);
-  await testInfo.attach('local-error-initial-request.json', {
-    body: Buffer.from(JSON.stringify({ localRequestCount, failLocalRequests })),
-    contentType: 'application/json',
-  });
+  await expect(alert).toBeVisible();
+  await expect(page.getByText('아직 게시글이 없어요')).toBeHidden();
 
-  await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
-  await expect(page.getByText('아직 게시글이 없어요')).toHaveCount(0);
-  await page.waitForTimeout(3600);
-  await expect(page.getByRole('alert')).toBeVisible();
-  const previousCount = localRequestCount;
-  await page.goto('/home');
+  await tabs.getByRole('tab', { name: '홈', exact: true }).click();
   await expect(page.getByRole('heading', { name: '홈' })).toBeVisible();
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(alert).toBeHidden();
 
-  await page.goto('/local');
-  await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
-  await expect.poll(() => localRequestCount).toBeGreaterThan(previousCount);
-
-  const countBeforeRetry = localRequestCount;
-  await page.getByRole('button', { name: '다시 시도' }).click();
-  await expect.poll(() => localRequestCount).toBe(countBeforeRetry + 1);
-  await expect(page.getByRole('alert')).toContainText('로컬 타임라인을 불러오지 못했어요');
-  await page.waitForTimeout(3600);
-  await expect(page.getByRole('alert')).toBeVisible();
+  await tabs.getByRole('tab', { name: '로컬', exact: true }).click();
+  await expect(retry).toBeVisible();
+  await page.clock.runFor(30_000);
+  const failedRetry = waitForGraphQLOperation(page, 'LocalPageQuery');
+  await retry.click();
+  await (await failedRetry).finished();
+  await expect(retry).toBeVisible();
+  await expect(post).toBeHidden();
 
   failLocalRequests = false;
-  await page.getByRole('button', { name: '다시 시도' }).click();
-  await expect.poll(() => localRequestCount).toBe(countBeforeRetry + 2);
-  await expect(page.getByText('아직 게시글이 없어요')).toBeVisible();
-  await expect(page.getByRole('alert')).toHaveCount(0);
+  await retry.click();
+  await expect(post).toBeVisible();
+  await expect(alert).toBeHidden();
 });
 
 test('빈 본문과 긴 본문 게시글도 목록 항목으로 렌더한다', async ({ context, page }) => {
