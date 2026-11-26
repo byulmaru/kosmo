@@ -1,11 +1,10 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
-import { createElement, useState } from 'react';
+import { createContext, createElement, useContext, useEffect, useState } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
 import { Environment, Network, Observable, RecordSource, Store } from 'relay-runtime';
-import type { ReactNode } from 'react';
 import type {
   ReactTestInstance,
   ReactTestRenderer,
@@ -13,12 +12,30 @@ import type {
 } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { ToastProvider as ToastProviderExport } from '@/components/ui/ToastProvider';
+import type {
+  createFirstProfileOnboardingAnalytics,
+  FirstProfileOnboardingAnalytics as OnboardingAnalytics,
+} from './firstProfileOnboardingAnalytics';
 import type { FirstProfileTagDiscoveryRoute as RouteExport } from './FirstProfileTagDiscoveryRoute';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const require = createRequire(import.meta.url);
+const analyticsEvents: Array<{
+  accountId: string;
+  event: string;
+  properties: Record<string, unknown>;
+}> = [];
+const pendingHomeViews: Array<{ accountId: string | null; flowId: string | null }> = [];
+const FocusContext = createContext(true);
+let setRouteFocused: ((focused: boolean) => void) | undefined;
 const mockModule = (specifier: string | URL, exports: object) =>
   mock.module(specifier, { exports } as unknown as Parameters<typeof mock.module>[1]);
+mockModule('expo-router', {
+  useFocusEffect: (callback: () => void | (() => void)) => {
+    const focused = useContext(FocusContext);
+    useEffect(() => (focused ? callback() : undefined), [callback, focused]);
+  },
+});
 mockModule('react-relay', {
   ...ReactRelay,
   graphql: (parts: TemplateStringsArray) => {
@@ -57,7 +74,16 @@ mockModule('@/components/profile/ProfileListItemContent', {
   ProfileListItemContent: (props: object) => createElement('ProfileRow', props),
 });
 mockModule('@/components/profile/ProfileBlockAction', { ProfileBlockAction: 'ProfileBlockAction' });
-mockModule('@/analytics/client', { trackAnalytics: () => undefined });
+mockModule('@/analytics/client', {
+  trackAnalytics: () => undefined,
+  trackAnalyticsForAccount: (
+    accountId: string,
+    event: string,
+    properties: Record<string, unknown>,
+  ) => analyticsEvents.push({ accountId, event, properties }),
+  setPendingOnboardingHomeView: (accountId: string | null, flowId: string | null) =>
+    pendingHomeViews.push({ accountId, flowId }),
+});
 mockModule('@/theme/ThemeProvider', {
   useReducedMotion: () => false,
   useTheme: () => ({
@@ -80,6 +106,8 @@ const pending: Request[] = [];
 let renderer: ReactTestRenderer | null = null;
 let Route: typeof RouteExport;
 let ToastProvider: typeof ToastProviderExport;
+let createOnboardingAnalytics: typeof createFirstProfileOnboardingAnalytics;
+let analytics: OnboardingAnalytics;
 const firstTag = { id: 'opaque:Hashtag:01', name: 'Fediverse' };
 const secondTag = { id: 'opaque:Hashtag:02', name: '음악' };
 const queryName = 'FirstProfileTagDiscoveryQuery';
@@ -98,14 +126,20 @@ function environment() {
     store: new Store(new RecordSource()),
   });
 }
-function App({ profileId, empty }: { profileId: string; empty: ReactNode }) {
+function App({ profileId }: { profileId: string }) {
   const [continued, setContinued] = useState(false);
+  const [focused, setFocused] = useState(true);
+  setRouteFocused = setFocused;
   return continued
     ? createElement('Home')
-    : createElement(Route, {
-        profileId,
-        empty,
-        onContinue: () => setContinued(true),
+    : createElement(FocusContext.Provider, {
+        value: focused,
+        children: createElement(Route, {
+          analytics,
+          profileId,
+          onContinue: () => setContinued(true),
+          onNoSavedTags: () => setContinued(true),
+        }),
       });
 }
 async function mount(env = environment(), profileId = 'owner') {
@@ -114,7 +148,7 @@ async function mount(env = environment(), profileId = 'owner') {
       createElement(ReactRelay.RelayEnvironmentProvider, {
         environment: env,
         children: createElement(ToastProvider, {
-          children: createElement(App, { profileId, empty: createElement('NoTagsDestination') }),
+          children: createElement(App, { profileId }),
         }),
       }),
     );
@@ -235,10 +269,16 @@ async function resolveTag(id: string, data: object | null) {
 before(async () => {
   ({ ToastProvider } = await import('@/components/ui/ToastProvider'));
   ({ FirstProfileTagDiscoveryRoute: Route } = await import('./FirstProfileTagDiscoveryRoute'));
+  ({ createFirstProfileOnboardingAnalytics: createOnboardingAnalytics } =
+    await import('./firstProfileOnboardingAnalytics'));
 });
 beforeEach(() => {
   mock.timers.enable({ apis: ['setTimeout'] });
   mock.method(console, 'error', () => undefined);
+  analyticsEvents.length = 0;
+  pendingHomeViews.length = 0;
+  setRouteFocused = undefined;
+  analytics = createOnboardingAnalytics('account-1');
 });
 afterEach(async () => {
   await act(async () => renderer?.unmount());
@@ -250,7 +290,7 @@ afterEach(async () => {
   pending.length = 0;
 });
 
-function followPayload(followPolicy: 'OPEN' | 'APPROVAL_REQUIRED') {
+function followPayload(followPolicy: 'OPEN' | 'APPROVAL_REQUIRED', profileId = 'target') {
   const approvalRequired = followPolicy === 'APPROVAL_REQUIRED';
   return {
     followProfile: {
@@ -259,7 +299,7 @@ function followPayload(followPolicy: 'OPEN' | 'APPROVAL_REQUIRED') {
         id: approvalRequired ? 'request-target' : 'follow-target',
       },
       followerProfile: { id: 'owner', followingCount: approvalRequired ? 0 : 1 },
-      followeeProfile: profile('target', {
+      followeeProfile: profile(profileId, {
         followPolicy,
         followersCount: approvalRequired ? 0 : 1,
         viewerState: {
@@ -294,6 +334,26 @@ function unfollowPayload() {
 }
 
 describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
+  it('유지된 사람 찾기 화면에 다시 돌아오면 새 방문만 기록한다', async () => {
+    await mount();
+    await loadFirst();
+    await act(async () => setRouteFocused!(false));
+    await act(async () => setRouteFocused!(true));
+    await press('#음악');
+    await resolveTag(secondTag.id, tagResult(secondTag.id));
+    await press('#Fediverse');
+
+    assert.deepEqual(
+      analyticsEvents
+        .filter(
+          ({ event, properties }) =>
+            event === 'first_profile_onboarding_step_viewed' && properties.step === 'discovery',
+        )
+        .map(({ properties }) => properties.visit_sequence),
+      [1, 2],
+    );
+  });
+
   it('선택한 태그 목록만 렌더하고 완료된 목록은 Relay 캐시에서 다시 읽는다', async () => {
     await mount();
     await loadTags();
@@ -334,8 +394,48 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
       nodes('ProfileRow').map((row) => row.props.relativeHandle),
       ['@first-target'],
     );
+    await press('#음악');
+    await press('#Fediverse');
+    assert.equal(requests.length, 3, 'reselecting completed lists stays in the Relay cache');
+    assert.equal(
+      analyticsEvents.filter(
+        ({ event, properties }) =>
+          event === 'first_profile_onboarding_discovery' &&
+          properties.stage === 'related_profiles' &&
+          properties.result === 'loaded',
+      ).length,
+      2,
+      'cached list reuse does not record another successful list load',
+    );
     await press('계속하기');
     assert.equal(nodes('Home').length, 1);
+    const selectedTagAction = analyticsEvents.find(
+      ({ event, properties }) =>
+        event === 'first_profile_onboarding_action' && properties.action === 'select_tag',
+    );
+    assert.equal(selectedTagAction?.properties.tag_index, 1);
+    assert.equal('tag_id' in (selectedTagAction?.properties ?? {}), false);
+    assert.equal('tag_name' in (selectedTagAction?.properties ?? {}), false);
+    assert.equal(
+      analyticsEvents.some(
+        ({ event, properties }) =>
+          event === 'first_profile_onboarding_discovery' &&
+          properties.stage === 'related_profiles' &&
+          properties.result === 'loaded' &&
+          properties.result_count === 1,
+      ),
+      true,
+    );
+    assert.equal(
+      analyticsEvents.some(({ properties }) =>
+        Object.values(properties).some(
+          (value) =>
+            typeof value === 'string' &&
+            [firstTag.id, firstTag.name, secondTag.id, secondTag.name].includes(value),
+        ),
+      ),
+      false,
+    );
   });
 
   it('저장 태그가 로딩 중이어도 계속할 수 있다', async () => {
@@ -345,6 +445,18 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
     assert.equal(nodes('Home').length, 1);
     assert.equal(requests.length, 1);
     assert.equal(requests[0]?.name, queryName);
+    const completion = analyticsEvents.find(
+      ({ event }) => event === 'first_profile_onboarding_completed',
+    );
+    assert.equal(completion?.properties.saved_tag_count_status, 'unknown');
+    assert.equal(completion?.properties.operation_pending_count, 1);
+    assert.equal(pendingHomeViews.length, 1);
+    assert.deepEqual(
+      analyticsEvents
+        .filter(({ event }) => event === 'first_profile_onboarding_operation')
+        .map(({ properties }) => [properties.operation, properties.result]),
+      [['load_saved_tags', 'not_observed']],
+    );
   });
 
   it('완료된 저장 태그 null 응답은 인라인 재시도로 실제 네트워크 요청을 시작한다', async () => {
@@ -414,6 +526,73 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
       ['@target', '@next-target'],
     );
     assert.equal(nodes('PaginationSurface')[0]?.props.hasNext, false);
+  });
+
+  it('관련 목록 재시도 중 태그를 바꾸면 중단된 조회를 한 번 종료한다', async () => {
+    await mount();
+    await loadTags();
+    await resolveTag(firstTag.id, { node: null });
+    await act(async () => nodes('StateView')[0]!.props.onAction());
+
+    await press('#음악');
+    await resolveTag(secondTag.id, tagResult(secondTag.id, [profile('second-target')]));
+    await resolveTag(firstTag.id, tagResult(firstTag.id, [profile('late-target')]));
+    assert.deepEqual(
+      nodes('ProfileRow').map((row) => row.props.relativeHandle),
+      ['@second-target'],
+    );
+    await press('계속하기');
+
+    assert.deepEqual(
+      analyticsEvents
+        .filter(
+          ({ event, properties }) =>
+            event === 'first_profile_onboarding_operation' &&
+            properties.operation === 'load_related_profiles' &&
+            properties.tag_index === 0,
+        )
+        .map(({ properties }) => [properties.operation_attempt, properties.result]),
+      [
+        [1, 'failed'],
+        [2, 'not_observed'],
+      ],
+    );
+    assert.equal(
+      analyticsEvents.find(({ event }) => event === 'first_profile_onboarding_completed')
+        ?.properties.operation_pending_count,
+      0,
+    );
+  });
+
+  it('다음 페이지 조회 중 태그를 바꾸면 중단된 조회를 한 번 종료한다', async () => {
+    await mount();
+    await loadFirst([profile('target')], true);
+    await act(async () => nodes('PaginationSurface')[0]!.props.onRetry());
+
+    await press('#음악');
+    await resolveTag(secondTag.id, tagResult(secondTag.id, [profile('second-target')]));
+    await resolve(nextPageName, tagResult(firstTag.id, [profile('late-target')]));
+    assert.deepEqual(
+      nodes('ProfileRow').map((row) => row.props.relativeHandle),
+      ['@second-target'],
+    );
+    await press('계속하기');
+
+    assert.deepEqual(
+      analyticsEvents
+        .filter(
+          ({ event, properties }) =>
+            event === 'first_profile_onboarding_operation' &&
+            properties.operation === 'load_more_related_profiles',
+        )
+        .map(({ properties }) => properties.result),
+      ['not_observed'],
+    );
+    assert.equal(
+      analyticsEvents.find(({ event }) => event === 'first_profile_onboarding_completed')
+        ?.properties.operation_pending_count,
+      0,
+    );
   });
 
   for (const followPolicy of ['OPEN', 'APPROVAL_REQUIRED'] as const) {
@@ -488,15 +667,62 @@ describe('첫 Profile 저장 태그 사람 찾기 Relay 흐름', () => {
     );
   }
 
-  it('태그가 없어도 완료 화면으로 이동하지 않고 기존 후속 화면을 렌더한다', async () => {
+  it('records unique follow relationship and request counts when continuing', async () => {
+    await mount();
+    await loadFirst([
+      profile('target-a', { followPolicy: 'OPEN' }),
+      profile('target-b', { followPolicy: 'APPROVAL_REQUIRED' }),
+    ]);
+
+    await press('팔로우');
+    await resolve('FollowButtonFollowProfileMutation', followPayload('OPEN', 'target-a'));
+    await press('팔로우');
+    await resolve(
+      'FollowButtonFollowProfileMutation',
+      followPayload('APPROVAL_REQUIRED', 'target-b'),
+    );
+    await press('계속하기');
+
+    const completion = analyticsEvents.find(
+      ({ event }) => event === 'first_profile_onboarding_completed',
+    );
+    assert.equal(completion?.properties.follow_relationship_count, 1);
+    assert.equal(completion?.properties.follow_request_count, 1);
+    assert.equal(completion?.properties.follow_operation_pending_count, 0);
+    const followEvents = analyticsEvents.filter(({ event }) => event === 'follow_succeeded');
+    assert.deepEqual(
+      followEvents.map(({ properties }) => properties.result),
+      ['follow', 'request'],
+    );
+    assert.equal(
+      followEvents.some(
+        ({ properties }) =>
+          Object.values(properties).includes('target-a') ||
+          Object.values(properties).includes('target-b'),
+      ),
+      false,
+    );
+  });
+
+  it('저장 태그가 없으면 알려진 빈 결과와 정상 완료를 기록하고 홈으로 이동한다', async () => {
     await mount();
     await loadTags([]);
 
-    assert.equal(nodes('NoTagsDestination').length, 1);
-    assert.equal(nodes('Home').length, 0);
+    assert.equal(nodes('Home').length, 1);
     assert.deepEqual(
       requests.map((request) => request.name),
       [queryName],
     );
+    const savedTags = analyticsEvents.find(
+      ({ event, properties }) =>
+        event === 'first_profile_onboarding_discovery' && properties.stage === 'saved_tags',
+    );
+    const completion = analyticsEvents.find(
+      ({ event }) => event === 'first_profile_onboarding_completed',
+    );
+    assert.equal(savedTags?.properties.result, 'empty');
+    assert.equal(savedTags?.properties.saved_tag_count_status, 'known');
+    assert.equal(savedTags?.properties.saved_tag_count, 0);
+    assert.equal(completion?.properties.exit_reason, 'no_saved_tags');
   });
 });

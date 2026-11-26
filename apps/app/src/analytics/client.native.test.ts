@@ -13,6 +13,7 @@ type BeforeSendEvent = { event: string; properties?: Record<string, unknown> };
 
 class FakePostHog {
   calls: Call[] = [];
+  distinctId = 'anonymous-id';
   captureFails = false;
   screenFails = false;
   identifyFails = false;
@@ -58,13 +59,19 @@ class FakePostHog {
     if (this.identifyFails) {
       throw new Error('identify failure');
     }
+    this.distinctId = accountId;
     this.calls.push({ kind: 'identify', accountId, ...(properties ? { properties } : {}) });
+  }
+
+  getDistinctId() {
+    return this.distinctId;
   }
 
   reset() {
     if (this.resetFails) {
       throw new Error('reset failure');
     }
+    this.distinctId = `anonymous-${this.calls.length}`;
     this.calls.push({ kind: 'reset' });
   }
 }
@@ -154,6 +161,51 @@ describe('PostHog Native client', () => {
     instance.screenFails = true;
     assert.doesNotThrow(() => analytics.trackAnalyticsScreen('/settings'));
     await new Promise<void>((resolve) => setImmediate(resolve));
+  });
+
+  it('sends onboarding events only for the current Account and records home once', async () => {
+    analytics.identifyAnalytics('account-a');
+    const instance = instances[0];
+    assert.ok(instance);
+
+    analytics.trackAnalyticsForAccount('account-a', 'first_profile_onboarding_started', {
+      flow_id: 'flow-a',
+    });
+    analytics.trackAnalyticsForAccount('account-b', 'first_profile_onboarding_started', {
+      flow_id: 'flow-b',
+    });
+    analytics.setPendingOnboardingHomeView('account-a', 'flow-a');
+    analytics.trackAnalyticsScreen('/settings');
+    analytics.trackAnalyticsScreen('/home');
+    analytics.trackAnalyticsScreen('/home');
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    assert.deepEqual(
+      instance.calls.filter((call) => call.kind === 'capture'),
+      [
+        {
+          kind: 'capture',
+          event: 'first_profile_onboarding_started',
+          properties: { flow_id: 'flow-a' },
+        },
+        {
+          kind: 'capture',
+          event: 'first_profile_onboarding_home_viewed',
+          properties: { flow_id: 'flow-a' },
+        },
+      ],
+    );
+
+    analytics.setPendingOnboardingHomeView('account-a', 'stale-flow');
+    analytics.identifyAnalytics('account-b');
+    analytics.trackAnalyticsScreen('/home');
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(
+      instance.calls.filter(
+        (call) => call.kind === 'capture' && call.event === 'first_profile_onboarding_home_viewed',
+      ).length,
+      1,
+    );
   });
 
   it('removes only Application Opened URL while preserving other event properties', () => {

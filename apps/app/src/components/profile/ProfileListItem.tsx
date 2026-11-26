@@ -4,12 +4,14 @@ import { FollowButton } from './FollowButton';
 import { ProfileListItemRow } from './ProfileListItemRow';
 import type { Href } from 'expo-router';
 import type { StyleProp, ViewStyle } from 'react-native';
+import type { FirstProfileFollowAnalytics } from '@/components/onboarding/firstProfileOnboardingAnalytics';
 import type { ProfileListItem_profile$key } from './__generated__/ProfileListItem_profile.graphql';
 
 type ProfileListItemProps = {
   linked?: boolean;
   onPress?: () => void;
   onNavigate?: () => void;
+  onboardingFollowAnalytics?: FirstProfileFollowAnalytics;
   profile: ProfileListItem_profile$key;
   showBio?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -27,6 +29,7 @@ export function ProfileListItem({
   linked = false,
   onPress,
   onNavigate,
+  onboardingFollowAnalytics,
   profile,
   showBio = true,
   style,
@@ -42,6 +45,7 @@ export function ProfileListItem({
       style={style}
     >
       <FollowButton
+        onboardingAnalytics={onboardingFollowAnalytics}
         profile={data}
         style={{
           flexShrink: 0,

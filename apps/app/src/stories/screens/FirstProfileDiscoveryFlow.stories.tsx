@@ -257,14 +257,20 @@ function InputSteps() {
       errors={flow.errors}
       onChange={flow.setDraft}
       onComplete={() => {
-        flow.complete(() => router.push('/first-profile/discover'));
+        flow.complete(step, step === 'review' ? 'continue' : 'start_now', () =>
+          router.push('/first-profile/discover'),
+        );
       }}
       onNext={() => {
         if (step !== 'review') {
           flow.next(step, next);
         }
       }}
-      onSkip={() => flow.skip(next)}
+      onSkip={() => {
+        if (step !== 'handle' && step !== 'review') {
+          flow.skip(step, next);
+        }
+      }}
       onAvatarEdit={() => {
         void flow.pickImage('avatar');
       }}

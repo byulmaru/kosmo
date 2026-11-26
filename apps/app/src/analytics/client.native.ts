@@ -5,6 +5,7 @@ import type { AnalyticsEventName, AnalyticsEventProperties } from './events';
 type PostHogClient = InstanceType<typeof PostHog>;
 
 let client: PostHogClient | null | undefined;
+let pendingOnboardingHomeView: { accountId: string; flowId: string } | null = null;
 
 function initializeAnalytics(): PostHogClient | null {
   if (client !== undefined) {
@@ -52,7 +53,36 @@ export function trackAnalytics<Name extends AnalyticsEventName>(
   }
 }
 
+export function trackAnalyticsForAccount<Name extends AnalyticsEventName>(
+  accountId: string,
+  eventName: Name,
+  properties: AnalyticsEventProperties[Name],
+): void {
+  if (!accountId) {
+    return;
+  }
+
+  try {
+    const analyticsClient = initializeAnalytics();
+    if (!analyticsClient || analyticsClient.getDistinctId() !== accountId) {
+      return;
+    }
+
+    analyticsClient.capture(eventName, properties as Parameters<PostHogClient['capture']>[1]);
+  } catch {
+    // Analytics is best-effort and must not affect the product flow.
+  }
+}
+
 export function trackAnalyticsScreen(screenName: string): void {
+  if (screenName === '/home' && pendingOnboardingHomeView) {
+    const pending = pendingOnboardingHomeView;
+    pendingOnboardingHomeView = null;
+    trackAnalyticsForAccount(pending.accountId, 'first_profile_onboarding_home_viewed', {
+      flow_id: pending.flowId,
+    });
+  }
+
   try {
     const analyticsClient = initializeAnalytics();
     if (!analyticsClient) {
@@ -63,6 +93,13 @@ export function trackAnalyticsScreen(screenName: string): void {
   } catch {
     // Analytics is best-effort and must not affect the product flow.
   }
+}
+
+export function setPendingOnboardingHomeView(
+  accountId: string | null,
+  flowId: string | null,
+): void {
+  pendingOnboardingHomeView = accountId && flowId ? { accountId, flowId } : null;
 }
 
 export function identifyAnalytics(accountId: string, availableProfileCount?: number): void {
@@ -91,6 +128,7 @@ export function setAnalyticsSelectedProfile(
 }
 
 export function clearAnalytics(): void {
+  pendingOnboardingHomeView = null;
   try {
     initializeAnalytics()?.reset();
   } catch {

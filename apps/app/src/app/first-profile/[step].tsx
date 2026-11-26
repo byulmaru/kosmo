@@ -1,5 +1,6 @@
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
+import { useCallback } from 'react';
 import { useFirstProfileOnboarding } from '@/components/onboarding/FirstProfileOnboardingRoute';
 import { FirstProfileOnboardingScreen } from '@/components/onboarding/FirstProfileOnboardingScreen';
 import { firstProfileSteps } from '@/components/onboarding/firstProfileOnboardingState';
@@ -11,10 +12,17 @@ export default function FirstProfileStepRoute() {
   const router = useRouter();
   const flow = useFirstProfileOnboarding();
   usePreventRemove(flow.busy, () => undefined);
-  if (
+  const validStep =
     (step !== 'complete' && !firstProfileSteps.includes(step as FirstProfileStep)) ||
-    (step !== 'handle' && !flow.profileSelected)
-  ) {
+    (step !== 'handle' && step !== 'complete' && !flow.profileSelected);
+  useFocusEffect(
+    useCallback(() => {
+      if (!validStep && step !== 'complete') {
+        flow.analytics.viewStep(step as FirstProfileStep);
+      }
+    }, [flow.analytics, step, validStep]),
+  );
+  if (validStep) {
     return <Redirect href="/first-profile/handle" />;
   }
   if (step === 'complete') {
@@ -35,7 +43,7 @@ export default function FirstProfileStepRoute() {
       errors={flow.errors}
       onChange={flow.setDraft}
       onComplete={() => {
-        flow.complete(() => {
+        flow.complete(current, current === 'review' ? 'continue' : 'start_now', () => {
           router.push('/first-profile/discover');
         });
       }}
@@ -44,7 +52,11 @@ export default function FirstProfileStepRoute() {
           flow.next(current, next);
         }
       }}
-      onSkip={() => flow.skip(next)}
+      onSkip={() => {
+        if (current !== 'handle' && current !== 'review') {
+          flow.skip(current, next);
+        }
+      }}
       onAvatarEdit={() => {
         void flow.pickImage('avatar');
       }}
