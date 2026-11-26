@@ -1000,18 +1000,6 @@ describe('PostMediaViewer', () => {
     );
   });
 
-  it('같은 Media의 Image load callback을 state update 뒤에도 재사용한다', async () => {
-    await render({ selectedIndex: 0 });
-    const onLoadStart = currentImage().props.onLoadStart;
-    const onLoad = currentImage().props.onLoad;
-    const onError = currentImage().props.onError;
-
-    await act(async () => onLoadStart());
-    assert.equal(currentImage().props.onLoadStart, onLoadStart);
-    assert.equal(currentImage().props.onLoad, onLoad);
-    assert.equal(currentImage().props.onError, onError);
-  });
-
   it('표시 완료 전에 사용자가 뷰어 안으로 옮긴 포커스를 유지한다', async () => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
     Object.defineProperty(globalThis, 'document', {

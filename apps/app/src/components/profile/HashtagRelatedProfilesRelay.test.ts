@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { afterEach, before, mock, test } from 'node:test';
+import { afterEach, before, beforeEach, mock, test } from 'node:test';
 import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import {
@@ -162,6 +162,7 @@ before(async () => {
   Screen = (await import('../../app/(tabs)/(protected)/hashtags/[hashtagId]/profiles')).default;
   execute = (await import('../../relay/network')).executeGraphQLRequest;
 });
+beforeEach(() => mock.timers.enable({ apis: ['setTimeout'] }));
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   renderer = undefined;
@@ -214,8 +215,6 @@ for (const [cache, network] of [
   [null, 'error'],
 ] as const) {
   test(`실제 Relay store-and-network: 먼저 표시된 cache ${cache} / network ${network}`, async () => {
-    // Relay temporary query retains use expiry timers even for a failed render.
-    mock.timers.enable({ apis: ['setTimeout'] });
     let complete: (response: Response) => void = () => assert.fail('network did not start');
     const pending = new Promise<Response>((resolve) => {
       complete = resolve;
@@ -321,7 +320,6 @@ test('malformed 단일 route ID는 요청 없이 notFound를 표시하고 histor
 });
 
 test('같은 결과의 Account loading은 중복하지 않고 Account·Hashtag 변경은 새 결과를 기록한다', async () => {
-  mock.timers.enable({ apis: ['setTimeout'] });
   const environment = new Environment({
     store: new Store(new RecordSource()),
     network: Network.create(() => new Promise(() => {})),

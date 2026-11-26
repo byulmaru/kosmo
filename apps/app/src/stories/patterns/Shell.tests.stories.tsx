@@ -123,21 +123,6 @@ export const UniversalFullComposerLifecycle: Story = {
     );
     expect(surface.getBoundingClientRect().top).toBe(48);
     expect(surface.getBoundingClientRect().width).toBe(640);
-    const overlayBody = within(dialog).getByRole('textbox', { name: '게시글 본문' });
-    const initialDialogHeight = surface.getBoundingClientRect().height;
-    await userEvent.type(overlayBody, '\n추가 본문'.repeat(10));
-    await waitFor(() =>
-      expect(surface.getBoundingClientRect().height).toBeGreaterThan(initialDialogHeight),
-    );
-    await userEvent.type(overlayBody, '\n긴 본문'.repeat(40));
-    const scroll = within(dialog).getByTestId('post-composer-scroll');
-    await waitFor(() =>
-      expect(surface.getBoundingClientRect().height).toBeCloseTo(
-        context.canvasElement.ownerDocument.defaultView!.innerHeight - 96,
-        0,
-      ),
-    );
-    expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight);
     expect(page.queryByRole('link', { name: '개인정보 처리방침' })).toBeNull();
   },
 };

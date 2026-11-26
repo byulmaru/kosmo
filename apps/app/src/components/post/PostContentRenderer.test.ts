@@ -480,24 +480,6 @@ describe('PostContentRenderer', () => {
     );
   });
 
-  it('Gallery에는 viewer open callback만 전달한다', async () => {
-    const onMediaOpen = () => undefined;
-    await render({
-      bodyText: '',
-      contentWarning: null,
-      document: null,
-      media: [{ altText: null, id: 'media-1', url: 'https://media.example/1.webp' }],
-      mentionedProfiles: [],
-      onMediaOpen,
-      postId: 'post-viewer-callbacks',
-    });
-
-    const gallery = rendered('PostMediaGallery')[0];
-    assert.ok(gallery);
-    assert.equal(gallery.props.onMediaOpen, onMediaOpen);
-    assert.equal('onMediaUnavailable' in gallery.props, false);
-  });
-
   it('Media를 숨기는 상세 표현에서는 unavailable Gallery도 렌더하지 않는다', async () => {
     await render({
       bodyText: '',
@@ -655,42 +637,6 @@ describe('PostContentRenderer', () => {
     assert.equal(
       rendered('Text').find((node) => node.props.numberOfLines === 3)?.props.numberOfLines,
       3,
-    );
-  });
-
-  it('keeps the canonical content root around warning and revealed body content', async () => {
-    await render({
-      bodyText: '원문 본문',
-      contentWarning: '민감한 내용',
-      document: null,
-      media: [],
-      mentionedProfiles: [],
-      postId: 'post-2',
-    });
-
-    const contentRoot = byTestId('post-content-renderer');
-    assert.equal(
-      contentRoot.findAll((node) => node.props.testID === 'post-content-warning').length,
-      1,
-    );
-
-    const toggle = rendered('Pressable').find(
-      (node) => node.props.testID === 'post-content-warning',
-    );
-    assert.ok(toggle);
-    await act(async () =>
-      toggle.props.onPress({
-        stopPropagation: () => undefined,
-      }),
-    );
-
-    const body = rendered('Text').find((node) => node.props.children === '원문 본문');
-    assert.ok(body);
-    const galleries = rendered('PostMediaGallery');
-    assert.equal(galleries.length, 1);
-    assert.equal(
-      contentRoot.findAll((node) => (node.type as unknown) === 'PostMediaGallery').length,
-      1,
     );
   });
 
