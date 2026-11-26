@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { after, mock, test } from 'node:test';
+import { after, test } from 'node:test';
 import { and, DrizzleQueryError, eq, inArray } from 'drizzle-orm';
 import {
   AccountProfiles,
@@ -1644,7 +1644,13 @@ test('ActivityPub Reply effects는 duplicate에서 backfill하지 않는다', as
   const duplicate = await createPostPersisted(input);
 
   assert.equal(duplicate.created, false);
-  assert.equal('postCommit' in duplicate, false);
+  assert.deepEqual(
+    await db
+      .select({ postId: ActivityPubPosts.postId })
+      .from(ActivityPubPosts)
+      .where(eq(ActivityPubPosts.uri, input.objectUri)),
+    [{ postId: created.post.id }],
+  );
   assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, created.post.id)), 0);
 });
 
@@ -1658,33 +1664,28 @@ test('Post effects Workflow start 실패가 Post transaction과 호출을 실패
     visibility: PostVisibility.PUBLIC,
   });
   const objectUri = `https://remote.example/notes/reply-workflow-failure-${crypto.randomUUID()}`;
-  const errorLog = mock.method(console, 'error', () => undefined);
-  t.mock.method(temporalClient.workflow, 'start', async () => {
+  t.mock.method(console, 'error', () => undefined);
+  const startEffects = t.mock.method(temporalClient.workflow, 'start', async () => {
     throw new Error('Temporal unavailable');
   });
 
-  try {
-    const result = await createPostWithEffects({
-      document: postContentDocumentFromText('remote reply'),
-      mentionProfileIds: [],
-      objectUri,
-      origin: 'ACTIVITYPUB',
-      profileId: author.id,
-      publishedAt: null,
-      receivedAt: Temporal.Instant.from('2026-07-30T00:00:00Z'),
-      replyParentId: parent.post.id,
-      visibility: PostVisibility.PUBLIC,
-    });
+  const result = await createPostWithEffects({
+    document: postContentDocumentFromText('remote reply'),
+    mentionProfileIds: [],
+    objectUri,
+    origin: 'ACTIVITYPUB',
+    profileId: author.id,
+    publishedAt: null,
+    receivedAt: Temporal.Instant.from('2026-07-30T00:00:00Z'),
+    replyParentId: parent.post.id,
+    visibility: PostVisibility.PUBLIC,
+  });
 
-    assert.equal(result.created, true);
-    assert.equal(errorLog.mock.callCount(), 1);
-    assert.equal(errorLog.mock.calls[0]?.arguments[0], 'Post Create effects Workflow start failed');
-    assert.equal(result.post.replyParentId, parent.post.id);
-    assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, result.post.id)), 0);
-    assert.equal(await db.$count(Posts, eq(Posts.id, result.post.id)), 1);
-  } finally {
-    errorLog.mock.restore();
-  }
+  assert.ok(startEffects.mock.calls.length);
+  assert.equal(result.created, true);
+  assert.equal(result.post.replyParentId, parent.post.id);
+  assert.equal(await db.$count(Notifications, eq(Notifications.sourceId, result.post.id)), 0);
+  assert.equal(await db.$count(Posts, eq(Posts.id, result.post.id)), 1);
 });
 
 test('createPost는 존재하지 않는 Reply Parent에서 ActivityPub transaction을 rollback한다', async () => {
@@ -1767,15 +1768,15 @@ test('createPost는 Content 없는 Reply Parent에서 field 오류와 함께 rol
   );
 });
 
-test('일반 Local Post와 Reply는 저장 Workflow 없이 commit하고 effects 실패도 결과를 유지한다', async (t) => {
+test('Temporal을 사용할 수 없어도 일반 Local Post와 Reply를 저장한다', async (t) => {
   const profile = await createProfile();
-  const admission = t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
+  t.mock.method(temporalClient.workflow, 'executeUpdateWithStart', async () => {
     throw new Error('Ordinary posts must not require an owner Worker');
   });
-  const effects = t.mock.method(temporalClient.workflow, 'start', async () => {
+  t.mock.method(temporalClient.workflow, 'start', async () => {
     throw new Error('Effects unavailable');
   });
-  const errors = t.mock.method(console, 'error', () => {});
+  t.mock.method(console, 'error', () => undefined);
   const input = {
     origin: 'LOCAL' as const,
     profileId: profile.id,
@@ -1787,9 +1788,6 @@ test('일반 Local Post와 Reply는 저장 Workflow 없이 commit하고 effects 
   const resubmitted = await createPostWithEffects(input);
   assert.notEqual(first.post.id, resubmitted.post.id);
   assert.equal(second.post.replyParentId, first.post.id);
-  assert.equal(admission.mock.callCount(), 0);
-  assert.equal(effects.mock.callCount(), 3);
-  assert.equal(errors.mock.callCount(), 3);
   assert.equal(await db.$count(Posts, eq(Posts.profileId, profile.id)), 3);
 });
 

@@ -13,6 +13,7 @@ import {
   Store,
 } from 'relay-runtime';
 import PostMediaViewerHostQueryNode from './__generated__/PostMediaViewerHostQuery.graphql';
+import type { ReactNode } from 'react';
 import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import type { GraphQLResponse } from 'relay-runtime';
 import type { usePostMediaViewerHost as UseHost } from './PostMediaViewerContext';
@@ -36,7 +37,7 @@ let activeRequests: PendingRequest[] = [];
 let renderer: ReactTestRenderer | null = null;
 let viewportWidth = 1280;
 let replyExecutionKind: 'disabled' | 'enabled' | 'resolution-required' = 'disabled';
-let replyResolveCalls = 0;
+let replyResolutionReasons: Array<'guest' | 'profile'> = [];
 let replyPressOwners: Array<'detail' | 'list' | undefined> = [];
 let replyBinding: {
   expanded: boolean;
@@ -95,9 +96,12 @@ mock.module('@/relay/RelayActorProvider', {
 mock.module('./PostActionAuthentication', {
   exports: {
     usePostActionAuthentication: () => ({
-      execution: { kind: replyExecutionKind },
-      resolve: () => {
-        replyResolveCalls += 1;
+      execution:
+        replyExecutionKind === 'resolution-required'
+          ? { kind: replyExecutionKind, reason: 'profile' }
+          : { kind: replyExecutionKind },
+      resolve: (reason: 'guest' | 'profile') => {
+        replyResolutionReasons.push(reason);
       },
     }),
   },
@@ -105,8 +109,19 @@ mock.module('./PostActionAuthentication', {
 
 mock.module('./PostActionSurface', {
   exports: {
-    PostActionSurface: (props: Record<string, unknown>) =>
-      createElement('PostActionSurface', props),
+    PostActionSurface: ({ reply }: { reply?: { onPress: () => void } }) =>
+      reply
+        ? createElement(
+            'Pressable',
+            {
+              accessibilityLabel: '답글',
+              accessibilityRole: 'button',
+              onPress: reply.onPress,
+              testID: 'post-media-viewer-reply-action',
+            },
+            '답글',
+          )
+        : null,
   },
 } as unknown as Parameters<typeof mock.module>[1]);
 
@@ -114,8 +129,12 @@ mock.module('./PostMediaViewer', {
   exports: {
     PostMediaViewer: ({ children }: { children?: React.ReactNode }) =>
       createElement('ModalShell', { testID: 'post-media-viewer-dialog' }, children),
-    PostMediaViewerContent: (props: Record<string, unknown>) =>
-      createElement('ViewerContent', { ...props, testID: 'post-media-viewer-content' }),
+    PostMediaViewerContent: ({ actionBar, ...props }: Record<string, unknown>) =>
+      createElement(
+        'ViewerContent',
+        { ...props, testID: 'post-media-viewer-content' },
+        actionBar as ReactNode,
+      ),
     PostMediaViewerQueryState: ({
       loading = false,
       onRetry,
@@ -183,7 +202,7 @@ afterEach(async () => {
   activeRequests = [];
   viewportWidth = 1280;
   replyExecutionKind = 'disabled';
-  replyResolveCalls = 0;
+  replyResolutionReasons = [];
   replyPressOwners = [];
   replyBinding = null;
   platform.OS = 'web';
@@ -200,38 +219,13 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     assert.equal(relay.requests.length, 1);
   });
 
-  it('compact Viewer의 인증된 Reply는 Viewer를 닫고 list owner로 background composer를 연다', async () => {
-    viewportWidth = 1024;
-    replyExecutionKind = 'enabled';
-    replyBinding = {
-      expanded: false,
-      onPress: (owner) => replyPressOwners.push(owner),
-      onRequestClose: () => undefined,
-      owner: 'detail',
-      profile: {},
-    };
-    const relay = createEnvironment(hostPayload());
-    await renderHost(relay.environment);
-    await openViewer();
-
-    const actionBar = byTestId('post-media-viewer-content').props.actionBar as {
-      props: { children: { props: { reply?: { onPress: () => void } } } };
-    };
-    const reply = actionBar.props.children.props.reply;
-    assert.ok(reply);
-    assert.equal((reply as { count?: number }).count, 2);
-    await act(async () => reply.onPress());
-
-    assert.deepEqual(replyPressOwners, ['list']);
-    assert.equal(optionalByTestId('post-media-viewer-dialog'), null);
-  });
-
-  it('인증 해석이 필요한 Viewer Reply는 owner press 없이 해석 경로를 유지한다', async () => {
-    viewportWidth = 1024;
+  it('프로필 선택이 필요한 Viewer Reply는 Reply 버튼으로 profile-switcher 경로를 연다', async () => {
     replyExecutionKind = 'resolution-required';
     replyBinding = {
       expanded: false,
-      onPress: (owner) => replyPressOwners.push(owner),
+      onPress: () => {
+        throw new Error('프로필을 선택하기 전에는 답글 Composer를 열지 않는다.');
+      },
       onRequestClose: () => undefined,
       owner: 'detail',
       profile: {},
@@ -240,18 +234,13 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     await renderHost(relay.environment);
     await openViewer();
 
-    const actionBar = byTestId('post-media-viewer-content').props.actionBar as {
-      props: { children: { props: { reply?: { onPress: () => void } } } };
-    };
-    const reply = actionBar.props.children.props.reply;
-    assert.ok(reply);
-    await act(async () => reply.onPress());
+    await act(async () => byTestId('post-media-viewer-reply-action').props.onPress());
 
-    assert.equal(replyResolveCalls, 1);
-    assert.deepEqual(replyPressOwners, []);
+    assert.deepEqual(replyResolutionReasons, ['profile']);
+    assert.equal(optionalByTestId('post-media-viewer-dialog'), null);
   });
 
-  it('Native Viewer Reply는 viewport 폭과 무관하게 list owner를 사용한다', async () => {
+  it('Native Viewer Reply는 넓은 viewport에서도 originating list composer로 연결된다', async () => {
     platform.OS = 'ios';
     viewportWidth = 1600;
     replyExecutionKind = 'enabled';
@@ -266,13 +255,9 @@ describe('PostMediaViewerHost Relay lifecycle', () => {
     await renderHost(relay.environment);
     await openViewer();
 
-    const actionBar = byTestId('post-media-viewer-content').props.actionBar as {
-      props: { children: { props: { reply?: { onPress: () => void } } } };
-    };
-    const reply = actionBar.props.children.props.reply;
-    assert.ok(reply);
-    await act(async () => reply.onPress());
+    await act(async () => byTestId('post-media-viewer-reply-action').props.onPress());
 
+    assert.equal(optionalByTestId('post-media-viewer-dialog'), null);
     assert.deepEqual(replyPressOwners, ['list']);
   });
 

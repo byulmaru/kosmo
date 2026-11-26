@@ -3295,6 +3295,36 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+type VisibleThreadPost = Readonly<{ body: HTMLElement; row: HTMLElement }>;
+
+function expectVisibleContentInOrder(elements: readonly HTMLElement[]) {
+  for (const [index, element] of elements.entries()) {
+    expect(element).toBeVisible();
+    if (index > 0) {
+      expect(element.getBoundingClientRect().top).toBeGreaterThan(
+        elements[index - 1]!.getBoundingClientRect().top,
+      );
+    }
+  }
+}
+
+function expectThreadBodiesInOrder(
+  thread: HTMLElement,
+  bodyTexts: readonly string[],
+): VisibleThreadPost[] {
+  const posts = bodyTexts.map((bodyText) => {
+    const body = within(thread).getByText(bodyText);
+    const row = body.closest<HTMLElement>(
+      '[data-testid^="post-thread-item-"], [data-testid^="post-thread-current-"]',
+    );
+    expect(body).toBeVisible();
+    expect(row).not.toBeNull();
+    return { body, row: row! };
+  });
+  expectVisibleContentInOrder(posts.map(({ body }) => body));
+  return posts;
+}
+
 export const BodyTimeAndLayoutStates: Story = {
   globals: { viewport: { isRotated: false, value: 'kosmoMobile' } },
   play: async ({ canvasElement }) => {
@@ -5473,10 +5503,15 @@ export const PostMediaViewerCompact: Story = {
     await waitFor(() =>
       expect(viewer.getByRole('button', { name: '이미지 뷰어 닫기' })).toHaveFocus(),
     );
-    expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({
-      flexDirection: 'column',
-    });
     expect(await viewer.findByTestId('post-media-viewer-counter')).toHaveTextContent('2 / 4');
+    const mediaPane = viewer.getByTestId('post-media-viewer-media-pane');
+    const mediaPaneBounds = mediaPane.getBoundingClientRect();
+    const compactDetail = viewer.getByTestId('post-media-viewer-compact-detail');
+    expect(mediaPane).toBeVisible();
+    expect(compactDetail).toBeVisible();
+    expect(compactDetail.getBoundingClientRect().top).toBeGreaterThanOrEqual(
+      mediaPaneBounds.bottom,
+    );
     expect(viewer.getByTestId('post-media-viewer-image')).toBeVisible();
     expect(viewer.getByTestId('post-media-viewer-image')).toHaveAttribute(
       'aria-label',
@@ -5510,6 +5545,15 @@ export const PostMediaViewerCompact: Story = {
     await userEvent.click(screen.getByTestId('post-media-viewer-backdrop-dismiss'));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(origin).toHaveFocus();
+
+    await userEvent.click(origin);
+    const replyViewer = within(await screen.findByRole('dialog', { name: '이미지 뷰어' }));
+    await userEvent.click(await replyViewer.findByRole('button', { name: '답글' }));
+    const replyDialog = await screen.findByRole('dialog', { name: '답글 쓰기' });
+    expect(screen.queryByTestId('post-media-viewer-dialog')).toBeNull();
+    await waitFor(() =>
+      expect(within(replyDialog).getByRole('textbox', { name: '답글 본문' })).toHaveFocus(),
+    );
   },
   render: () => (
     <ProductionPostListItemStory postId="post-media-viewer-quote" presentation="mobile" />
@@ -5537,25 +5581,29 @@ export const PostMediaViewerWide: Story = {
     const dialog = await screen.findByRole('dialog');
     const viewer = within(dialog);
     expect(dialog).toHaveAttribute('aria-modal', 'true');
-    expect(viewer.getByTestId('post-media-viewer-layout')).toHaveStyle({ flexDirection: 'row' });
     const thread = await viewer.findByTestId('post-thread');
+    const mediaPane = viewer.getByTestId('post-media-viewer-media-pane');
+    const mediaPaneBounds = mediaPane.getBoundingClientRect();
     const wideDetail = viewer.getByTestId('post-media-viewer-context-rail');
-    expect(wideDetail.getBoundingClientRect().width).toBe(320);
-    const rows = Array.from(thread.children) as HTMLElement[];
-    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
-      'post-thread-item-route-root',
-      'post-thread-item-route-parent',
-      'post-thread-current-post-media-viewer-quote',
-      'post-thread-item-media-viewer-thread-reply',
+    const railBounds = wideDetail.getBoundingClientRect();
+    expect(mediaPane).toBeVisible();
+    expect(railBounds.width).toBe(320);
+    expect(railBounds.left).toBeGreaterThanOrEqual(mediaPaneBounds.right);
+    expect(Math.abs(railBounds.top - mediaPaneBounds.top)).toBeLessThanOrEqual(1);
+    const currentRow = within(wideDetail).getByRole('article', { current: true });
+    expect(currentRow).toHaveTextContent('긴 Plain Text 본문');
+    expectVisibleContentInOrder([
+      within(thread).getByText('Route Root 본문'),
+      within(thread).getByText('Route Parent 본문'),
+      currentRow,
+      within(thread).getByText('Media Reply'),
     ]);
 
-    const currentRow = within(
-      within(wideDetail).getByTestId('post-thread-current-post-media-viewer-quote'),
-    );
-    expect(currentRow.queryByRole('button', { name: /첨부 이미지 크게 보기/ })).toBeNull();
-    expect(currentRow.queryByRole('alert')).toBeNull();
-    expect(currentRow.queryByRole('button', { name: '원문 더 보기' })).toBeNull();
-    expect(currentRow.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
+    const currentPost = within(currentRow);
+    expect(currentPost.queryByRole('button', { name: /첨부 이미지 크게 보기/ })).toBeNull();
+    expect(currentPost.queryByRole('alert')).toBeNull();
+    expect(currentPost.queryByRole('button', { name: '원문 더 보기' })).toBeNull();
+    expect(currentPost.queryByRole('textbox', { name: '답글 본문' })).toBeNull();
     expect(
       within(wideDetail).getByRole('button', { name: '주변 Reply 이미지 크게 보기' }),
     ).toBeEnabled();
@@ -5567,7 +5615,7 @@ export const PostMediaViewerWide: Story = {
     expect(viewer.getByTestId('post-media-viewer-counter')).toHaveTextContent('4 / 4');
     expect(viewer.getByRole('button', { name: '다음 이미지' })).toBeDisabled();
 
-    const currentActionBar = currentRow.getByRole('toolbar', { name: '액션 바' });
+    const currentActionBar = currentPost.getByRole('toolbar', { name: '액션 바' });
     expect(currentActionBar.scrollWidth).toBeLessThanOrEqual(currentActionBar.clientWidth);
 
     const threadScroll = within(wideDetail).getByTestId('post-media-viewer-thread-scroll');
@@ -6015,21 +6063,17 @@ export const ReplyThreadPresentation: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    const rows = Array.from(thread.children) as HTMLElement[];
-
-    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
-      'post-thread-item-thread-root',
-      'post-thread-item-thread-parent',
-      'post-thread-current-thread-current',
-      'post-thread-item-thread-child',
-      'post-thread-item-thread-sibling',
-      'post-thread-item-thread-reply-quote',
+    const visiblePosts = expectThreadBodiesInOrder(thread, [
+      '대화의 시작입니다.',
+      '직접 Parent Reply입니다.',
+      '지금 보고 있는 Reply입니다.',
+      '현재 Reply에 이어진 답글입니다.',
+      '별도 분기의 답글입니다.',
+      'Reply이면서 Quote인 Post의 자체 Content입니다.',
     ]);
-    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 2);
-    rows.forEach((row, index) => {
+    visiblePosts.forEach(({ row }, index) => {
       const dividers = within(row).queryAllByTestId(/^post-thread-divider-/);
-
-      if (index === rows.length - 1 || row.getAttribute('aria-current') === 'true') {
+      if (index === visiblePosts.length - 1 || row.getAttribute('aria-current') === 'true') {
         expect(dividers).toHaveLength(0);
         return;
       }
@@ -6191,7 +6235,16 @@ export const PostDetailThreadRoute: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
+    const visiblePosts = expectThreadBodiesInOrder(thread, [
+      'Route Root 본문',
+      'Route Parent 본문',
+      '현재 Reply 본문',
+      'Child 본문',
+      'Sibling 본문',
+      'Reply+Quote 자체 Content',
+      'Source가 없어도 남는 Content',
+    ]);
+    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(visiblePosts.length - 2);
     const heading = canvas.getByRole('heading', { name: '게시글' });
     const backButton = canvas.getByRole('button', { name: '뒤로 가기' });
 
@@ -6199,17 +6252,7 @@ export const PostDetailThreadRoute: Story = {
     expect(backButton.getBoundingClientRect().height).toBe(44);
     expect(heading.parentElement).toContainElement(backButton);
     expect(heading.parentElement?.parentElement).toHaveStyle({ position: 'sticky', top: '0px' });
-    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
-      'post-thread-item-route-root',
-      'post-thread-item-route-parent',
-      'post-thread-current-route-current',
-      'post-thread-item-route-child',
-      'post-thread-item-route-sibling',
-      'post-thread-item-route-reply-quote',
-      'post-thread-item-route-source-null',
-    ]);
     expect(canvas.queryByText(/님에게 답글$/)).not.toBeInTheDocument();
-    expect(canvas.queryAllByTestId(/^post-thread-divider-/)).toHaveLength(rows.length - 2);
     expect(
       window.getComputedStyle(
         within(canvas.getByTestId('post-thread-item-route-root')).getByRole('article'),
@@ -6510,13 +6553,12 @@ export const PostDetailThreadUnavailableAncestorBoundary: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const thread = await canvas.findByTestId('post-thread');
-    const rows = within(thread).getAllByTestId(/^post-thread-(item|current)-/);
-    expect(rows.map((row) => row.getAttribute('data-testid'))).toEqual([
-      'post-thread-item-route-visible-parent',
-      'post-thread-current-route-boundary-current',
-    ]);
+    const parentBody = within(thread).getByText('조회 가능한 직접 Parent');
+    const currentBody = within(thread).getByText('경계 Current 본문');
+    expectVisibleContentInOrder([parentBody, currentBody]);
     const header = canvas.getByTestId('post-detail-scroll').children[0] as HTMLElement;
-    const current = canvas.getByTestId('post-thread-current-route-boundary-current');
+    const current = within(thread).getByRole('article', { current: true });
+    expect(current).toHaveTextContent('경계 Current 본문');
     await waitFor(() =>
       expect(
         Math.abs(current.getBoundingClientRect().top - header.getBoundingClientRect().bottom),

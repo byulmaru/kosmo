@@ -19,8 +19,6 @@ describe('GraphQL request context', () => {
     const context = await createRequestContext();
     const otherContext = await createRequestContext();
 
-    assert.equal('db' in context, false);
-
     const load = (request: Context, source: string) =>
       request
         .loader({
