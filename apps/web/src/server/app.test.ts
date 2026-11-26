@@ -812,6 +812,7 @@ describe('runtime routing', () => {
     '/@kosmo/followers',
     '/@kosmo/following',
     '/@kosmo/AaCx-8WAcbyBDtHc8M8Xg1Bvc3Q/reactions',
+    '/@kosmo/AaCx-8WAcbyBDtHc8M8Xg1Bvc3Q/activity',
   ])('serves the public route %s without navigation headers', async (path) => {
     for (const accept of [
       undefined,
@@ -878,6 +879,7 @@ describe('runtime routing', () => {
     '/@alice@[not-ip]',
     '/@kosmo/missing.js',
     '/@kosmo/post-id/unknown',
+    '/@kosmo/post-id/activity/unknown',
     '/@kosmo/a/b/c',
   ])('keeps unsupported public route shapes %s as 404', async (path) => {
     const response = await app.request(path, { headers: { accept: 'text/html' } });
