@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { afterEach, before, describe, it, mock } from 'node:test';
+import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 import { createElement } from 'react';
 import * as ReactRelay from 'react-relay';
 import { act, create } from 'react-test-renderer';
@@ -97,8 +97,11 @@ before(async () => {
   ({ SettingsNaturalLanguageMute } = await import('./SettingsNaturalLanguageMute'));
 });
 
+beforeEach(() => mock.timers.enable({ apis: ['setTimeout'] }));
+
 afterEach(async () => {
   await act(async () => renderer?.unmount());
+  mock.timers.reset();
   renderer = null;
   requests = [];
   focused = true;
