@@ -19,6 +19,14 @@ spec:
       activeService: {{ printf "%s-api" .Release.Name | trunc 63 | trimSuffix "-" }}
       previewService: {{ printf "%s-api-preview" .Release.Name | trunc 63 | trimSuffix "-" }}
       previewReplicaCount: 1
+      {{- if and (eq .Values.env "prod") .Values.apiDescheduling }}
+      activeMetadata:
+        labels:
+          kosmo.byulmaru.co/rollout-role: active
+      previewMetadata:
+        labels:
+          kosmo.byulmaru.co/rollout-role: preview
+      {{- end }}
   selector:
     matchLabels:
       app.kubernetes.io/name: api

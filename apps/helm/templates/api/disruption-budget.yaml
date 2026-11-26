@@ -1,0 +1,13 @@
+{{- if and (eq .Values.env "prod") .Values.apiDescheduling }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ printf "%s-api" .Release.Name | trunc 63 | trimSuffix "-" }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      kosmo.byulmaru.co/rollout-role: active
+{{- end }}
