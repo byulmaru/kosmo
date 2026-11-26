@@ -6,7 +6,6 @@ import { useToastMotion } from '@/theme/useOverlayMotion';
 import { getBottomTabBarContentHeight } from './navigationChrome';
 import { Toast } from './Toast';
 import type { PropsWithChildren, ReactNode } from 'react';
-import type { ViewStyle } from 'react-native';
 import type { ToastProps } from './Toast';
 
 const toastDurationMs = 3000;
@@ -127,10 +126,11 @@ export function ToastProvider({ children, renderToast }: ToastProviderProps): Re
         accessibilityLiveRegion="assertive"
         accessibilityRole="alert"
         style={[
-          Platform.OS === 'web' ? webHost : styles.nativeHost,
+          styles.host,
+          Platform.OS === 'web' ? styles.webHost : styles.nativeHost,
           {
+            bottom,
             opacity: toastMotion.progress,
-            paddingBottom: bottom,
             transform: [
               {
                 translateY: toastMotion.progress.interpolate({
@@ -180,22 +180,14 @@ export function useToast(): ToastContextValue {
   return context;
 }
 
-const webHost = {
-  alignItems: 'center',
-  bottom: 0,
-  left: 0,
-  pointerEvents: 'box-none',
-  position: 'fixed',
-  right: 0,
-  zIndex: 30,
-} as unknown as ViewStyle;
-
 const styles = StyleSheet.create({
-  nativeHost: {
-    ...StyleSheet.absoluteFill,
+  host: {
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    left: 0,
     pointerEvents: 'box-none',
+    right: 0,
     zIndex: 30,
   },
+  webHost: { position: 'fixed' as never },
+  nativeHost: { position: 'absolute' },
 });
