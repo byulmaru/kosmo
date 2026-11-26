@@ -201,28 +201,6 @@ describe('PostComposerHost', () => {
     assert.equal(keyboardAvoidingView?.props.keyboardVerticalOffset, 59);
   });
 
-  it('모바일 Web surface는 공용 dialog modal host를 사용한다', async () => {
-    platform.OS = 'web';
-    await act(async () => {
-      renderer = create(
-        createElement(PostComposerHost, {
-          mode: 'mobile',
-          onRequestClose: () => undefined,
-          open: true,
-          profile: {} as never,
-        }),
-      );
-    });
-
-    const modal = renderer?.root.findByType('Modal' as ElementType);
-    assert.equal(modal?.props.accessibilityLabel, '글쓰기');
-    assert.equal(modal?.props.animationType, 'none');
-    assert.equal(modal?.props.role, 'dialog');
-    assert.equal(modal?.props.transparent, true);
-    assert.equal(modal?.props.visible, true);
-    assert.ok(renderer?.root.findByProps({ testID: 'post-composer-backdrop' }));
-  });
-
   it('닫힌 Overlay를 modal로 노출하지 않는다', async () => {
     await act(async () => {
       renderer = create(

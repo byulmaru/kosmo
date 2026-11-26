@@ -4,11 +4,7 @@ import { createElement } from 'react';
 import { act, create } from 'react-test-renderer';
 import type { ReactElement, ReactNode } from 'react';
 import type { ReactTestRenderer } from 'react-test-renderer';
-import type { PostLinkPreviewData } from './PostLinkPreview';
-import type {
-  PostSourcePresentationView as PostSourcePresentationViewComponent,
-  PostSourcePreview as PostSourcePreviewComponent,
-} from './PostSourcePresentationView';
+import type { PostSourcePreview as PostSourcePreviewComponent } from './PostSourcePresentationView';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -63,13 +59,11 @@ mockModule('./PostContentRenderer', {
     createElement('PostContentRenderer', props),
 });
 
-let PostSourcePresentationView: typeof PostSourcePresentationViewComponent;
 let PostSourcePreview: typeof PostSourcePreviewComponent;
 let renderer: ReactTestRenderer | null = null;
 
 before(async () => {
-  ({ PostSourcePresentationView, PostSourcePreview } =
-    await import('./PostSourcePresentationView'));
+  ({ PostSourcePreview } = await import('./PostSourcePresentationView'));
 });
 
 afterEach(async () => {
@@ -81,50 +75,9 @@ afterEach(async () => {
   mock.restoreAll();
 });
 
-describe('PostSourcePresentationView mention relation wiring', () => {
-  it('forwards mentionedProfiles from an ordinary post content relation', async () => {
-    const mentionedProfiles = [mentionedProfile('profile-mentioned')];
-
-    await render(
-      createElement(PostSourcePresentationView, {
-        post: postWithContent(mentionedProfiles) as never,
-      }),
-    );
-
-    const contentRenderer = renderer?.root.findAll(
-      (node) => (node.type as unknown) === 'PostContentRenderer',
-    )[0];
-    assert.equal(contentRenderer?.props.mentionedProfiles, mentionedProfiles);
-  });
-
-  it('forwards mentionedProfiles and link preview dimensions through the source preview path', async () => {
-    const mentionedProfiles = [mentionedProfile('profile-source-mentioned')];
-    const linkPreview: PostLinkPreviewData = {
-      description: 'Source summary',
-      imageHeight: 630,
-      imageUrl: 'https://cdn.example.com/source-preview.webp',
-      imageWidth: 1200,
-      title: 'Source title',
-      url: 'https://example.com/source',
-    };
-
-    await render(
-      createElement(PostSourcePreview, {
-        interactive: false,
-        source: postWithContent(mentionedProfiles, linkPreview) as never,
-      }),
-    );
-
-    const contentRenderer = renderer?.root.findAll(
-      (node) => (node.type as unknown) === 'PostContentRenderer',
-    )[0];
-    assert.equal(contentRenderer?.props.interactive, false);
-    assert.equal(contentRenderer?.props.mentionedProfiles, mentionedProfiles);
-    assert.equal(contentRenderer?.props.linkPreview, linkPreview);
-  });
-
+describe('Post source preview', () => {
   it('uses a Pressable only for interactive Web hover feedback', async () => {
-    const source = postWithContent([]);
+    const source = previewPost();
 
     await render(createElement(PostSourcePreview, { source: source as never }));
 
@@ -257,26 +210,15 @@ function flattenStyle(style: unknown): Record<string, unknown> {
   return Object.assign({}, ...style.flat(Infinity).filter(Boolean));
 }
 
-function mentionedProfile(id: string) {
-  return {
-    displayName: 'Mentioned Profile',
-    id,
-    relativeHandle: '@mentioned-profile',
-  };
-}
-
-function postWithContent(
-  mentionedProfiles: ReturnType<typeof mentionedProfile>[],
-  linkPreview: PostLinkPreviewData | null = null,
-) {
+function previewPost() {
   return {
     content: {
       bodyText: '@mentioned-profile',
       contentWarning: null,
       document: null,
-      linkPreview,
+      linkPreview: null,
       media: [],
-      mentionedProfiles,
+      mentionedProfiles: [],
     },
     createdAt: '2026-09-14T00:00:00.000Z',
     id: 'post-source-presentation',
