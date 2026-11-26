@@ -338,8 +338,19 @@ async function assertReactionViewport(canvasElement: HTMLElement, expectedWidth:
   expect(pickerRect.right).toBeLessThanOrEqual(canvasRect.right);
 }
 
+async function sampleReactionFrames(read: () => string, duration = 260) {
+  const samples: string[] = [];
+  const start = performance.now();
+  do {
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    samples.push(read());
+  } while (performance.now() - start < duration);
+  return samples;
+}
+
 const meta = {
   component: QuickPickerInteractionCatalog,
+  excludeStories: ['QuickPickerMotionContract', 'QuickPickerReducedMotionContract'],
   parameters: {
     relay: { data: { nodes: storyProfiles } },
     router: { pathname: '/@kosmo' },
@@ -489,6 +500,64 @@ export const QuickPickerInteraction: Story = {
     expect(canvas.getByText('마지막 동작: 🎉:선택')).toBeVisible();
   },
   render: () => <QuickPickerInteractionCatalog />,
+};
+
+export const QuickPickerMotionContract: Story = {
+  tags: ['motion'],
+  render: () => <QuickPickerInteractionCatalog />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heart = canvas.getByRole('button', { name: '❤️ 반응' });
+    const background = within(heart).getByTestId('reaction-selected-background');
+    const readState = () =>
+      `${getComputedStyle(background).backgroundColor}:${getComputedStyle(background).opacity}`;
+    const selected = readState();
+
+    await userEvent.click(heart);
+    const leaving = await sampleReactionFrames(readState);
+    const idle = readState();
+    expect(heart).toHaveAttribute('aria-pressed', 'false');
+    expect(leaving.some((frame) => frame !== selected && frame !== idle)).toBe(true);
+
+    await userEvent.click(heart);
+    const entering = await sampleReactionFrames(readState);
+    expect(heart).toHaveAttribute('aria-pressed', 'true');
+    expect(entering.some((frame) => frame !== idle && frame !== selected)).toBe(true);
+    await waitFor(() => expect(readState()).toBe(selected));
+
+    // Rapid retargeting settles at the latest optimistic selection.
+    await userEvent.click(heart);
+    await userEvent.click(heart);
+    await userEvent.click(heart);
+    await waitFor(() => expect(heart).toHaveAttribute('aria-pressed', 'false'));
+    await waitFor(() => expect(readState()).toBe(idle));
+  },
+};
+
+export const QuickPickerReducedMotionContract: Story = {
+  tags: ['motion'],
+  globals: { reduceMotion: true },
+  render: () => <QuickPickerInteractionCatalog />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const heart = canvas.getByRole('button', { name: '❤️ 반응' });
+    const background = within(heart).getByTestId('reaction-selected-background');
+    const readState = () =>
+      `${getComputedStyle(background).backgroundColor}:${getComputedStyle(background).opacity}`;
+    const selected = readState();
+
+    await userEvent.click(heart);
+    const idle = readState();
+    expect(idle).not.toBe(selected);
+    const idleFrames = await sampleReactionFrames(readState);
+    expect(idleFrames.every((frame) => frame === idle)).toBe(true);
+
+    await userEvent.click(heart);
+    const selectedAgain = readState();
+    expect(selectedAgain).toBe(selected);
+    const selectedFrames = await sampleReactionFrames(readState);
+    expect(selectedFrames.every((frame) => frame === selectedAgain)).toBe(true);
+  },
 };
 
 export const QuickPickerStates: Story = {

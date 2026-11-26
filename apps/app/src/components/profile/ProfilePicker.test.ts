@@ -30,6 +30,7 @@ function MockPressable({
 }
 
 mockModule('react-native', {
+  Animated: { View: 'AnimatedView' },
   Platform: platform,
   Pressable: MockPressable,
   ScrollView: 'ScrollView',
@@ -42,8 +43,13 @@ mockModule('@/components/profile/ProfileSwitcherUnread', {
   ProfileSwitcherUnreadBadge: () => null,
 });
 mockModule('@/components/ui/Avatar', { Avatar: 'Avatar' });
+mockModule('@/components/ui/useAnimatedColorTransition', {
+  useAnimatedColorTransition: ({ color }: { color: string }) => color,
+  useAnimatedOpacityTransition: ({ opacity }: { opacity: number }) => opacity,
+});
 mockModule('@/theme/ThemeProvider', {
   useElevation: () => ({ floating: {}, overlay: {} }),
+  useReducedMotion: () => false,
   useTheme: () => ({
     backgroundElevated: '#elevated',
     backgroundSurface: '#surface',

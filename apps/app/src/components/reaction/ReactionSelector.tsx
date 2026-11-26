@@ -1,8 +1,14 @@
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTheme } from '@/theme/ThemeProvider';
+import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  useAnimatedColorTransition,
+  useAnimatedOpacityTransition,
+} from '@/components/ui/useAnimatedColorTransition';
+import { useReducedMotion, useTheme } from '@/theme/ThemeProvider';
 import { radii, spacing } from '@/theme/tokens';
 import { ReactionPendingSpinner } from './ReactionPendingSpinner';
 import type React from 'react';
+import type { ViewStyle } from 'react-native';
+import type { AnimatedOpacityValue } from '@/components/ui/useAnimatedColorTransition';
 
 export type ReactionOption = Readonly<{
   emoji: string;
@@ -23,6 +29,118 @@ export type ReactionSelectorProps = {
   pendingOptionIds?: ReadonlyArray<string>;
   selectedOptionIds?: ReadonlyArray<string>;
 };
+
+type ReactionSelectorOptionProps = {
+  error: boolean;
+  onToggle: (intent: ReactionToggleIntent) => void;
+  option: ReactionOption;
+  pending: boolean;
+  selected: boolean;
+};
+
+type ReactionSelectorOptionVisualProps = {
+  hovered: boolean;
+  option: ReactionOption;
+  pending: boolean;
+  pressed: boolean;
+  selected: boolean;
+};
+
+function ReactionSelectorOptionVisual({
+  hovered,
+  option,
+  pending,
+  pressed,
+  selected,
+}: ReactionSelectorOptionVisualProps) {
+  const theme = useTheme();
+  const reducedMotion = useReducedMotion();
+  const interaction = pressed || hovered;
+  const backgroundColor = selected
+    ? pressed
+      ? theme.primaryHover
+      : theme.primary
+    : pressed
+      ? theme.backgroundSurface
+      : hovered
+        ? theme.stateHover
+        : theme.backgroundElevated;
+  const animatedBackground = useAnimatedColorTransition({
+    color: backgroundColor,
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : hovered ? 'hovered' : 'idle',
+    reducedMotion,
+    role: interaction ? 'interaction' : 'selection',
+    selectionKey: selected,
+  });
+  const animatedOpacity = useAnimatedOpacityTransition({
+    instantKey: theme,
+    interactionKey: pressed ? 'pressed' : hovered ? 'hovered' : 'idle',
+    opacity: selected ? 0.7 : 1,
+    reducedMotion,
+    role: interaction ? 'interaction' : 'selection',
+    selectionKey: selected,
+  });
+
+  return (
+    <>
+      <Animated.View
+        style={[
+          styles.optionBackground,
+          { backgroundColor: animatedBackground } as ViewStyle,
+          { opacity: animatedOpacity as AnimatedOpacityValue },
+        ]}
+        testID={selected ? 'reaction-selected-background' : undefined}
+      />
+      <Text style={styles.emoji} testID="reaction-emoji">
+        {option.emoji}
+      </Text>
+      {pending ? (
+        <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
+          <ReactionPendingSpinner />
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+function ReactionSelectorOption({
+  error,
+  onToggle,
+  option,
+  pending,
+  selected,
+}: ReactionSelectorOptionProps): React.ReactElement {
+  const optionDisabled = pending;
+  const accessibilityLabel = error
+    ? `${option.label} 반응, 오류, 다시 시도`
+    : pending
+      ? `${option.label} 반응, 처리 중`
+      : `${option.label} 반응`;
+
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ busy: pending, disabled: optionDisabled, selected }}
+      aria-busy={pending}
+      aria-pressed={selected}
+      disabled={optionDisabled}
+      onPress={() => onToggle({ nextSelected: !selected, optionId: option.id })}
+      style={styles.option}
+    >
+      {(state) => (
+        <ReactionSelectorOptionVisual
+          hovered={Platform.OS === 'web' && Boolean((state as { hovered?: boolean }).hovered)}
+          option={option}
+          pending={pending}
+          pressed={Boolean(state.pressed)}
+          selected={selected}
+        />
+      )}
+    </Pressable>
+  );
+}
 
 export function ReactionSelector({
   disabled = false,
@@ -53,58 +171,16 @@ export function ReactionSelector({
         const error = errorIds.has(option.id);
         const pending = pendingIds.has(option.id);
         const selected = selectedIds.has(option.id);
-        const optionDisabled = pending;
-        const accessibilityLabel = error
-          ? `${option.label} 반응, 오류, 다시 시도`
-          : pending
-            ? `${option.label} 반응, 처리 중`
-            : `${option.label} 반응`;
 
         return (
-          <Pressable
-            accessibilityLabel={accessibilityLabel}
-            accessibilityRole="button"
-            accessibilityState={{
-              busy: pending,
-              disabled: optionDisabled,
-              selected,
-            }}
-            aria-busy={pending}
-            aria-pressed={selected}
-            disabled={optionDisabled}
+          <ReactionSelectorOption
+            error={error}
             key={option.id}
-            onPress={() => onToggle({ nextSelected: !selected, optionId: option.id })}
-            style={styles.option}
-          >
-            {({ pressed }) => (
-              <>
-                <View
-                  style={[
-                    styles.optionBackground,
-                    {
-                      backgroundColor: selected
-                        ? pressed
-                          ? theme.primaryHover
-                          : theme.primary
-                        : pressed
-                          ? theme.backgroundSurface
-                          : theme.backgroundElevated,
-                      opacity: selected ? 0.7 : 1,
-                    },
-                  ]}
-                  testID={selected ? 'reaction-selected-background' : undefined}
-                />
-                <Text style={styles.emoji} testID="reaction-emoji">
-                  {option.emoji}
-                </Text>
-                {pending ? (
-                  <View accessibilityElementsHidden aria-hidden style={styles.pendingOverlay}>
-                    <ReactionPendingSpinner />
-                  </View>
-                ) : null}
-              </>
-            )}
-          </Pressable>
+            onToggle={onToggle}
+            option={option}
+            pending={pending}
+            selected={selected}
+          />
         );
       })}
     </View>
