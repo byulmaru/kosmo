@@ -736,8 +736,8 @@ test(
           ]);
           assert.equal(uploadResult.id, `u_${mediaId}`);
           assert.ok(results.every(({ status }) => status === PostRequestStatus.PUBLISHED));
-          for (const handle of handles) {
-            const history = await handle.fetchHistory();
+          const histories = await Promise.all(handles.map((handle) => handle.fetchHistory()));
+          for (const history of histories) {
             const events = history.events ?? [];
             assert.equal(
               events.some(
@@ -757,6 +757,25 @@ test(
               false,
             );
           }
+          const nexusPatchId = 'post-request-media-nexus-v1';
+          const nexusHistory = histories[0]!;
+          const nexusPatchPayload = nexusHistory.events
+            ?.flatMap(({ markerRecordedEventAttributes: marker }) =>
+              marker?.markerName === 'core_patch'
+                ? (marker.details?.['patch-data']?.payloads ?? [])
+                : [],
+            )
+            .find(
+              ({ data }) =>
+                data &&
+                (JSON.parse(Buffer.from(data).toString()) as { id: string }).id === nexusPatchId,
+            );
+          assert.ok(nexusPatchPayload);
+          nexusPatchPayload.data = Buffer.from(
+            JSON.stringify({ id: nexusPatchId, deprecated: false }),
+          );
+          await Worker.runReplayHistory(testWorkflowSource, nexusHistory, handles[0]!.workflowId);
+
           assert.equal(database.finalizationCount(), 1);
           assert.equal(mediaRows.get(mediaId)?.state, MediaState.READY);
           assert.equal(postCreateInputs.length, 3);

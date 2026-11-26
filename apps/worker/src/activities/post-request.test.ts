@@ -4,26 +4,9 @@ import { db, Media } from '@kosmo/core/db';
 import { MediaSource, MediaState } from '@kosmo/core/enums';
 import { ApplicationFailure } from '@temporalio/client';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import { getPostRequestMediaStateActivity } from './post-request';
 import type { TestContext } from 'node:test';
 import type { SQL } from 'drizzle-orm';
-
-const previousTemporalAddress = process.env.TEMPORAL_ADDRESS;
-const previousTemporalNamespace = process.env.TEMPORAL_NAMESPACE;
-process.env.TEMPORAL_ADDRESS ??= '127.0.0.1:7233';
-process.env.TEMPORAL_NAMESPACE ??= 'test';
-
-const { getPostRequestMediaStateActivity } = await import('./post-request');
-
-if (previousTemporalAddress === undefined) {
-  delete process.env.TEMPORAL_ADDRESS;
-} else {
-  process.env.TEMPORAL_ADDRESS = previousTemporalAddress;
-}
-if (previousTemporalNamespace === undefined) {
-  delete process.env.TEMPORAL_NAMESPACE;
-} else {
-  process.env.TEMPORAL_NAMESPACE = previousTemporalNamespace;
-}
 
 type MediaRow = {
   readonly id: string;

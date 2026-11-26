@@ -43,10 +43,8 @@ export { createPostActivity, generatePostIdActivity } from './activities/post-cr
 export { createPostActivity as createPostActivityV2 } from './activities/post-create';
 export { capturePostCreatedActivity } from './activities/post-created';
 export {
-  checkPostRequestMediaUploadActivity,
   getPostRequestMediaStateActivity,
   reconcilePostRequestActivity,
-  waitForPostRequestMediaUploadActivity,
 } from './activities/post-request';
 export {
   createPostTransitionActivity,

@@ -80,17 +80,14 @@
   `applyNightshade`와 기존 `applyHope` 및 `publishUpload({id})` acknowledgement sequence를 그대로 재생한다. Legacy workflow에
   기존 Update가 합류하면 Media를 다시 호출하지 않고 원래 flag와 요청 선택을 비교한다. 불일치는 거부하고 기존 result
   semantics를 유지한다.
-  신규 history는 `patched('post-request-media-nexus-v1')` 뒤에서 namespace-local `kosmoMediaUpload.processUpload` workflow-backed Nexus operation을
+  Post Request는 `deprecatePatch('post-request-media-nexus-v1')` 뒤에서 namespace-local `kosmoMediaUpload.processUpload` workflow-backed Nexus operation을
   `ABANDON` cancellation과 76시간 schedule-to-close 한도로 실행한다. Worker handler는 기존 `media-upload:${mediaId}` Workflow ID로
   `USE_EXISTING` conflict와 `REJECT_DUPLICATE` reuse 정책을 사용해 실제 upload Workflow를 시작하므로, 동시 PostRequest가 같은
-  active upload에 붙고 닫힌 실행을 새 run으로 덮어쓰지 않는다. Operation 결과를 기다리는 동안 Activity slot은 점유하지 않는다. 기존 history의 child start/execute
-  command 순서는 그대로 유지하며, `post-request-media-retry-poll-v1` marker가 있는 history는 기존
-  `checkPostRequestMediaUploadActivity` 5초 간격 retry, marker가 없는 history는 기존
-  `waitForPostRequestMediaUploadActivity` 76시간 heartbeat 경로를 사용한다. 두 legacy Activity와 각 branch는 해당 history가
-  drain될 때까지 등록한다. Nexus operation 또는 legacy child start/join 실패 뒤 새 history는
+  active upload에 붙고 닫힌 실행을 새 run으로 덮어쓰지 않는다. Operation 결과를 기다리는 동안 Activity slot은 점유하지 않는다.
+  Nexus operation 실패 뒤 새 history는
   `patched('post-request-media-ready-recovery-v1')`에서 취소가 아닐 때 동일 Account의 Local Media가 primary DB에서
   READY인지 재확인한다. READY면 그 Media identity를 재사용하고, 그렇지 않거나 재확인에 실패하면 원래 upload 오류를
-  보존한다. 취소는 recovery 확인을 건너뛰며 Nexus operation과 legacy child 모두 `ABANDON`으로 취소 전파를 막는다. 취소는 publication 시작 전에만 확정한다. publication
+  보존한다. 취소는 recovery 확인을 건너뛰며 Nexus operation은 `ABANDON`으로 취소 전파를 막는다. 취소는 publication 시작 전에만 확정한다. publication
   중 timeout이나 응답 유실이 있으면 exact `postId`를 조회해 정산하되, 아직 row가 없다는 결과만으로 FAILED를 확정하지
   않는다. 이전 post Activity가 나중에 commit할 수 있기 때문이다. Publication은 stable `postId`와 현재 authorization
   재검증을 지정한 `postCreateWorkflowV2` child가 맡고, 공통 create Activity가 commit과 retry/idempotency를 소유한다.
