@@ -81,10 +81,6 @@ const legacyPostDeleteWorkflowPath = new URL(
   './test-fixtures/legacy-post-delete.ts',
   import.meta.url,
 ).pathname;
-const legacyRemoteProfileFeaturedWorkflowPath = new URL(
-  './test-fixtures/legacy-remote-profile-featured.ts',
-  import.meta.url,
-).pathname;
 const mediaUploadNexusWorkflowPath = new URL(
   './test-fixtures/media-upload-nexus-operation.ts',
   import.meta.url,
@@ -431,67 +427,70 @@ test(
 );
 
 test(
-  'Remote Featured Workflow replays the pre-patch collection and replacement trace',
+  'Remote Featured Workflow replays a retained non-deprecated patch marker',
   { timeout: 120_000 },
   async (t) => {
     const environment = await createTestWorkflowEnvironment();
     t.after(() => environment.teardown());
-    const taskQueue = `${KOSMO_TASK_QUEUE}-remote-profile-featured-replay-${process.pid}`;
+    const taskQueue = [KOSMO_TASK_QUEUE, 'remote-profile-featured-replay', process.pid].join('-');
     const profileId = '00000000-0000-8000-8000-000000000221';
-    const postIds = ['00000000-0000-8000-8000-000000000321'];
     const input: RemoteProfileFeaturedSyncInput = {
-      actorUri: 'https://remote.example/users/legacy',
-      featuredUri: 'https://remote.example/users/legacy/featured',
+      actorUri: 'https://remote.example/users/alice',
+      featuredUri: 'https://remote.example/users/alice/featured',
       profileId,
     };
     const calls: string[] = [];
-    const legacyWorker = await Worker.create({
+    const worker = await Worker.create({
       activities: {
-        collectRemoteFeaturedActivity: async (received: RemoteProfileFeaturedSyncInput) => {
-          calls.push('collectRemoteFeaturedActivity');
+        collectRemoteFeaturedItemsActivity: async (received: RemoteProfileFeaturedSyncInput) => {
+          calls.push('collectRemoteFeaturedItemsActivity');
           assert.deepEqual(received, input);
-          return postIds;
+          return { documentBytes: 0, itemUris: [] };
         },
         replaceRemoteFeaturedActivity: async (received: {
           readonly profileId: string;
           readonly postIds: readonly string[];
         }) => {
           calls.push('replaceRemoteFeaturedActivity');
-          assert.deepEqual(received, { profileId, postIds });
+          assert.deepEqual(received, { profileId, postIds: [] });
         },
       },
       connection: environment.nativeConnection,
       namespace: environment.namespace,
       taskQueue,
-      workflowsPath: legacyRemoteProfileFeaturedWorkflowPath,
+      ...testWorkflowSource,
     });
 
-    await legacyWorker.runUntil(async () => {
+    await worker.runUntil(async () => {
+      const workflowId = taskQueue + ':retained-patch';
       const handle = await environment.client.workflow.start('remoteProfileFeaturedWorkflow', {
         args: [input],
         taskQueue,
-        workflowId: `${taskQueue}:legacy`,
+        workflowId,
       });
       await handle.result();
-      assert.deepEqual(calls, ['collectRemoteFeaturedActivity', 'replaceRemoteFeaturedActivity']);
 
       const history = await handle.fetchHistory();
-      const events = history.events ?? [];
-      const scheduledActivities = events.flatMap((event) => {
-        const name = event.activityTaskScheduledEventAttributes?.activityType?.name;
-        return name === undefined ? [] : [name];
-      });
-      assert.deepEqual(scheduledActivities, [
-        'collectRemoteFeaturedActivity',
-        'replaceRemoteFeaturedActivity',
-      ]);
-      assert.equal(
-        events.some((event) => Boolean(event.childWorkflowExecutionStartedEventAttributes)),
-        false,
-      );
-
-      await Worker.runReplayHistory({ workflowsPath }, history, handle.workflowId);
+      const patchId = 'remote-profile-featured-post-lookup-v1';
+      const patchPayload = history.events
+        ?.flatMap(({ markerRecordedEventAttributes: marker }) =>
+          marker?.markerName === 'core_patch'
+            ? (marker.details?.['patch-data']?.payloads ?? [])
+            : [],
+        )
+        .find(
+          ({ data }) =>
+            data && (JSON.parse(Buffer.from(data).toString()) as { id: string }).id === patchId,
+        );
+      assert.ok(patchPayload);
+      patchPayload.data = Buffer.from(JSON.stringify({ id: patchId, deprecated: false }));
+      await Worker.runReplayHistory(testWorkflowSource, history, workflowId);
     });
+
+    assert.deepEqual(calls, [
+      'collectRemoteFeaturedItemsActivity',
+      'replaceRemoteFeaturedActivity',
+    ]);
   },
 );
 

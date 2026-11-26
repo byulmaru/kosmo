@@ -18,10 +18,6 @@ export {
   reconcileHomeTimelineFollowChangesActivity,
 } from './activities/home-timeline';
 export { collectPostLinkPreviewActivity } from './activities/link-preview';
-export {
-  createLocalPostActivity,
-  generateLocalPostIdActivity,
-} from './activities/local-post-create';
 export { finalizeMediaUploadActivity, prepareMediaUploadActivity } from './activities/media-upload';
 export { executeNaturalLanguageMuteRuleActivity } from './activities/natural-language-mute-rule';
 export {
@@ -75,18 +71,13 @@ export {
   lookupRemotePostActivity,
   prepareRemotePostActivity,
 } from './activities/remote-post-lookup';
-export {
-  collectRemoteFeaturedActivity,
-  collectRemoteFeaturedItemsActivity,
-} from './activities/remote-profile-featured';
+export { collectRemoteFeaturedItemsActivity } from './activities/remote-profile-featured';
 export {
   applyRemoteProfileActorActivity,
   fetchRemoteProfileActorActivity,
   getRemoteProfileActorStateActivity,
   lookupRemoteActorUriActivity,
-  materializeRemoteProfileActorActivity,
   recoverRemoteProfileActorActivity,
-  refreshRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 export {
   sendProfileFollowAcceptActivity,

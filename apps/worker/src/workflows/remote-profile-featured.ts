@@ -4,7 +4,7 @@ import {
 } from '@kosmo/core/temporal/workflows';
 import {
   ApplicationFailure,
-  patched,
+  deprecatePatch,
   proxyActivities,
   WorkflowIdReusePolicy,
 } from '@temporalio/workflow';
@@ -18,22 +18,13 @@ import type * as activities from '../activities';
 
 export type { RemoteProfileFeaturedSyncInput } from '@kosmo/core/temporal/workflows';
 
-const {
-  collectRemoteFeaturedActivity,
-  collectRemoteFeaturedItemsActivity,
-  replaceRemoteFeaturedActivity,
-} = proxyActivities<typeof activities>(workflowActivityOptions);
+const { collectRemoteFeaturedItemsActivity, replaceRemoteFeaturedActivity } =
+  proxyActivities<typeof activities>(workflowActivityOptions);
 
 export async function remoteProfileFeaturedWorkflow(
   input: RemoteProfileFeaturedSyncInput,
 ): Promise<void> {
-  if (!patched('remote-profile-featured-post-lookup-v1')) {
-    const postIds = await collectRemoteFeaturedActivity(input);
-    if (postIds !== null) {
-      await replaceRemoteFeaturedActivity({ profileId: input.profileId, postIds });
-    }
-    return;
-  }
+  deprecatePatch('remote-profile-featured-post-lookup-v1');
 
   const collection = await collectRemoteFeaturedItemsActivity(input);
   if (collection === null) {

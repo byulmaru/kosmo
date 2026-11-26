@@ -1,11 +1,10 @@
-import { ApplicationFailure, patched, proxyActivities } from '@temporalio/workflow';
+import { ApplicationFailure, deprecatePatch, proxyActivities } from '@temporalio/workflow';
 import { z } from 'zod';
 import { workflowActivityOptions } from './activity-options';
 import type { RemoteProfileMaterializationInput } from '@kosmo/core/temporal/workflows';
 import type * as activities from '../activities';
 
 const {
-  refreshRemoteProfileActorActivity,
   getRemoteProfileActorStateActivity,
   fetchRemoteProfileActorActivity,
   applyRemoteProfileActorActivity,
@@ -37,9 +36,7 @@ export async function remoteProfileRefreshWorkflow(
   input: RemoteProfileMaterializationInput,
 ): Promise<string> {
   const parsedInput = parseRefreshInput(input);
-  if (!patched('remote-profile-activity-split-v1')) {
-    return refreshRemoteProfileActorActivity(parsedInput);
-  }
+  deprecatePatch('remote-profile-activity-split-v1');
 
   const state = await getRemoteProfileActorStateActivity({ actorUri: parsedInput.actorUri });
   if (state !== null && !state.needsRefresh) {

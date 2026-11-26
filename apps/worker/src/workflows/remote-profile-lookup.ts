@@ -2,9 +2,9 @@ import { remoteProfileRefreshWorkflow } from '@kosmo/core/temporal/workflows';
 import {
   ApplicationFailure,
   ChildWorkflowCancellationType,
+  deprecatePatch,
   log,
   ParentClosePolicy,
-  patched,
   proxyActivities,
   WorkflowIdReusePolicy,
 } from '@temporalio/workflow';
@@ -20,8 +20,6 @@ import type * as activities from '../activities';
 
 const {
   lookupRemoteActorUriActivity,
-  materializeRemoteProfileActorActivity,
-  refreshRemoteProfileActorActivity,
   getRemoteProfileActorStateActivity,
   fetchRemoteProfileActorActivity,
   applyRemoteProfileActorActivity,
@@ -96,37 +94,7 @@ export async function remoteProfileLookupWorkflow(
   input: RemoteProfileLookupInput,
 ): Promise<string | null> {
   const parsedInput = parseRemoteProfileLookupInput(input);
-
-  if (!patched('remote-profile-activity-split-v1')) {
-    if ('domain' in parsedInput) {
-      const actorUri = await lookupRemoteActorUriActivity(parsedInput);
-      if (actorUri === null) {
-        return null;
-      }
-
-      const materializationInput: RemoteProfileActorLookupInput = {
-        actorUri,
-        ...(parsedInput.profileId ? { profileId: parsedInput.profileId } : {}),
-      };
-      const state = await materializeRemoteProfileActorActivity(materializationInput);
-      return state === null
-        ? refreshRemoteProfileActorActivity(materializationInput)
-        : startRefreshIfNeeded(materializationInput, state);
-    }
-
-    const state = await materializeRemoteProfileActorActivity(parsedInput);
-    if (state !== null) {
-      return state.profileId;
-    }
-
-    return refreshRemoteProfileActorActivity({
-      actorUri: parsedInput.actorUri,
-      ...(parsedInput.contextOrigin === undefined
-        ? {}
-        : { contextOrigin: parsedInput.contextOrigin }),
-      ...(parsedInput.profileId === undefined ? {} : { profileId: parsedInput.profileId }),
-    });
-  }
+  deprecatePatch('remote-profile-activity-split-v1');
 
   let actorInput: RemoteProfileActorLookupInput;
   if ('domain' in parsedInput) {

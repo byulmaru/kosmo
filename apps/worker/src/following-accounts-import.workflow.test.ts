@@ -19,8 +19,8 @@ import { Worker } from '@temporalio/worker';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import { followImportedProfileActivity } from './activities/following-accounts-import';
 import {
+  fetchRemoteProfileActorActivity,
   lookupRemoteActorUriActivity,
-  materializeRemoteProfileActorActivity,
 } from './activities/remote-profile-materialization';
 import { createTestWorkflowEnvironment, testWorkflowSource } from './temporal-test-environment.js';
 import type { FollowingAccountsImportInput } from '@kosmo/core/temporal/workflows';
@@ -107,7 +107,7 @@ test('Remote Profile Activities classify fetch errors, reject missing origins, a
   );
 
   await assert.rejects(
-    materializeRemoteProfileActorActivity({
+    fetchRemoteProfileActorActivity({
       actorUri: 'https://missing-target.example/actors/alice',
       profileId: followerProfileId,
     }),
