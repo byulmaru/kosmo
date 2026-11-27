@@ -13,7 +13,7 @@ export function PostActionBackground({ style, ...props }: ViewProps) {
       onBackgroundPress={onBackgroundPress}
       // RNW must focus the responder itself when a focused ancestor blurs on pointer down.
       tabIndex={Platform.OS === 'web' ? -1 : undefined}
-      style={[style, Platform.OS === 'web' && { cursor: 'pointer' }]}
+      style={style}
     />
   ) : (
     <View {...props} style={style} />
