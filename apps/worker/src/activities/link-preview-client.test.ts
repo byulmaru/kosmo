@@ -207,6 +207,10 @@ test('requires a usable title and valid image dimensions', async (t) => {
       output: { imageUrl, imageWidth: null, imageHeight: null },
     },
     {
+      input: { title: 'Partial height', image: imageUrl, imageHeight: 630 },
+      output: { imageUrl, imageWidth: null, imageHeight: null },
+    },
+    {
       input: { title: 'Zero dimension', image: imageUrl, imageWidth: 0, imageHeight: 630 },
       output: { imageUrl, imageWidth: null, imageHeight: null },
     },
