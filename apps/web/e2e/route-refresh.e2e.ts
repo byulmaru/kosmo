@@ -10,7 +10,7 @@ import { isGraphQLOperation, toGlobalId } from './graphql';
 import type { Page } from '@playwright/test';
 
 const historyStorageKey = 'kosmo-e2e-route-history';
-const shellQueries = ['UniversalShellQuery', 'ProfileLayoutQuery'] as const;
+const shellQueries = ['UniversalShellQuery', 'ProfileScreenQuery'] as const;
 
 type RouteCase = {
   path: string;

@@ -136,6 +136,11 @@ export function useRouter() {
   );
 }
 
+const navigation = { addListener: () => () => undefined };
+export function useNavigation() {
+  return navigation;
+}
+
 export const unstable_navigationEvents = { addListener: () => () => undefined };
 
 export function Link({
