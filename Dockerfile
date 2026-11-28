@@ -80,7 +80,14 @@ RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
   --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
   pnpm install --filter @kosmo/admin --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
 
-FROM runtime-deps AS runtime-files
+FROM runtime-deps AS runtime-base
+
+RUN --mount=type=tmpfs,target=/var/lib/apt/lists \
+  --mount=type=tmpfs,target=/var/log \
+  --mount=type=tmpfs,target=/var/cache/ldconfig \
+  apt-get update && apt-get upgrade -y
+
+FROM runtime-base AS runtime
 
 COPY --chown=app:app tsconfig.json ./
 COPY --chown=app:app apps/api ./apps/api
@@ -95,19 +102,6 @@ COPY --chown=app:app --from=app-build /app/apps/app/dist ./apps/app/dist
 COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh
-
-FROM runtime-files AS runtime
-
-RUN --mount=type=tmpfs,target=/var/lib/apt/lists \
-  --mount=type=tmpfs,target=/var/log \
-  --mount=type=tmpfs,target=/var/cache/ldconfig \
-  set -eu; \
-  touch /var/log/apt-started; \
-  apt-get update; \
-  apt-get upgrade -y; \
-  find /etc /usr /var /tmp -xdev -newer /var/log/apt-started \
-    ! -path /etc/hosts ! -path /etc/hostname ! -path /etc/resolv.conf \
-    -exec touch -h -m -d @0 -- {} +
 
 ARG SENTRY_RELEASE
 ENV SENTRY_RELEASE=$SENTRY_RELEASE

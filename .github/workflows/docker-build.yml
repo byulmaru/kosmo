@@ -46,6 +46,21 @@ jobs:
             type=sha,format=long
             type=raw,value=main
 
+      - name: Build runtime base
+        id: runtime-base
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          target: runtime-base
+          provenance: false
+          build-args: SOURCE_DATE_EPOCH=0
+          no-cache-filters: runtime-base
+          outputs: type=oci,dest=${{ runner.temp }}/kosmo-runtime-base,tar=false,rewrite-timestamp=true
+          cache-from: |
+            type=gha,scope=docker-runtime-base
+            type=gha,scope=docker-build
+          cache-to: type=gha,scope=docker-runtime-base,mode=max,ignore-error=true
+
       - name: Build and push Docker image
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         env:
@@ -56,11 +71,11 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-contexts: |
+            runtime-base=oci-layout://${{ runner.temp }}/kosmo-runtime-base@${{ steps.runtime-base.outputs.digest }}
           cache-from: type=gha,scope=docker-build
           cache-to: type=gha,mode=max,scope=docker-build,ignore-error=true
-          no-cache-filters: |
-            app-build
-            runtime
+          no-cache-filters: app-build
           build-args: |
             SENTRY_ORG=${{ vars.SENTRY_ORG }}
             SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
