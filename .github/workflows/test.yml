@@ -35,7 +35,7 @@ jobs:
           - name: Admin Image
             command: |
               set -euo pipefail
-              docker buildx build --load --no-cache-filter runtime --target runtime \
+              docker build --target runtime --build-arg RUNTIME_OS_REFRESH=smoke-a \
                 --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-admin-smoke .
               docker image inspect --format 'Runtime image size: {{.Size}} bytes' kosmo-admin-smoke
               docker run --rm --user 0 --entrypoint sh kosmo-admin-smoke -exc '
@@ -63,12 +63,40 @@ jobs:
               const binaries = readdirSync(releases, { recursive: true }).filter((name) => name.endsWith('.node'));
               assert.deepEqual(binaries, [relative(releases, binary)]);
               JS
-              docker buildx build --load --no-cache-filter runtime --target runtime \
+              docker build --target runtime --build-arg RUNTIME_OS_REFRESH=smoke-b \
                 --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-admin-smoke:rebuilt .
               layer_format='{{range .RootFS.Layers}}{{println .}}{{end}}'
               first_runtime_layers=$(docker image inspect --format "$layer_format" kosmo-admin-smoke)
               second_runtime_layers=$(docker image inspect --format "$layer_format" kosmo-admin-smoke:rebuilt)
-              diff -u <(printf '%s\n' "$first_runtime_layers") <(printf '%s\n' "$second_runtime_layers")
+              if ! diff -u <(printf '%s\n' "$first_runtime_layers") <(printf '%s\n' "$second_runtime_layers"); then
+                docker image save kosmo-admin-smoke:latest kosmo-admin-smoke:rebuilt -o /tmp/runtime-images.tar
+                python3 - <<'PY'
+              import hashlib
+              import json
+              import tarfile
+
+              with tarfile.open('/tmp/runtime-images.tar') as images:
+                  first, second = json.load(images.extractfile('manifest.json'))
+
+                  def layer_entries(path):
+                      with tarfile.open(fileobj=images.extractfile(path), mode='r|*') as layer:
+                          return {
+                              entry.name: (entry.mtime, entry.uid, entry.gid, entry.mode, entry.linkname,
+                                           hashlib.file_digest(layer.extractfile(entry), 'sha256').hexdigest() if entry.isfile() else '')
+                              for entry in layer
+                          }
+
+                  for pos, (before, after) in enumerate(zip(first['Layers'], second['Layers'])):
+                      if before == after:
+                          continue
+                      left, right = layer_entries(before), layer_entries(after)
+                      changed = [path for path in sorted(left.keys() | right.keys()) if left.get(path) != right.get(path)]
+                      print(f'Layer {pos} has {len(changed)} different entries')
+                      for path in changed[:15]:
+                          print(path, left.get(path), right.get(path))
+              PY
+                exit 1
+              fi
               docker build --target runtime-deps --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-runtime-deps:smoke-a .
               docker build --target runtime-deps --build-arg SENTRY_RELEASE=smoke-b --tag kosmo-runtime-deps:smoke-b .
               first_layers=$(docker image inspect --format '{{json .RootFS.Layers}}' kosmo-runtime-deps:smoke-a)

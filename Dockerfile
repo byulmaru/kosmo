@@ -77,6 +77,7 @@ RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
 
 FROM node:${NODE_VERSION}-trixie-slim AS runtime
 
+ARG RUNTIME_OS_REFRESH
 RUN --mount=type=tmpfs,target=/run \
   set -eu; \
   touch /run/runtime-build-start; \
