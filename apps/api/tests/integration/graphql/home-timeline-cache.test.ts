@@ -2895,7 +2895,10 @@ test(
       };
       const [firstReadyEvent, secondReadyEvent, otherReadyEvent] = readyEvents;
       const firstProfileCompletion = readAfterInitialPost(profileAOnFirstSession, firstReadyEvent);
-      const secondProfileCompletion = readAfterInitialPost(profileAOnSecondSession, secondReadyEvent);
+      const secondProfileCompletion = readAfterInitialPost(
+        profileAOnSecondSession,
+        secondReadyEvent,
+      );
       const otherProfilePostEvent = readAfterInitialPost(profileBOnFirstSession, otherReadyEvent);
 
       const deleted = await requestGraphQL<{
