@@ -4,18 +4,27 @@ ARG NODE_VERSION=26.12.1
 # 11.28.8 bundles undici 6.29.1; workspace overrides do not patch pnpm's own dependencies.
 ARG PNPM_VERSION=11.28.8
 
-FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS base
+FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS pnpm
 
-ARG NODE_VERSION
+FROM debian:trixie-slim AS workspace
 
 WORKDIR /app
 
-ENV PATH=/pnpm/bin:$PATH
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME/bin:$PATH
 
+RUN apt-get update \
+  && apt-get upgrade -y \
+  && apt-get install -y --no-install-recommends ca-certificates curl libatomic1 \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --link --from=pnpm /opt/pnpm /opt/pnpm
+
+ARG NODE_VERSION
 RUN --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
-  pnpm runtime set node ${NODE_VERSION} -g
-
-FROM base AS workspace
+  install -d -m 0777 "$PNPM_HOME" "$PNPM_HOME/bin" \
+  && ln -s /opt/pnpm/pnpm /usr/local/bin/pnpm \
+  && pnpm runtime set node "$NODE_VERSION" -g
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches ./patches
@@ -80,14 +89,7 @@ RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
   --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
   pnpm install --filter @kosmo/admin --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
 
-FROM runtime-deps AS runtime-base
-
-RUN --mount=type=tmpfs,target=/var/lib/apt/lists \
-  --mount=type=tmpfs,target=/var/log \
-  --mount=type=tmpfs,target=/var/cache/ldconfig \
-  apt-get update && apt-get upgrade -y
-
-FROM runtime-base AS runtime
+FROM runtime-deps AS runtime
 
 COPY --chown=app:app tsconfig.json ./
 COPY --chown=app:app apps/api ./apps/api
