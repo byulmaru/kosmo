@@ -4,9 +4,9 @@ ARG NODE_VERSION=26.13.1
 # 11.28.8 bundles undici 6.29.1; workspace overrides do not patch pnpm's own dependencies.
 ARG PNPM_VERSION=11.28.8
 
-FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS pnpm
+FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION}@sha256:b8f37cb60815b3b9cfc24b74f1933a1557836e1fe96b0ff6041f6054f4f528ad AS pnpm
 
-FROM node:${NODE_VERSION}-trixie-slim AS workspace
+FROM node:${NODE_VERSION}-trixie-slim@sha256:abe7e5a82b61a8ef67b315b85497c9e65173387ccf2f4a029248184b8e020be5 AS workspace
 
 WORKDIR /app
 
