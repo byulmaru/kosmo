@@ -10,8 +10,10 @@ import {
 } from 'relay-runtime';
 import { expect, fn, mocked, userEvent, waitFor, within } from 'storybook/test';
 import { trackAnalytics } from '@/analytics/client';
+import SearchCoachmarkQueryNode from '@/app/(tabs)/(protected)/__generated__/SearchCoachmarkQuery.graphql';
 import SearchPeopleByHandlePageQueryNode from '@/app/(tabs)/(protected)/__generated__/SearchPeopleByHandlePageQuery.graphql';
 import SearchScreen from '@/app/(tabs)/(protected)/search';
+import { CoachmarkProvider } from '@/components/coachmark/CoachmarkProvider';
 import {
   PrimaryNavigationScrollProvider,
   usePrimaryNavigationScroll,
@@ -59,6 +61,10 @@ function SearchShellChromeStory({ children }: { children: ReactNode }) {
       <PrimaryNavigationScrollProvider>{children}</PrimaryNavigationScrollProvider>
     </ShellChromeProvider>
   );
+}
+
+function SearchStoryProviders({ children }: { children: ReactNode }) {
+  return <CoachmarkProvider accountId={null}>{children}</CoachmarkProvider>;
 }
 
 function SearchNavigationProbe({ onBackNavigation }: { onBackNavigation: () => void }) {
@@ -111,6 +117,25 @@ function StoreAndNetworkSearchStory({ mode }: { mode: SearchRefreshMode }) {
   const [refreshStatus, setRefreshStatus] = useState<'waiting' | SearchRefreshMode>('waiting');
   const environment = useMemo(() => {
     const network = Network.create((request: RequestParameters) => {
+      if (request.name === 'SearchCoachmarkQuery') {
+        return Promise.resolve({
+          data: {
+            me: {
+              id: 'search-story-account',
+              profiles: [],
+              metadata: [
+                {
+                  id: 'search-story-coachmark-metadata',
+                  key: 'coachmark.search.shown',
+                  value: 'true',
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                },
+              ],
+            },
+          },
+        } as GraphQLResponse);
+      }
+
       if (request.name !== 'SearchPeopleByHandlePageQuery') {
         return Promise.resolve({ data: {} } as GraphQLResponse);
       }
@@ -133,6 +158,10 @@ function StoreAndNetworkSearchStory({ mode }: { mode: SearchRefreshMode }) {
       network,
       store: new Store(new RecordSource()),
     });
+    nextEnvironment.commitPayload(
+      createOperationDescriptor(getRequest(SearchCoachmarkQueryNode), {}),
+      { me: null },
+    );
     nextEnvironment.commitPayload(
       createOperationDescriptor(getRequest(SearchPeopleByHandlePageQueryNode), {
         query: 'byulmaru',
@@ -159,6 +188,20 @@ const meta = {
     openSearchDrawer.mockClear();
   },
   component: SearchScreen,
+  decorators: [
+    (Story) => (
+      <SearchStoryProviders>
+        <Story />
+      </SearchStoryProviders>
+    ),
+  ],
+  parameters: {
+    relay: {
+      operationResponses: {
+        SearchCoachmarkQuery: { data: { me: null } },
+      },
+    },
+  },
   title: 'KOSMO/Screens/Search',
 } satisfies Meta<typeof SearchScreen>;
 
@@ -427,6 +470,8 @@ export const RecentSearchInteraction: Story = {
     await expect(input).toHaveValue('');
     await expect(input).toHaveFocus();
     await expect(canvas.findByText('별마루')).resolves.toBeVisible();
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: '검색 도움말' })).toHaveFocus();
     await userEvent.tab();
     await expect(canvas.getByRole('link', { name: '별마루' })).toHaveFocus();
     const recentLink = canvas.getByRole('link', { name: '별마루' });
