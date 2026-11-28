@@ -2865,6 +2865,7 @@ test(
       const profileBOnFirstSession = await subscribe(owner.token, otherProfile.id);
       const firstProfileCompletion = profileAOnFirstSession.readEvent();
       const secondProfileCompletion = profileAOnSecondSession.readEvent();
+      const otherProfilePostEvent = profileBOnFirstSession.readEvent();
 
       await Promise.all([
         waitForTopicCount('profileDisabled', owner.profile.id, 1),
@@ -2917,7 +2918,7 @@ test(
         postId: otherProfilePost.id,
       });
       const otherProfileEvent = await withTimeout(
-        profileBOnFirstSession.readEvent(),
+        otherProfilePostEvent,
         'The other Profile subscription stopped after Profile A was disabled',
       );
       assert.deepEqual(getSseData(otherProfileEvent), {
