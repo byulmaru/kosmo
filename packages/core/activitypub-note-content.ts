@@ -3,6 +3,8 @@ import { JSDOM } from 'jsdom';
 import { DOMParser as ProseMirrorDOMParser } from 'prosemirror-model';
 import {
   isPostContentMentionHandleUsernameWithinLimit,
+  normalizePostContentCustomEmojiShortcode,
+  normalizePostContentCustomEmojiUrl,
   normalizePostContentMentionHandle,
   normalizePostContentPlainText,
   normalizePostContentProfileId,
@@ -16,13 +18,23 @@ import {
   postContentDocumentFromText,
   postContentDocumentToText,
 } from './post-content/server';
-import type { PostContentBodyDocumentV1, PostContentDocumentV1 } from './post-content/index';
+import type {
+  PostContentBodyDocumentV1,
+  PostContentCustomEmoji,
+  PostContentDocumentV1,
+} from './post-content/index';
 
 export interface RemoteNoteContentInput {
   content: string | null;
+  emojis?: readonly RemoteNoteCustomEmojiCandidate[];
   mentions?: readonly RemoteNoteMentionCandidate[];
   summary: string | null;
   mediaType: string | null;
+}
+
+export interface RemoteNoteCustomEmojiCandidate {
+  readonly shortcode: string;
+  readonly url: string;
 }
 
 export interface RemoteNoteMentionCandidate {
@@ -162,6 +174,53 @@ function projectBody(
   throw new TypeError(`Unsupported remote Note media type: ${essence}`);
 }
 
+function normalizeRemoteCustomEmojis(
+  body: PostContentBodyDocumentV1,
+  candidates: readonly RemoteNoteCustomEmojiCandidate[],
+): PostContentCustomEmoji[] {
+  const urlsByShortcode = new Map<string, Set<string>>();
+  const matchedShortcodes = new Set<string>();
+  for (const candidate of candidates) {
+    let shortcode: string;
+    let url: string;
+    try {
+      shortcode = normalizePostContentCustomEmojiShortcode(candidate.shortcode);
+      url = normalizePostContentCustomEmojiUrl(candidate.url);
+    } catch {
+      continue;
+    }
+    const urls = urlsByShortcode.get(shortcode) ?? new Set<string>();
+    urls.add(url);
+    urlsByShortcode.set(shortcode, urls);
+  }
+
+  for (const block of body.content) {
+    if (block.type !== 'paragraph') {
+      continue;
+    }
+    for (const node of block.content ?? []) {
+      if (node.type !== 'text') {
+        continue;
+      }
+      const linkMark = node.marks?.find((mark) => mark.type === 'link');
+      if (linkMark?.attrs.href === node.text) {
+        continue;
+      }
+      for (const match of node.text.matchAll(/:[^:\s]+:/gu)) {
+        matchedShortcodes.add(match[0]);
+      }
+    }
+  }
+
+  const emojis: PostContentCustomEmoji[] = [];
+  for (const [shortcode, urls] of urlsByShortcode) {
+    if (urls.size === 1 && matchedShortcodes.has(shortcode)) {
+      emojis.push({ shortcode, url: urls.values().next().value! });
+    }
+  }
+  return emojis;
+}
+
 export function projectRemoteActivityPubHtmlToPlainText(html: string): string {
   const plainText = postContentDocumentToText({
     version: postContentSchemaVersion,
@@ -182,15 +241,18 @@ function projectSummary(value: string | null): string | null {
 
 export function projectRemoteNoteContent({
   content,
+  emojis = [],
   mentions = [],
   summary,
   mediaType,
 }: RemoteNoteContentInput): PostContentDocumentV1 {
   const projectedSummary = projectSummary(summary);
+  const body = projectBody(content, mediaType, mentions);
+  const customEmojis = normalizeRemoteCustomEmojis(body, emojis);
   const document = canonicalizePostContentDocument({
     version: postContentSchemaVersion,
     summary: projectedSummary,
-    body: projectBody(content, mediaType, mentions),
+    body: customEmojis.length > 0 ? { ...body, attrs: { ...body.attrs, customEmojis } } : body,
   });
 
   // Count the visible source text before Mention nodes replace remote anchor text.
