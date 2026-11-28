@@ -102,10 +102,12 @@ RUN --mount=type=tmpfs,target=/var/lib/apt/lists \
   --mount=type=tmpfs,target=/var/log \
   --mount=type=tmpfs,target=/var/cache/ldconfig \
   set -eu; \
-  touch -d '1 second ago' /var/log/apt-started; \
+  touch /var/log/apt-started; \
   apt-get update; \
   apt-get upgrade -y; \
-  find /etc /usr /var /tmp -xdev -newer /var/log/apt-started -exec touch -h -m -d @0 -- {} +
+  find /etc /usr /var /tmp -xdev -newer /var/log/apt-started \
+    ! -path /etc/hosts ! -path /etc/hostname ! -path /etc/resolv.conf \
+    -exec touch -h -m -d @0 -- {} +
 
 ARG SENTRY_RELEASE
 ENV SENTRY_RELEASE=$SENTRY_RELEASE
