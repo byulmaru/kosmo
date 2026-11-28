@@ -1,21 +1,26 @@
 # syntax=docker/dockerfile:1
 
-ARG NODE_VERSION=26.12.1
+ARG NODE_VERSION=26.13.1
 # 11.28.8 bundles undici 6.29.1; workspace overrides do not patch pnpm's own dependencies.
 ARG PNPM_VERSION=11.28.8
 
-FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS base
+FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION}@sha256:b8f37cb60815b3b9cfc24b74f1933a1557836e1fe96b0ff6041f6054f4f528ad AS pnpm
 
-ARG NODE_VERSION
+FROM node:${NODE_VERSION}-trixie-slim@sha256:abe7e5a82b61a8ef67b315b85497c9e65173387ccf2f4a029248184b8e020be5 AS workspace
 
 WORKDIR /app
 
-ENV PATH=/pnpm/bin:$PATH
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME/bin:$PATH
 
-RUN --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
-  pnpm runtime set node ${NODE_VERSION} -g
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl libatomic1 \
+  && rm -rf /var/lib/apt/lists/*
 
-FROM base AS workspace
+COPY --link --from=pnpm /opt/pnpm /opt/pnpm
+
+RUN install -d -m 0777 "$PNPM_HOME" "$PNPM_HOME/bin" \
+  && ln -s /opt/pnpm/pnpm /usr/local/bin/pnpm
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches ./patches
@@ -80,7 +85,7 @@ RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
   --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
   pnpm install --filter @kosmo/admin --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
 
-FROM runtime-deps AS runtime-files
+FROM runtime-deps AS runtime
 
 COPY --chown=app:app tsconfig.json ./
 COPY --chown=app:app apps/api ./apps/api
@@ -95,12 +100,6 @@ COPY --chown=app:app --from=app-build /app/apps/app/dist ./apps/app/dist
 COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 
 RUN chmod +x ./docker-entrypoint.sh
-
-FROM runtime-files AS runtime
-
-RUN apt-get update \
-  && apt-get upgrade -y \
-  && rm -rf /var/lib/apt/lists/*
 
 ARG SENTRY_RELEASE
 ENV SENTRY_RELEASE=$SENTRY_RELEASE

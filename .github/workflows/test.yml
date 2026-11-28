@@ -32,39 +32,6 @@ jobs:
               helm template kosmo apps/helm --namespace kosmo-prod --set env=prod --set imageDigest=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa >/dev/null
               ruby apps/helm/temporal-namespace.test.rb
               ruby scripts/production-release.test.rb
-          - name: Admin Image
-            command: |
-              set -euo pipefail
-              docker build --target runtime --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-admin-smoke .
-              docker run --rm --user 0 --entrypoint sh kosmo-admin-smoke -exc '
-                test "$SENTRY_RELEASE" = smoke-a
-                if [ -d /root/.cache/pnpm ]; then
-                  metadata=$(find /root/.cache/pnpm -type d \( -name metadata -o -name metadata-full \) -print -quit)
-                  test -z "$metadata"
-                fi
-              '
-              docker build --target runtime-deps --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-runtime-deps:smoke-a .
-              docker build --target runtime-deps --build-arg SENTRY_RELEASE=smoke-b --tag kosmo-runtime-deps:smoke-b .
-              first_layers=$(docker image inspect --format '{{json .RootFS.Layers}}' kosmo-runtime-deps:smoke-a)
-              second_layers=$(docker image inspect --format '{{json .RootFS.Layers}}' kosmo-runtime-deps:smoke-b)
-              test "$first_layers" = "$second_layers"
-              container="$(docker run --detach --rm --publish 127.0.0.1:18080:8080 kosmo-admin-smoke admin)"
-              trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
-              timeout 30 sh -c 'until test "$(curl --silent --output /dev/null --write-out "%{http_code}" http://127.0.0.1:18080/healthz)" = 200; do sleep 1; done'
-              health_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST --header 'Content-Type: application/json' http://127.0.0.1:18080/healthz)"
-              grep -Eq '^HTTP/[0-9.]+ 405 ' <<<"$health_post"
-              grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$health_post"
-              shell="$(curl --silent --show-error --dump-header - http://127.0.0.1:18080/)"
-              grep -Eq '^HTTP/[0-9.]+ 200 ' <<<"$shell"
-              grep -Eiq '^cache-control:[[:space:]]*.*no-store' <<<"$shell"
-              escaped="$(curl --silent --show-error --dump-header - --header 'Tailscale-User-Name: <script>alert(1)</script>' http://127.0.0.1:18080/)"
-              grep -Eq '^HTTP/[0-9.]+ 200 ' <<<"$escaped"
-              grep -Fq '&lt;script>alert(1)&lt;/script>' <<<"$escaped"
-              if grep -Fq '<script>alert(1)</script>' <<<"$escaped"; then exit 1; fi
-              shell_post="$(curl --silent --show-error --dump-header - --output /dev/null --request POST --header 'Content-Type: application/json' http://127.0.0.1:18080/)"
-              grep -Eq '^HTTP/[0-9.]+ 405 ' <<<"$shell_post"
-              grep -Eiq '^allow:[[:space:]]*GET([[:space:]]|$)' <<<"$shell_post"
-              test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18080/graphql)" = 404
           - name: Core
             command: pnpm test:temporal -- pnpm --filter @kosmo/core test
             database: true

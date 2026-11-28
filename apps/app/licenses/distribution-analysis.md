@@ -24,7 +24,7 @@ The [npm version record](https://registry.npmjs.org/standard-navigation/0.0.5) d
 
 ## Current artifact generation
 
-After changing `@kosmo/app` production dependencies, manually regenerate the current artifact with the repository-pinned Node `26.12.1` and pnpm `11.28.8` toolchain:
+After changing `@kosmo/app` production dependencies, manually regenerate the current artifact with the Node and pnpm versions pinned in the root `mise.toml`.
 
 ```sh
 pnpm --filter @kosmo/app licenses:generate
