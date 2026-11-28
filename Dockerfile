@@ -98,14 +98,14 @@ RUN chmod +x ./docker-entrypoint.sh
 
 FROM runtime-files AS runtime
 
-RUN --mount=type=tmpfs,target=/run \
+RUN --mount=type=tmpfs,target=/var/lib/apt/lists \
+  --mount=type=tmpfs,target=/var/log \
+  --mount=type=tmpfs,target=/var/cache/ldconfig \
   set -eu; \
-  touch -d '1 second ago' /run/apt-started; \
+  touch -d '1 second ago' /var/log/apt-started; \
   apt-get update; \
   apt-get upgrade -y; \
-  rm -rf /var/lib/apt/lists/*; \
-  rm -f /var/cache/ldconfig/aux-cache /var/log/alternatives.log /var/log/apt/history.log /var/log/apt/term.log /var/log/dpkg.log; \
-  find /etc /usr /var /tmp -xdev -newer /run/apt-started -exec touch -h -m -d @0 -- {} +
+  find /etc /usr /var /tmp -xdev -newer /var/log/apt-started -exec touch -h -m -d @0 -- {} +
 
 ARG SENTRY_RELEASE
 ENV SENTRY_RELEASE=$SENTRY_RELEASE
