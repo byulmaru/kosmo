@@ -50,10 +50,11 @@ jobs:
               docker run --rm -i --workdir /app/apps/worker --entrypoint node \
                 kosmo-admin-smoke --input-type=commonjs <<'JS'
               const assert = require('node:assert/strict');
-              const { readdirSync } = require('node:fs');
+              const { accessSync, constants, readdirSync } = require('node:fs');
               const { createRequire } = require('node:module');
               const { dirname, relative } = require('node:path');
 
+              accessSync('/app', constants.W_OK);
               require('@temporalio/worker');
               const requireFromWorker = createRequire(require.resolve('@temporalio/worker'));
               const requireFromBridge = createRequire(requireFromWorker.resolve('@temporalio/core-bridge'));

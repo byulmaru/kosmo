@@ -87,7 +87,7 @@ RUN --mount=type=tmpfs,target=/run \
   rm -f /var/cache/ldconfig/aux-cache /var/log/alternatives.log /var/log/apt/*.log /var/log/dpkg.log; \
   groupadd --system --gid 10001 app; \
   SOURCE_DATE_EPOCH=0 useradd --system --no-log-init --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app; \
-  install -d -o app -g app /app; \
+  mkdir -p /app; \
   find / -xdev -newer /run/runtime-build-start -exec touch -h -m -d @0 -- {} +
 
 WORKDIR /app
@@ -111,6 +111,8 @@ COPY --chown=app:app apps/web/src/server ./apps/web/src/server
 COPY --link --chown=10001:10001 --from=app-build /app/apps/admin/build ./apps/admin/build
 COPY --link --chown=10001:10001 --from=app-build /app/apps/app/dist ./apps/app/dist
 COPY --chown=app:app --chmod=755 docker-entrypoint.sh ./docker-entrypoint.sh
+
+RUN chown app:app /app && touch -m -d @0 /app
 
 ARG SENTRY_RELEASE
 ENV SENTRY_RELEASE=$SENTRY_RELEASE
