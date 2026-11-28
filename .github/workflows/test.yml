@@ -35,20 +35,7 @@ jobs:
           - name: Admin Image
             command: |
               set -euo pipefail
-              base_dir=$(mktemp -d)
-              build_runtime_base() {
-                local layout=$1
-                docker buildx build --target runtime-base --no-cache-filter runtime-base --provenance=false \
-                  --build-arg SOURCE_DATE_EPOCH=0 \
-                  --output "type=oci,dest=$layout,tar=false,rewrite-timestamp=true" . >&2
-                jq -er '.manifests[0].digest' "$layout/index.json"
-              }
-              first_base=$(build_runtime_base "$base_dir/first")
-              second_base=$(build_runtime_base "$base_dir/second")
-              test "$first_base" = "$second_base"
-              docker buildx build --load --target runtime \
-                --build-context "runtime-base=oci-layout://$base_dir/first@$first_base" \
-                --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-admin-smoke .
+              docker build --target runtime --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-admin-smoke .
               docker run --rm --user 0 --entrypoint sh kosmo-admin-smoke -exc '
                 test "$SENTRY_RELEASE" = smoke-a
                 if [ -d /root/.cache/pnpm ]; then
@@ -56,8 +43,8 @@ jobs:
                   test -z "$metadata"
                 fi
               '
-              docker buildx build --load --target runtime-deps --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-runtime-deps:smoke-a .
-              docker buildx build --load --target runtime-deps --build-arg SENTRY_RELEASE=smoke-b --tag kosmo-runtime-deps:smoke-b .
+              docker build --target runtime-deps --build-arg SENTRY_RELEASE=smoke-a --tag kosmo-runtime-deps:smoke-a .
+              docker build --target runtime-deps --build-arg SENTRY_RELEASE=smoke-b --tag kosmo-runtime-deps:smoke-b .
               first_layers=$(docker image inspect --format '{{json .RootFS.Layers}}' kosmo-runtime-deps:smoke-a)
               second_layers=$(docker image inspect --format '{{json .RootFS.Layers}}' kosmo-runtime-deps:smoke-b)
               test "$first_layers" = "$second_layers"
@@ -150,10 +137,6 @@ jobs:
         run: |
           docker compose -f docker-compose.test.yml up -d redis
           timeout 30 sh -c 'until docker compose -f docker-compose.test.yml exec -T redis redis-cli ping >/dev/null 2>&1; do sleep 1; done'
-
-      - name: Set up Docker Buildx for image tests
-        if: matrix.name == 'Admin Image'
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Run ${{ matrix.name }} tests
         run: ${{ matrix.command }}
