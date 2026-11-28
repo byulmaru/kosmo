@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { getCoachmarkPosition } from './coachmarkPosition';
+import { getCenteredCoachmarkPosition, getCoachmarkPosition } from './coachmarkPosition';
 
 test('positions a coachmark below its anchor when the lower space fits', () => {
   assert.deepEqual(
@@ -99,3 +99,16 @@ for (const anchorY of [-600, 600]) {
     assert.ok(position.top + position.height <= 284);
   });
 }
+
+test('centers an unanchored coachmark inside the safe viewport', () => {
+  const position = getCenteredCoachmarkPosition({
+    bubble: { width: 240, height: 120 },
+    viewport: { width: 400, height: 800, topInset: 16, bottomInset: 16 },
+  });
+
+  assert.equal(position.width, 240);
+  assert.equal(position.height, 120);
+  assert.equal(position.left, 80);
+  assert.equal(position.top, 340);
+  assert.equal(position.maxHeight, 736);
+});

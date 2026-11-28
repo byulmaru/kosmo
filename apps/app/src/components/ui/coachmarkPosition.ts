@@ -24,6 +24,11 @@ export type CoachmarkPositionInput = Readonly<{
   }>;
 }>;
 
+export type CenteredCoachmarkPositionInput = Readonly<{
+  bubble: Pick<CoachmarkRect, 'height' | 'width'>;
+  viewport: CoachmarkPositionInput['viewport'];
+}>;
+
 export type CoachmarkPosition = Readonly<{
   arrowLeft: number;
   height: number;
@@ -36,6 +41,29 @@ export type CoachmarkPosition = Readonly<{
 
 const clamp = (value: number, minimum: number, maximum: number) =>
   Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
+
+export function getCenteredCoachmarkPosition({
+  bubble,
+  viewport,
+}: CenteredCoachmarkPositionInput): CoachmarkPosition {
+  const safeTop = (viewport.topInset ?? 0) + EDGE_INSET;
+  const safeBottom = viewport.height - (viewport.bottomInset ?? 0) - EDGE_INSET;
+  const safeLeft = (viewport.leftInset ?? 0) + EDGE_INSET;
+  const safeRight = viewport.width - (viewport.rightInset ?? 0) - EDGE_INSET;
+  const width = Math.min(bubble.width, Math.max(0, safeRight - safeLeft));
+  const maxHeight = Math.max(0, safeBottom - safeTop);
+  const height = Math.min(bubble.height, maxHeight);
+
+  return {
+    arrowLeft: 0,
+    height,
+    left: safeLeft + (safeRight - safeLeft - width) / 2,
+    maxHeight,
+    placement: 'bottom',
+    top: safeTop + (maxHeight - height) / 2,
+    width,
+  };
+}
 
 export function getCoachmarkPosition({
   anchor,

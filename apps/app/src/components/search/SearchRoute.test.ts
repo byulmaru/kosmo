@@ -148,7 +148,7 @@ mockModule('@/components/ui/Tabs', {
 });
 mockModule('@/lib/recentSearches', {
   addRecentSearch: (items: string[]) => items,
-  readRecentSearches: async () => [],
+  readRecentSearches: async () => ['kosmo'],
   writeRecentSearches: async () => undefined,
 });
 mockModule('@/theme/ThemeProvider', {
@@ -353,7 +353,7 @@ test('Native 검색 지우기는 q를 비우고 같은 입력에 포커스를 �
   assert.deepEqual(nativeTextWrites, []);
 });
 
-test('Native 검색은 포커스 밖의 q 변경을 반영하고 입력 중 탭 변경에는 초안을 유지한다', async () => {
+test('Native 검색은 q 변경만 반영하고 입력 중 탭·포커스 변경에는 초안을 유지한다', async () => {
   await act(async () => {
     renderer = create(createElement(NativeStackHarness));
   });
@@ -368,5 +368,28 @@ test('Native 검색은 포커스 밖의 q 변경을 반영하고 입력 중 탭 
   assert.equal(input().props.value, '한글 검색');
   await act(async () => renderer.root.findByProps({ accessibilityLabel: '검색' }).props.onBlur());
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
-  assert.equal(input().props.value, '한글');
+  assert.equal(input().props.value, '한글 검색');
+});
+
+test('Native 검색에서 현재 최근 검색어를 다시 선택하면 초안을 결과 검색어로 맞춘다', async () => {
+  await act(async () => {
+    renderer = create(createElement(NativeStackHarness));
+  });
+  await focusSearch();
+  await typeText('다른 검색');
+  const recent = renderer.root
+    .findAllByType(host('Pressable'))
+    .find((node) => node.props.accessibilityRole === 'link');
+  assert.ok(recent);
+  let prevented = false;
+  await act(async () =>
+    recent.props.onPress({
+      preventDefault: () => {
+        prevented = true;
+      },
+    }),
+  );
+  assert.equal(prevented, true);
+  assert.equal(input().props.value, 'kosmo');
+  assert.deepEqual(routerActions, []);
 });
