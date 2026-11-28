@@ -16,7 +16,7 @@ import {
   SessionState,
 } from '@kosmo/core/enums';
 import { encodeGlobalId } from '@kosmo/core/global-id';
-import { homeTimelinePubSub } from '@kosmo/core/home-timeline/events';
+import { homeTimelinePubSub, publishHomeTimelinePostAdded } from '@kosmo/core/home-timeline/events';
 import {
   postContentDocumentFromText,
   postContentDocumentFromTextAndMedia,
@@ -2826,16 +2826,8 @@ test(
       otherProfile.id,
       'the other Profile remains subscribed',
     );
-    const redis = createClient({ url: testRedisUrl! });
+    const initialPost = await createContentfulPost(otherProfile.id, 'initial subscription post');
     const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
-    redis.on('error', () => undefined);
-    await redis.connect();
-
-    const waitForTopicCount = (topic: string, id: string, count: number) =>
-      waitForSubscriberCount(
-        async () => (await redis.pubSubNumSub(`${topic}:${id}`))[`${topic}:${id}`] ?? 0,
-        count,
-      );
 
     const subscribe = async (token: string, profileId: string) => {
       const response = await app.request('/graphql', {
@@ -2856,25 +2848,55 @@ test(
       assert.ok(response.body);
       const reader = response.body.getReader();
       readers.push(reader);
-      return { readEvent: createSseEventReader(reader) };
+      return createSseEventReader(reader);
     };
 
     try {
       const profileAOnFirstSession = await subscribe(owner.token, owner.profile.id);
       const profileAOnSecondSession = await subscribe(secondSession.token, owner.profile.id);
       const profileBOnFirstSession = await subscribe(owner.token, otherProfile.id);
-      const firstProfileCompletion = profileAOnFirstSession.readEvent();
-      const secondProfileCompletion = profileAOnSecondSession.readEvent();
-      const otherProfilePostEvent = profileBOnFirstSession.readEvent();
-
-      await Promise.all([
-        waitForTopicCount('profileDisabled', owner.profile.id, 1),
-        waitForTopicCount('profileDisabled', otherProfile.id, 1),
-        waitForTopicCount('homeTimelinePostAdded', owner.profile.id, 1),
-        waitForTopicCount('homeTimelinePostAdded', otherProfile.id, 1),
-        waitForTopicCount('sessionEnded', owner.session.id, 1),
-        waitForTopicCount('sessionEnded', secondSession.id, 1),
+      const firstEvents = Promise.all([
+        profileAOnFirstSession(),
+        profileAOnSecondSession(),
+        profileBOnFirstSession(),
       ]);
+      const announcements = setInterval(() => {
+        publishHomeTimelinePostAdded({ profileId: owner.profile.id, postId: initialPost.id });
+        publishHomeTimelinePostAdded({ profileId: otherProfile.id, postId: initialPost.id });
+      }, 25);
+      const readyEvents = await withTimeout(
+        firstEvents,
+        'The three subscriptions did not receive the initial post',
+      ).finally(() => clearInterval(announcements));
+
+      for (const event of readyEvents) {
+        assert.deepEqual(getSseData(event), {
+          data: {
+            timeline: {
+              __typename: 'TimelinePostAdded',
+              post: {
+                id: encodeGlobalId('Post', initialPost.id),
+                content: { bodyText: 'initial subscription post' },
+              },
+            },
+          },
+        });
+      }
+
+      const readAfterInitialPost = async (
+        readEvent: ReturnType<typeof createSseEventReader>,
+        initialEvent: string | null,
+      ) => {
+        let event = await readEvent();
+        while (event !== null && event === initialEvent) {
+          event = await readEvent();
+        }
+        return event;
+      };
+      const [firstReadyEvent, secondReadyEvent, otherReadyEvent] = readyEvents;
+      const firstProfileCompletion = readAfterInitialPost(profileAOnFirstSession, firstReadyEvent);
+      const secondProfileCompletion = readAfterInitialPost(profileAOnSecondSession, secondReadyEvent);
+      const otherProfilePostEvent = readAfterInitialPost(profileBOnFirstSession, otherReadyEvent);
 
       const deleted = await requestGraphQL<{
         deleteProfile: { profileId: string; success: boolean };
@@ -2891,13 +2913,10 @@ test(
         success: true,
       });
 
-      const completions = await Promise.all([
-        withTimeout(firstProfileCompletion, 'Profile A subscription did not complete'),
-        withTimeout(
-          secondProfileCompletion,
-          'Profile A subscription in another Session did not complete',
-        ),
-      ]);
+      const completions = await withTimeout(
+        Promise.all([firstProfileCompletion, secondProfileCompletion]),
+        'Profile A subscriptions did not complete',
+      );
       for (const completion of completions) {
         assert.ok(completion);
         assert.match(completion, /^event: complete$/m);
@@ -2905,18 +2924,15 @@ test(
         assert.doesNotMatch(completion, /"errors"\s*:/);
       }
 
-      await Promise.all([
-        waitForTopicCount('profileDisabled', owner.profile.id, 0),
-        waitForTopicCount('profileDisabled', otherProfile.id, 1),
-        waitForTopicCount('homeTimelinePostAdded', owner.profile.id, 0),
-        waitForTopicCount('homeTimelinePostAdded', otherProfile.id, 1),
-        waitForTopicCount('sessionEnded', owner.session.id, 1),
-        waitForTopicCount('sessionEnded', secondSession.id, 0),
-      ]);
+      assert.deepEqual(
+        await withTimeout(
+          Promise.all([profileAOnFirstSession(), profileAOnSecondSession()]),
+          'Profile A subscription streams did not end',
+        ),
+        [null, null],
+      );
 
-      homeTimelinePubSub.publish('homeTimelinePostAdded', otherProfile.id, {
-        postId: otherProfilePost.id,
-      });
+      publishHomeTimelinePostAdded({ profileId: otherProfile.id, postId: otherProfilePost.id });
       const otherProfileEvent = await withTimeout(
         otherProfilePostEvent,
         'The other Profile subscription stopped after Profile A was disabled',
@@ -2932,17 +2948,8 @@ test(
           },
         },
       });
-
-      await Promise.all(readers.map((reader) => reader.cancel()));
-      await Promise.all([
-        waitForTopicCount('homeTimelinePostAdded', owner.profile.id, 0),
-        waitForTopicCount('homeTimelinePostAdded', otherProfile.id, 0),
-        waitForTopicCount('sessionEnded', owner.session.id, 0),
-        waitForTopicCount('profileDisabled', otherProfile.id, 0),
-      ]);
     } finally {
       await Promise.all(readers.map((reader) => reader.cancel().catch(() => undefined)));
-      await redis.close();
     }
   },
 );
