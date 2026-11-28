@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
-ARG NODE_VERSION=26.12.1
+ARG NODE_VERSION=26.13.1
 # 11.28.8 bundles undici 6.29.1; workspace overrides do not patch pnpm's own dependencies.
 ARG PNPM_VERSION=11.28.8
 
 FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS pnpm
 
-FROM debian:trixie-slim AS workspace
+FROM node:${NODE_VERSION}-trixie-slim AS workspace
 
 WORKDIR /app
 
@@ -14,17 +14,13 @@ ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME/bin:$PATH
 
 RUN apt-get update \
-  && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends ca-certificates curl libatomic1 \
   && rm -rf /var/lib/apt/lists/*
 
 COPY --link --from=pnpm /opt/pnpm /opt/pnpm
 
-ARG NODE_VERSION
-RUN --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
-  install -d -m 0777 "$PNPM_HOME" "$PNPM_HOME/bin" \
-  && ln -s /opt/pnpm/pnpm /usr/local/bin/pnpm \
-  && pnpm runtime set node "$NODE_VERSION" -g
+RUN install -d -m 0777 "$PNPM_HOME" "$PNPM_HOME/bin" \
+  && ln -s /opt/pnpm/pnpm /usr/local/bin/pnpm
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches ./patches
