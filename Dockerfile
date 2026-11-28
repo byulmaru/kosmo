@@ -4,7 +4,7 @@ ARG NODE_VERSION=26.12.1
 # 11.28.8 bundles undici 6.29.1; workspace overrides do not patch pnpm's own dependencies.
 ARG PNPM_VERSION=11.28.8
 
-FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS workspace
+FROM ghcr.io/pnpm/pnpm:${PNPM_VERSION} AS base
 
 ARG NODE_VERSION
 
@@ -14,6 +14,8 @@ ENV PATH=/pnpm/bin:$PATH
 
 RUN --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
   pnpm runtime set node ${NODE_VERSION} -g
+
+FROM base AS workspace
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches ./patches
@@ -66,42 +68,21 @@ RUN pnpm --filter @kosmo/admin build
 FROM workspace AS runtime-deps
 
 ENV NODE_ENV=production
-
-RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
-  --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
-  set -eu; \
-  pnpm install --filter @kosmo/admin --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store; \
-  bridge_binary=$(cd apps/worker && node -p 'require("node:module").createRequire(require.resolve("@temporalio/worker"))("@temporalio/core-bridge/common").getPrebuiltPath()'); \
-  target_release=$(dirname "$bridge_binary"); \
-  find "$(dirname "$target_release")" -mindepth 1 -maxdepth 1 -type d ! -path "$target_release" -exec rm -rf -- {} +
-
-FROM node:${NODE_VERSION}-trixie-slim AS runtime
-
-ARG RUNTIME_OS_REFRESH
-RUN --mount=type=tmpfs,target=/run \
-  set -eu; \
-  touch /run/runtime-build-start; \
-  apt-get update; \
-  apt-get upgrade -y; \
-  apt-get install -y --no-install-recommends ca-certificates curl libatomic1; \
-  rm -rf /var/lib/apt/lists/*; \
-  rm -f /var/cache/ldconfig/aux-cache /var/log/alternatives.log /var/log/apt/*.log /var/log/dpkg.log; \
-  groupadd --system --gid 10001 app; \
-  SOURCE_DATE_EPOCH=0 useradd --system --no-log-init --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app; \
-  mkdir -p /app; \
-  find / -xdev -newer /run/runtime-build-start -exec touch -h -m -d @0 -- {} +
-
-WORKDIR /app
-
-ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV EXPO_WEB_ROOT=/app/apps/app/dist
 
-COPY --link --from=runtime-deps /app/node_modules ./node_modules
-COPY --link --from=runtime-deps /app/apps ./apps
-COPY --link --from=runtime-deps /app/packages ./packages
-COPY --chown=app:app package.json tsconfig.json ./
+RUN groupadd --system --gid 10001 app \
+  && useradd --system --uid 10001 --gid app --home-dir /app --shell /usr/sbin/nologin app \
+  && chown app:app /app
+
+RUN --mount=type=cache,id=kosmo-pnpm-store,target=/var/cache/pnpm/store \
+  --mount=type=cache,id=kosmo-pnpm-metadata,target=/root/.cache/pnpm \
+  pnpm install --filter @kosmo/admin --filter @kosmo/api... --filter @kosmo/web... --filter @kosmo/worker... --filter @kosmo/fedify-consumer... --frozen-lockfile --prod --ignore-scripts --store-dir=/var/cache/pnpm/store
+
+FROM runtime-deps AS runtime-files
+
+COPY --chown=app:app tsconfig.json ./
 COPY --chown=app:app apps/api ./apps/api
 COPY --chown=app:app apps/fedify-consumer ./apps/fedify-consumer
 COPY --chown=app:app apps/worker ./apps/worker
@@ -109,11 +90,22 @@ COPY --chown=app:app drizzle ./drizzle
 COPY --chown=app:app packages/core ./packages/core
 COPY --chown=app:app packages/fedify ./packages/fedify
 COPY --chown=app:app apps/web/src/server ./apps/web/src/server
-COPY --link --chown=10001:10001 --from=app-build /app/apps/admin/build ./apps/admin/build
-COPY --link --chown=10001:10001 --from=app-build /app/apps/app/dist ./apps/app/dist
-COPY --chown=app:app --chmod=755 docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --chown=app:app --from=app-build /app/apps/admin/build ./apps/admin/build
+COPY --chown=app:app --from=app-build /app/apps/app/dist ./apps/app/dist
+COPY --chown=app:app docker-entrypoint.sh ./docker-entrypoint.sh
 
-RUN chown app:app /app && touch -m -d @0 /app
+RUN chmod +x ./docker-entrypoint.sh
+
+FROM runtime-files AS runtime
+
+RUN --mount=type=tmpfs,target=/run \
+  set -eu; \
+  touch -d '1 second ago' /run/apt-started; \
+  apt-get update; \
+  apt-get upgrade -y; \
+  rm -rf /var/lib/apt/lists/*; \
+  rm -f /var/cache/ldconfig/aux-cache /var/log/alternatives.log /var/log/apt/history.log /var/log/apt/term.log /var/log/dpkg.log; \
+  find /etc /usr /var /tmp -xdev -newer /run/apt-started -exec touch -h -m -d @0 -- {} +
 
 ARG SENTRY_RELEASE
 ENV SENTRY_RELEASE=$SENTRY_RELEASE
